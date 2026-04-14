@@ -14,3 +14,4 @@ Educational geography game. Phase B web beta.
 Both subdirectories deploy to separate Netlify sites on push to `main`.
 
 See `docs/STEP_1_HANDOFF.md` for the current build step.
+Step 1 verified.
