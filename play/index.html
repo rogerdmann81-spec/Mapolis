@@ -1898,6 +1898,7 @@ body.impersonating .screen { padding-bottom: 54px !important; }
 
 </style>
 
+  <script src="/assets/shared.js"></script>
 </head>
 
 <body>
@@ -11634,6 +11635,25 @@ function registerSW() {
 }
 
 function initApp() {
+
+  // Step 5.2 — establish anonymous Supabase session on every launch.
+  // Captures auth_uid and stamps it onto any local profiles missing it.
+  if (typeof signInAnonymous === 'function') {
+    signInAnonymous().then(function(authUid) {
+      loadProfiles();
+      var changed = false;
+      allProfiles.forEach(function(p) {
+        if (!p.auth_uid) { p.auth_uid = authUid; changed = true; }
+      });
+      if (changed) saveProfiles();
+    }).catch(function(err) {
+      console.warn('[initApp] signInAnonymous failed, continuing offline:', err);
+      loadProfiles();
+    });
+  } else {
+    loadProfiles();
+  }
+
 
   registerSW();
 
