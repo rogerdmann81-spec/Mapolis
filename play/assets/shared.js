@@ -60,11 +60,38 @@ function authedHeaders() {
 // ─── Auth functions (Step 5.1) ─────────────────────────────────────────────
 
 // Sign in anonymously (students). Returns auth.uid() string or throws.
+// Reuses the stored session if its access token is still valid; otherwise
+// attempts a refresh using the stored refresh_token; otherwise mints a new
+// anonymous session.
 async function signInAnonymous() {
   if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
 
   const existing = _getSession();
-  if (existing && existing.user && existing.user.id) return existing.user.id;
+  if (existing && existing.user && existing.user.id) {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const buffer = 60; // refresh if within 60s of expiry
+    if (existing.expires_at && existing.expires_at > nowSec + buffer) {
+      return existing.user.id; // token still valid
+    }
+    if (existing.refresh_token) {
+      try {
+        const rr = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+          body:    JSON.stringify({ refresh_token: existing.refresh_token })
+        });
+        if (rr.ok) {
+          const refreshed = await rr.json();
+          _saveSession(refreshed);
+          return refreshed.user.id;
+        }
+        console.warn('[signInAnonymous] refresh rejected (' + rr.status + '), creating new anonymous session');
+      } catch (e) {
+        console.warn('[signInAnonymous] refresh threw, creating new anonymous session:', e);
+      }
+    }
+    _clearSession(); // stale session unusable — fall through to fresh signup
+  }
 
   const resp = await fetch(SUPABASE_URL + '/auth/v1/signup', {
     method:  'POST',
