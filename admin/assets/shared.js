@@ -122,6 +122,51 @@ async function signOut() {
   _clearSession();
 }
 
+// Generates an RFC 4122 v4 UUID. Prefers crypto.randomUUID() (all modern
+// browsers, secure context). Falls back to Math.random-based shim only if
+// crypto.randomUUID is unavailable.
+function mapolisUUID() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+// Step 5.2.1 — persist a newly created profile to Supabase via the
+// create_profile RPC. SECURITY DEFINER function reads auth_uid from
+// auth.uid(), so we don't pass it. Returns the new player_id on success,
+// throws on failure (e.g. handle_taken, network error, not_authenticated).
+async function createProfile(opts) {
+  if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
+  if (!opts || !opts.playerId || !opts.handle) {
+    throw new Error('[createProfile] missing required fields');
+  }
+
+  const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/create_profile', {
+    method:  'POST',
+    headers: authedHeaders(),
+    body:    JSON.stringify({
+      p_player_id:   opts.playerId,
+      p_handle:      opts.handle,
+      p_birth_year:  opts.birthYear  || null,
+      p_country:     opts.country    || null,
+      p_parent_email:  opts.parentEmail  || null,
+      p_password_hash: opts.passwordHash || null,
+      p_consent_age:   opts.consentAge   || null
+    })
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error('[createProfile] ' + (err.message || err.code || resp.status));
+  }
+
+  return await resp.json(); // returns the player_id UUID
+}
+
 // Returns { id, authUid, isAdmin } for the current session, or null if not signed in.
 async function getCurrentUser() {
   const session = _getSession();
@@ -162,11 +207,9 @@ const syncStore = {
     } catch (e) {
       console.warn('[syncStore] localStorage write failed:', e);
     }
-    if (key.startsWith('profile_') && isSupabaseConfigured()) {
-      const entry = syncStore._buildProfileRow(data);
-      syncStore._enqueue({ table: 'profiles', payload: entry });
-      syncStore.processQueue();
-    }
+    // Step 5.2.1 — profile writes no longer POST directly. Inserts go via
+    // the create_profile RPC (called from finalizeProfile in play/index.html).
+    // Future updates (stats, handle rename) will go through their own RPCs.
   },
 
   load(key) {

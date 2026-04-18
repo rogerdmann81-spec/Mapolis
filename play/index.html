@@ -12522,13 +12522,32 @@ function renderCreateStep() {
 
 function finalizeProfile(goToAvatar) {
 
-  newProfile.id = 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  newProfile.id = (typeof mapolisUUID === 'function')
+    ? mapolisUUID()
+    : (crypto && crypto.randomUUID ? crypto.randomUUID() : ('p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)));
 
   newProfile.createdAt = new Date().toISOString();
 
   allProfiles.push(newProfile);
 
   saveProfiles();
+
+  // Step 5.2.1 — persist to Supabase via create_profile RPC (fire-and-forget).
+  // Server-side auth_uid comes from auth.uid(); no need to pass it.
+  // Local profile stays usable offline even if this fails.
+  if (typeof createProfile === 'function') {
+    createProfile({
+      playerId:     newProfile.id,
+      handle:       newProfile.handle,
+      birthYear:    newProfile.birthYear,
+      country:      newProfile.country,
+      parentEmail:  newProfile.parentEmail,
+      passwordHash: newProfile.passwordHash,
+      consentAge:   newProfile.consentAgeAtCreate
+    }).catch(function(err) {
+      console.warn('[finalizeProfile] create_profile RPC failed:', err);
+    });
+  }
 
   activeProfile = newProfile;
 
