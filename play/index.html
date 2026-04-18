@@ -22310,29 +22310,8 @@ function renderProfile() {
       </button>
     </div>`;
   } else {
-    // Age-gate the "Unlock Educator Mode" self-toggle. Educator mode is
-    // for adults only — 18+. Under-18 profiles still see "Join a Class"
-    // below (that's the student-side flow to link to an existing
-    // educator's classroom). Missing birth year → treated as unknown
-    // age → gate closed.
-    //
-    // TODO(phase-b-5.3): This self-unlock button is being replaced by a
-    // proper "I'm a teacher" Supabase Auth login from the title screen
-    // per PHASE_B_BLUEPRINT Section 5.3. When that lands, delete the
-    // unlock-button code path entirely — the age gate here becomes
-    // moot because students will never have the button and educators
-    // will authenticate via email/password on a separate flow.
-    const _eduCurYear = new Date().getFullYear();
-    const _eduAge = profile.birthYear ? (_eduCurYear - profile.birthYear) : null;
-    const _eduIsAdult = _eduAge !== null && _eduAge >= 18;
-
-    if (_eduIsAdult) {
-      html += `<div style="margin-top:12px;">
-        <button id="btn-unlock-edu" style="width:100%;padding:12px;background:var(--bg-panel);color:var(--text);font-weight:700;font-size:13px;border:1px solid var(--border);border-radius:var(--pill);">
-          🎓 Unlock Educator Mode
-        </button>
-      </div>`;
-    }
+    // Step 5.3 provides the real "I'm a teacher" login from the title
+    // screen. Students see only the Join-a-Class flow here.
 
     html += `<div class="join-class-field">
       <label>Join a Class</label>
@@ -22394,9 +22373,6 @@ function renderProfile() {
   document.getElementById('btn-view-all-badges')?.addEventListener('click', () => go('s-badges'));
 
   document.getElementById('btn-edu-dash')?.addEventListener('click', () => go('s-edu-dash'));
-  document.getElementById('btn-unlock-edu')?.addEventListener('click', () => {
-    unlockEducatorMode();
-  });
   document.getElementById('btn-join-class')?.addEventListener('click', () => {
     const code = document.getElementById('join-code-input')?.value;
     if (code) joinClass(code);
@@ -22791,45 +22767,6 @@ function generateLinkCode() {
     code += chars[Math.floor(Math.random() * chars.length)];
   }
   return code;
-}
-
-function unlockEducatorMode() {
-  if (!activeProfile) return;
-
-  // Defense-in-depth: refuse to elevate an under-18 profile to educator
-  // even if the unlock button was somehow reached (stale UI, dev tools,
-  // future regression). UI already hides the button in renderProfile for
-  // under-18, but this is the authoritative check.
-  // TODO(phase-b-5.3): This whole self-unlock path is being replaced by
-  // Supabase Auth "I'm a teacher" email login — delete when blueprint
-  // Section 5.3 lands.
-  const _eduCurYear = new Date().getFullYear();
-  const _eduAge = activeProfile.birthYear ? (_eduCurYear - activeProfile.birthYear) : null;
-  if (_eduAge === null || _eduAge < 18) {
-    logSecurityEvent('educator_unlock_denied_underage', { pid: activeProfile.id, age: _eduAge });
-    showToast('Educator Mode is for ages 18+');
-    return;
-  }
-
-  logSecurityEvent('educator_unlock_granted', { pid: activeProfile.id });
-  activeProfile.isEducator = true;
-
-  if (!activeProfile.linkCode) {
-    activeProfile.linkCode = generateLinkCode();
-  }
-
-  saveProfiles();
-
-  if (typeof syncStore !== 'undefined') {
-    const entry = syncStore._buildProfileRow(activeProfile);
-    entry.is_educator = true;
-    entry.link_code = activeProfile.linkCode;
-    syncStore._enqueue({ table: 'profiles', payload: entry });
-    syncStore.processQueue();
-  }
-
-  showToast('Educator Mode Unlocked! 🎓');
-  go('s-edu-dash');
 }
 
 function regenerateLinkCode() {
