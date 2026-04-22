@@ -4,26 +4,1516 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Mapolis Admin</title>
+
+  <!-- Fonts (same as play/index.html) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+  <!-- D3 (for analytics charts) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+
+  <!-- Shared data layer -->
+  <script src="../assets/shared.js"></script>
+
   <style>
-    html,body { margin:0; padding:0; background:#0a0a0a; color:#e8f4ff;
-                font-family:-apple-system,system-ui,sans-serif;
-                min-height:100vh; display:flex; align-items:center;
-                justify-content:center; text-align:center; }
-    .stub { padding:32px; max-width:480px; }
-    .stub h1 { font-size:24px; margin:0 0 12px; font-weight:500; }
-    .stub p { font-size:14px; color:#7fb8d8; line-height:1.6; margin:8px 0; }
-    .badge { display:inline-block; background:rgba(91,143,255,0.15);
-             border:1px solid rgba(91,143,255,0.4); border-radius:999px;
-             padding:4px 12px; font-size:11px; color:#5b8fff;
-             text-transform:uppercase; letter-spacing:1.2px; margin-top:16px; }
+    /* ── Reset + CSS variables ─────────────────────────────── */
+    *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+
+    :root {
+      --bg-deep:  #060d2e;
+      --bg-dark:  #0d0f1a;
+      --bg-panel: #111428;
+      --blue:     #3b6ef8;
+      --blue-lt:  #5b8fff;
+      --blue-glow:rgba(91,143,255,.3);
+      --yellow:   #ffe135;
+      --text:     #d0d8f0;
+      --dim:      #8899bb;
+      --muted:    #5a6285;
+      --correct:  #22d17a;
+      --wrong:    #f04060;
+      --border:   rgba(91,143,255,.18);
+      --pill:     100px;
+    }
+
+    html, body {
+      width:100%; height:100%;
+      background: var(--bg-dark);
+      font-family: 'Nunito', sans-serif;
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    /* ── Admin shell layout ────────────────────────────────── */
+    #admin-shell {
+      width:100%; height:100%;
+      display:flex; flex-direction:column;
+      background: var(--bg-deep);
+      overflow: hidden;
+    }
+    #admin-root { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+
+    /* ── Toast ─────────────────────────────────────────────── */
+    .toast {
+      position:fixed; bottom:22px; left:50%;
+      transform:translateX(-50%) translateY(80px);
+      background:var(--bg-panel); border:1px solid var(--border);
+      border-radius:var(--pill); padding:9px 20px;
+      font-size:13px; font-weight:700; color:#fff; white-space:nowrap;
+      z-index:9999; transition:transform .3s cubic-bezier(.34,1.56,.64,1);
+      pointer-events:none;
+    }
+    .toast.show { transform:translateX(-50%) translateY(0); }
+
+#admin-impersonate-bar { flex-shrink: 0; }
+body.impersonating .screen { padding-bottom: 54px !important; }
+
+#s-admin { background: var(--bg-deep); padding: 0; overflow: hidden; }
+#s-admin.active { display: flex; flex-direction: column; }
+#admin-root { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+.admin-header {
+  padding: 16px 18px 10px;
+  border-bottom: 1px solid rgba(91,143,255,.12);
+  flex-shrink: 0;
+}
+
+.admin-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid rgba(91,143,255,.12);
+  flex-shrink: 0;
+}
+
+.admin-tab {
+  flex: 1;
+  padding: 11px 8px;
+  background: transparent;
+  color: var(--dim);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: 'Nunito', sans-serif;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+
+.admin-tab.active {
+  color: #fff;
+  border-bottom-color: #3b6ef8;
+}
+
+.admin-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-prof-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-prof-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.admin-prof-row:active {
+  background: rgba(59,110,248,.12);
+  border-color: rgba(91,143,255,.4);
+}
+
+#admin-trigger { cursor: default; }
+
+.nsg-modal-overlay {
+  position:fixed; inset:0; z-index:9999;
+  background:rgba(0,0,0,.78); backdrop-filter:blur(4px);
+  display:flex; align-items:center; justify-content:center;
+  padding:20px; animation:nsgFadeIn .25s ease;
+}
+@keyframes nsgFadeIn { from{opacity:0} to{opacity:1} }
+.nsg-modal {
+  background:var(--bg-panel); border:1px solid var(--border);
+  border-radius:18px; padding:24px 22px; max-width:400px; width:100%;
+  max-height:85vh; overflow-y:auto; position:relative;
+}
+.nsg-modal h3 {
+  font-family:'Fredoka One',sans-serif; font-size:20px; color:#fff;
+  margin-bottom:14px; text-align:center;
+}
+.nsg-modal p, .nsg-modal .nsg-body {
+  font-size:13px; color:var(--text); line-height:1.6; margin-bottom:10px;
+}
+.nsg-modal textarea {
+  width:100%; min-height:100px; background:var(--bg-deep); color:var(--text);
+  border:1px solid var(--border); border-radius:12px; padding:12px;
+  font-family:'Nunito',sans-serif; font-size:13px; resize:vertical;
+}
+.nsg-modal textarea:focus { border-color:var(--blue); }
+.nsg-modal .nsg-btn-primary {
+  display:block; width:100%; margin-top:14px; padding:13px;
+  background:var(--yellow); color:#111; font-family:'Fredoka One',sans-serif;
+  font-size:15px; border-radius:var(--pill); border:none; cursor:pointer;
+}
+.nsg-modal .nsg-btn-secondary {
+  display:block; width:100%; margin-top:8px; padding:11px;
+  background:var(--bg-deep); color:var(--text); font-weight:700;
+  font-size:13px; border:1px solid var(--border); border-radius:var(--pill); cursor:pointer;
+}
+.nsg-note-card {
+  background:var(--bg-deep); border:1px solid var(--border); border-radius:12px;
+  padding:12px; margin-bottom:10px;
+}
+.nsg-note-card .nsg-note-meta {
+  font-size:10px; color:var(--dim); margin-bottom:6px;
+}
+.nsg-note-card .nsg-note-msg {
+  font-size:13px; color:var(--text); line-height:1.5;
+}
+.nsg-note-card .nsg-note-reply {
+  margin-top:10px; padding:10px; background:rgba(59,110,248,.08);
+  border-left:3px solid var(--blue); border-radius:0 8px 8px 0;
+}
+.nsg-note-card .nsg-note-reply .nsg-reply-label {
+  font-size:9px; color:var(--blue-lt); text-transform:uppercase;
+  letter-spacing:.1em; font-weight:700; margin-bottom:3px;
+}
+.nsg-note-card .nsg-note-reply .nsg-reply-text {
+  font-size:12px; color:var(--text); line-height:1.5;
+}
+.nsg-unread-dot {
+  display:inline-block; width:8px; height:8px; background:var(--wrong);
+  border-radius:50%; margin-left:6px; vertical-align:middle;
+}
+.nsg-note-count {
+  display:inline-flex; align-items:center; justify-content:center;
+  background:var(--blue); color:#fff; font-size:10px; font-weight:800;
+  min-width:18px; height:18px; border-radius:9px; padding:0 5px;
+  margin-left:6px;
+}
   </style>
 </head>
 <body>
-  <div class="stub">
-    <h1>Mapolis Admin</h1>
-    <p>Admin extraction lands in Step 2 of the Phase B build.</p>
-    <p>This stub exists so the deploy pipeline has something to serve.</p>
-    <div class="badge">Step 1 Stub</div>
+
+<!-- Admin shell -->
+<div id="admin-shell">
+  <div id="admin-root"></div>
+</div>
+
+<!-- Admin password modal -->
+<div id="admin-pw-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(6,13,46,.92);backdrop-filter:blur(8px);align-items:center;justify-content:center;">
+  <div style="background:#111428;border:1px solid rgba(91,143,255,.25);border-radius:20px;padding:28px 24px;width:min(320px,90vw);text-align:center;">
+    <div style="font-size:28px;margin-bottom:8px;">🔐</div>
+    <div style="font-family:'Fredoka One',sans-serif;font-size:18px;color:#fff;margin-bottom:4px;">Master Access</div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:18px;">Enter password to continue</div>
+    <input id="admin-pw-input" type="password" placeholder="Password"
+      style="width:100%;background:#0d0f1a;border:1px solid rgba(91,143,255,.3);border-radius:12px;padding:12px 14px;color:#fff;font-size:14px;font-family:'Nunito',sans-serif;margin-bottom:8px;box-sizing:border-box;">
+    <div id="admin-pw-error" style="display:none;color:#f04060;font-size:11px;margin-bottom:8px;">Incorrect password</div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="document.getElementById('admin-pw-modal').style.display='none'" style="flex:1;padding:11px;background:transparent;border:1px solid rgba(91,143,255,.2);border-radius:12px;color:var(--dim);font-size:13px;font-weight:700;">Cancel</button>
+      <button onclick="adminSubmitPw()" style="flex:2;padding:11px;background:#3b6ef8;border:none;border-radius:12px;color:#fff;font-size:13px;font-weight:800;">Enter</button>
+    </div>
   </div>
+</div>
+
+<!-- Admin impersonation banner (standalone: visual only, no game nav) -->
+<div id="admin-impersonate-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9998;background:rgba(59,110,248,.95);backdrop-filter:blur(6px);padding:10px 16px;align-items:center;justify-content:space-between;">
+  <div style="font-size:12px;font-weight:700;color:#fff;">
+    <span style="opacity:.75;margin-right:4px;">👁 Viewing as</span>
+    <span id="admin-impersonate-name" style="color:#ffe135;"></span>
+  </div>
+  <button onclick="adminExitImpersonation()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:5px 12px;color:#fff;font-size:12px;font-weight:800;font-family:'Nunito',sans-serif;">← Exit View</button>
+</div>
+
+<!-- Admin change-password modal -->
+<div id="admin-changepw-modal" style="display:none;position:fixed;inset:0;z-index:10001;background:rgba(6,13,46,.93);backdrop-filter:blur(8px);align-items:center;justify-content:center;">
+  <div style="background:#111428;border:1px solid rgba(91,143,255,.25);border-radius:20px;padding:28px 24px;width:min(320px,90vw);">
+    <div style="font-family:'Fredoka One',sans-serif;font-size:17px;color:#fff;margin-bottom:14px;text-align:center;">Change Admin Password</div>
+    <input id="admin-cpw-cur" type="password" placeholder="Current password"
+      style="width:100%;background:#0d0f1a;border:1px solid rgba(91,143,255,.3);border-radius:10px;padding:10px 12px;color:#fff;font-size:13px;font-family:'Nunito',sans-serif;margin-bottom:8px;box-sizing:border-box;">
+    <input id="admin-cpw-new" type="password" placeholder="New password (min 8 chars)"
+      style="width:100%;background:#0d0f1a;border:1px solid rgba(91,143,255,.3);border-radius:10px;padding:10px 12px;color:#fff;font-size:13px;font-family:'Nunito',sans-serif;margin-bottom:8px;box-sizing:border-box;">
+    <input id="admin-cpw-confirm" type="password" placeholder="Confirm new password"
+      style="width:100%;background:#0d0f1a;border:1px solid rgba(91,143,255,.3);border-radius:10px;padding:10px 12px;color:#fff;font-size:13px;font-family:'Nunito',sans-serif;margin-bottom:8px;box-sizing:border-box;">
+    <div id="admin-cpw-error" style="display:none;color:#f04060;font-size:11px;margin-bottom:8px;text-align:center;"></div>
+    <div id="admin-cpw-success" style="display:none;color:#22d17a;font-size:11px;margin-bottom:8px;text-align:center;">Password updated ✓</div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="adminCloseCPW()" style="flex:1;padding:11px;background:transparent;border:1px solid rgba(91,143,255,.2);border-radius:12px;color:var(--dim);font-size:13px;font-weight:700;font-family:'Nunito',sans-serif;">Cancel</button>
+      <button onclick="adminDoChangePw()" style="flex:2;padding:11px;background:#3b6ef8;border:none;border-radius:12px;color:#fff;font-size:13px;font-weight:800;font-family:'Nunito',sans-serif;">Update Password</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Shims for game functions not available in standalone admin ──────────────
+
+// escHtml — string sanitizer (copied from play/index.html)
+function escHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// showToast — toast notification
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 2200);
+}
+
+// go() — game screen navigation. Not applicable in standalone admin.
+// adminExit() uses go('s-credits'); adminEnterAsProfile uses go('s-edu-dash'/'s-profile').
+// Both are game-context features. Log and no-op here.
+function go(screen) {
+  console.warn('[admin standalone] go("' + screen + '") called — game navigation not available here.');
+}
+
+// updateAvatarBars — game UI update called by adminExitImpersonation; no-op here.
+function updateAvatarBars() {}
+
+// ── Load profiles from localStorage ────────────────────────────────────────
+// In the game, allProfiles is a live global kept in sync by the profile system.
+// In standalone admin, we load it fresh from localStorage on init.
+var allProfiles = (function() {
+  try {
+    var raw = localStorage.getItem('nsg_profiles');
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) {
+    return [];
+  }
+})();
+
+// activeProfile — not meaningful in standalone admin; set to null.
+var activeProfile = null;
+
+</script>
+<script>
+var ADMIN_PW = 'mapolisfuckyeah';
+
+function adminTriggerClick() {
+  var m = document.getElementById('admin-pw-modal');
+  if (m) { m.style.display = 'flex'; }
+  var inp = document.getElementById('admin-pw-input');
+  if (inp) { inp.value = ''; setTimeout(function(){ inp.focus(); }, 80); }
+  var err = document.getElementById('admin-pw-error');
+  if (err) err.style.display = 'none';
+}
+
+function adminSubmitPw() {
+  var val = (document.getElementById('admin-pw-input') || {}).value || '';
+  var err = document.getElementById('admin-pw-error');
+  var modal = document.getElementById('admin-pw-modal');
+  if (val === ADMIN_PW) {
+    if (modal) modal.style.display = 'none';
+    _adminViewProfile = null;
+    renderAdmin(); // standalone: render directly instead of game nav
+  } else {
+    if (err) err.style.display = 'block';
+    var inp = document.getElementById('admin-pw-input');
+    if (inp) { inp.value = ''; inp.focus(); }
+  }
+}
+
+document.addEventListener('keydown', function(e) {
+  var modal = document.getElementById('admin-pw-modal');
+  if (!modal || modal.style.display === 'none') return;
+  if (e.key === 'Enter') adminSubmitPw();
+  if (e.key === 'Escape') { modal.style.display = 'none'; }
+});
+
+var _adminTab = 'profiles';
+var _adminViewProfile = null;
+
+function renderAdmin() {
+  var root = document.getElementById('admin-root');
+  if (!root) return;
+
+  if (_adminViewProfile) { renderAdminProfileDetail(root); return; }
+
+  var profiles = (typeof allProfiles !== 'undefined') ? allProfiles : [];
+  var sorted = profiles.slice().sort(function(a,b){ return (b.stats&&b.stats.cr||0)-(a.stats&&a.stats.cr||0); });
+
+  var html = '<div class="admin-header">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;">'
+    + '<button onclick="adminExit()" style="background:none;color:var(--dim);font-size:13px;font-weight:700;padding:4px 0;">← Exit Panel</button>'
+    + '<button onclick="adminShowChangePw()" style="background:rgba(59,110,248,.15);border:1px solid rgba(91,143,255,.25);border-radius:8px;padding:5px 10px;color:var(--dim);font-size:11px;font-weight:700;font-family:\'Nunito\',sans-serif;">⚙ Password</button>'
+    + '</div>'
+    + '<div style="font-family:\'Fredoka One\',sans-serif;font-size:20px;color:#fff;margin-top:4px;">🔐 Master Panel</div>'
+    + '<div style="font-size:11px;color:var(--dim);">' + profiles.length + ' profile' + (profiles.length!==1?'s':'') + ' · local</div>'
+    + '</div>'
+    + '<div class="admin-tabs">'
+    + '<button class="admin-tab' + (_adminTab==='profiles'?' active':'') + '" onclick="adminSetTab(\'profiles\')">👥 Profiles</button>'
+    + '<button class="admin-tab' + (_adminTab==='analytics'?' active':'') + '" onclick="adminSetTab(\'analytics\')">📊 Analytics</button>'
+    + '<button class="admin-tab' + (_adminTab==='notes'?' active':'') + '" onclick="adminSetTab(\'notes\')">📝 Notes' + (function(){ try { var n=getNotes().filter(function(x){return !x.read;}); return n.length ? '<span class="nsg-note-count">'+n.length+'</span>' : ''; } catch(e){ return ''; } })() + '</button>'
+    + '</div>'
+    + '<div class="admin-content" id="admin-content">';
+
+  if (_adminTab === 'profiles') {
+    html += renderAdminProfilesList(sorted, profiles);
+  } else if (_adminTab === 'notes') {
+    html += renderAdminNotes();
+  } else {
+    html += renderAdminAnalytics(profiles);
+  }
+  html += '</div>';
+  root.innerHTML = html;
+
+  if (_adminTab === 'analytics') renderAdminCharts(profiles);
+
+  if (_adminTab === 'notes') wireAdminNotes();
+
+  root.querySelectorAll('.admin-prof-row').forEach(function(row) {
+    row.addEventListener('click', function() {
+      var idx = parseInt(row.getAttribute('data-orig'));
+      _adminViewProfile = profiles[idx];
+      renderAdmin();
+    });
+  });
+}
+
+function adminSetTab(tab) { _adminTab = tab; renderAdmin(); }
+function adminExit() { go('s-credits'); }
+
+function adminShowChangePw() {
+  ['admin-cpw-cur','admin-cpw-new','admin-cpw-confirm'].forEach(function(id){
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
+  var err = document.getElementById('admin-cpw-error');
+  var ok  = document.getElementById('admin-cpw-success');
+  if (err) err.style.display = 'none';
+  if (ok)  ok.style.display  = 'none';
+  var m = document.getElementById('admin-changepw-modal');
+  if (m) { m.style.display = 'flex'; setTimeout(function(){ var el=document.getElementById('admin-cpw-cur'); if(el) el.focus(); }, 80); }
+}
+
+function adminCloseCPW() {
+  var m = document.getElementById('admin-changepw-modal');
+  if (m) m.style.display = 'none';
+}
+
+function adminDoChangePw() {
+  var cur     = (document.getElementById('admin-cpw-cur')     || {}).value || '';
+  var nw      = (document.getElementById('admin-cpw-new')     || {}).value || '';
+  var confirm = (document.getElementById('admin-cpw-confirm') || {}).value || '';
+  var err = document.getElementById('admin-cpw-error');
+  var ok  = document.getElementById('admin-cpw-success');
+  function showErr(msg) { if(err){ err.textContent=msg; err.style.display='block'; } if(ok) ok.style.display='none'; }
+  if (cur !== ADMIN_PW)    { showErr('Current password is incorrect.'); return; }
+  if (nw.length < 8)       { showErr('New password must be at least 8 characters.'); return; }
+  if (nw !== confirm)      { showErr('Passwords do not match.'); return; }
+  ADMIN_PW = nw;
+  localStorage.setItem('nsg_admin_pw', ADMIN_PW);
+  if (err) err.style.display = 'none';
+  if (ok)  ok.style.display  = 'block';
+  setTimeout(adminCloseCPW, 1400);
+}
+
+function renderAdminProfilesList(sorted, allP) {
+  if (!sorted.length) return '<p style="text-align:center;color:var(--dim);padding:40px 20px;">No profiles in local storage.</p>';
+  var html = '<div class="admin-prof-list">';
+  sorted.forEach(function(p) {
+    var s = p.stats || {};
+    var acc = s.totalAnswered > 0 ? Math.round(s.totalCorrect/s.totalAnswered*100) : 0;
+    var titleText = (typeof getProfileTitle==='function') ? getProfileTitle(p) : 'Explorer';
+    var titleColor = (typeof getProfileTitleColor==='function') ? getProfileTitleColor(p) : '#8899bb';
+    var lastPlayed = s.lastPlayed ? new Date(s.lastPlayed).toLocaleDateString() : 'Never';
+    var avatarHtml = p.avatar&&p.avatar.svg
+      ? '<img src="'+p.avatar.svg+'" style="width:40px;height:40px;border-radius:50%;border:2px solid '+titleColor+';flex-shrink:0;">'
+      : '<div style="width:40px;height:40px;border-radius:50%;background:var(--bg-panel);border:2px solid '+titleColor+';display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">'+(p.avatar&&p.avatar.face||'🧑')+'</div>';
+    var origIdx = allP.indexOf(p);
+    html += '<div class="admin-prof-row" data-orig="'+origIdx+'">'
+      + avatarHtml
+      + '<div style="flex:1;min-width:0;">'
+      + '<div style="font-weight:700;font-size:14px;color:'+(p.frozen?'var(--dim)':'#fff')+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escHtml(p.handle||'Unnamed')+(p.frozen?' 🔒':'')+'</div>'
+      + '<div style="font-size:11px;color:'+(p.frozen?'#5a6285':titleColor)+';">'+(p.frozen?'Frozen':titleText)+' · '+escHtml(p.country||'—')+'</div>'
+      + '<div style="font-size:10px;color:var(--dim);margin-top:1px;">Last: '+lastPlayed+'</div>'
+      + '</div>'
+      + '<div style="text-align:right;flex-shrink:0;">'
+      + '<div style="font-family:\'Space Mono\',monospace;font-size:14px;color:#ffe135;">⭐ '+(s.cr||0).toLocaleString()+'</div>'
+      + '<div style="font-size:10px;color:var(--dim);">'+acc+'% · '+(s.gamesPlayed||0)+'g</div>'
+      + (p.isEducator?'<div style="font-size:9px;color:var(--blue-lt);margin-top:2px;">🎓 Edu</div>':'')
+      + '</div>'
+      + '<div style="color:var(--dim);font-size:16px;margin-left:6px;">›</div>'
+      + '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function renderAdminProfileDetail(root) {
+  var p = _adminViewProfile;
+  var s = p.stats || {};
+  var titleText = (typeof getProfileTitle==='function') ? getProfileTitle(p) : 'Explorer';
+  var titleColor = (typeof getProfileTitleColor==='function') ? getProfileTitleColor(p) : '#8899bb';
+  var acc = s.totalAnswered>0 ? Math.round(s.totalCorrect/s.totalAnswered*100) : 0;
+  var corrRate = s.totalMistakes>0 ? Math.round((s.mistakesCorrected||0)/s.totalMistakes*100) : 0;
+  var isFrozen = !!p.frozen;
+  var borderColor = isFrozen ? '#5a6285' : titleColor;
+  var avatarHtml = p.avatar&&p.avatar.svg
+    ? '<img src="'+p.avatar.svg+'" style="width:72px;height:72px;border-radius:50%;border:3px solid '+borderColor+';'+(isFrozen?'filter:grayscale(1);opacity:.6;':'')+';">'
+    : '<div style="width:72px;height:72px;border-radius:50%;background:var(--bg-panel);border:3px solid '+borderColor+';display:flex;align-items:center;justify-content:center;font-size:32px;'+(isFrozen?'filter:grayscale(1);opacity:.6;':'')+';">'+(p.avatar&&p.avatar.face||'🧑')+'</div>';
+
+  var html = '<div class="admin-header">'
+    + '<button onclick="adminBackToList()" style="background:none;color:var(--dim);font-size:13px;font-weight:700;padding:4px 0;">← All Profiles</button>'
+    + (isFrozen ? '<div style="font-size:10px;color:#f04060;margin-top:2px;">🔒 Frozen — login blocked</div>' : '<div style="font-size:10px;color:var(--muted);margin-top:2px;">Admin View</div>')
+    + '</div>'
+    + '<div class="admin-content">'
+    + '<div style="text-align:center;margin-bottom:12px;">'+avatarHtml
+    + '<h2 style="font-family:\'Fredoka One\',sans-serif;font-size:20px;color:'+(isFrozen?'var(--dim)':'#fff')+';margin:8px 0 2px;">'+escHtml(p.handle||'Unnamed')+(isFrozen?' 🔒':'')+'</h2>'
+    + '<div style="font-size:11px;color:var(--dim);">'+escHtml(p.country||'')+(p.birthYear?' · Born '+p.birthYear:'')+'</div>'
+    + '<div style="font-size:13px;color:'+(isFrozen?'var(--dim)':titleColor)+';font-weight:700;margin-top:4px;">'+(isFrozen?'Frozen':titleText)+'</div>'
+    + (p.isEducator?'<div style="font-size:11px;color:var(--blue-lt);margin-top:2px;">🎓 Educator Mode</div>':'')
+    + '</div>'
+
+    + '<div style="display:flex;gap:8px;margin-bottom:8px;">'
+    + '<button onclick="adminEnterAsProfile()" style="flex:1;padding:11px 6px;background:rgba(59,110,248,.18);border:1px solid rgba(91,143,255,.35);border-radius:12px;color:#fff;font-size:13px;font-weight:800;font-family:\'Nunito\',sans-serif;">👤 Enter as Profile</button>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;margin-bottom:14px;">'
+    + '<button onclick="adminToggleFreeze()" style="flex:1;padding:11px 6px;background:'+(isFrozen?'rgba(34,209,122,.15)':'rgba(240,64,96,.12)')+';border:1px solid '+(isFrozen?'rgba(34,209,122,.3)':'rgba(240,64,96,.3)')+';border-radius:12px;color:'+(isFrozen?'#22d17a':'#f04060')+';font-size:13px;font-weight:800;font-family:\'Nunito\',sans-serif;">'
+    + (isFrozen?'✅ Unfreeze':'🔒 Freeze')+'</button>'
+    + '<button onclick="adminConfirmDelete()" style="flex:1;padding:11px 6px;background:rgba(240,64,96,.08);border:1px solid rgba(240,64,96,.2);border-radius:12px;color:#f04060;font-size:13px;font-weight:800;font-family:\'Nunito\',sans-serif;">🗑 Delete</button>'
+    + '</div>'
+
+    + '<div style="text-align:center;margin:0 0 10px;padding:12px;background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;">'
+    + '<div style="font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:2px;">⭐ Star Bank</div>'
+    + '<div style="font-family:\'Space Mono\',monospace;font-size:32px;font-weight:700;color:#ffe135;">'+(s.cr||0).toLocaleString()+'</div>'
+    + '</div>'
+
+    + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">'
+    + adminStatCard('Accuracy', acc+'%')
+    + adminStatCard('Corrected', corrRate+'%')
+    + adminStatCard('Day Streak', (s.currentDayStreak||0)+'🔥')
+    + adminStatCard('Games', s.gamesPlayed||0)
+    + adminStatCard('Answered', s.totalAnswered||0)
+    + adminStatCard('Best Streak', s.bestStreak||0)
+    + adminStatCard('Avg Speed', s.avgSpeed ? s.avgSpeed.toFixed(1)+'s' : '—')
+    + adminStatCard('Tier Avg', s.tierAvg ? s.tierAvg.toFixed(1) : '—')
+    + adminStatCard('Consistency', s.consistency ? Math.round(s.consistency*100)+'%' : '0%')
+    + '</div>';
+
+  if (s.dayHistory && s.dayHistory.length > 0) {
+    html += '<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:10px;">'
+      + '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">Play History — All Time</div>'
+      + '<div id="admin-profile-heatmap"></div>'
+      + '</div>';
+  }
+
+  if (typeof BADGE_DEFS !== 'undefined') {
+    html += '<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:10px;">'
+      + '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;">Badges ('+(p.badges||[]).length+'/'+BADGE_DEFS.length+')</div>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+    BADGE_DEFS.forEach(function(bd) {
+      var earned = (p.badges||[]).includes(bd.id);
+      html += '<div title="'+bd.desc.replace(/"/g,'&quot;')+'" style="background:'+(earned?'rgba(59,110,248,.15)':'transparent')+';border:1px solid '+(earned?'var(--border)':'rgba(91,143,255,.06)')+';border-radius:8px;padding:6px 6px;opacity:'+(earned?1:0.3)+';text-align:center;min-width:54px;">'
+        + '<div style="line-height:1;">'+badgeImgHtml(bd, 28)+'</div>'
+        + '<div style="font-size:7px;color:#fff;font-weight:700;margin-top:3px;line-height:1.15;">'+bd.name+'</div>'
+        + '</div>';
+    });
+    html += '</div></div>';
+  }
+
+  html += '<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:20px;">'
+    + '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;">Profile Info</div>'
+    + '<div style="font-size:11px;color:var(--text);line-height:2;">'
+    + '<div>ID: <span style="font-family:\'Space Mono\',monospace;font-size:9px;color:var(--dim);">'+(p.id||'—')+'</span></div>'
+    + '<div>Last Played: '+(s.lastPlayed ? new Date(s.lastPlayed).toLocaleString() : 'Never')+'</div>'
+    + '<div>Grade Adj: '+(s.gradeAdjust?(s.gradeAdjust>0?'+':'')+s.gradeAdjust.toFixed(2):'0')+'</div>'
+    + '<div>Frozen: '+(isFrozen?'<span style="color:#f04060;font-weight:700;">Yes — '+new Date(p.frozenAt||0).toLocaleDateString()+'</span>':'No')+'</div>'
+    + '<div>Cat Diversity: '+(s.categoryDiv||0)+'</div>'
+    + '<div>Linked Educators: '+((p.linkedEducators||[]).join(', ')||'None')+'</div>'
+    + (p.linkCode?'<div>Link Code: <span style="font-family:\'Space Mono\',monospace;color:var(--blue-lt);">'+escHtml(p.linkCode)+'</span></div>':'')
+    + '</div></div>'
+    + '</div>';
+
+  html += '<div id="admin-delete-modal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(6,13,46,.93);backdrop-filter:blur(8px);align-items:center;justify-content:center;">'
+    + '<div style="background:#111428;border:1px solid rgba(240,64,96,.3);border-radius:20px;padding:28px 24px;width:min(300px,90vw);text-align:center;">'
+    + '<div style="font-size:32px;margin-bottom:8px;">⚠️</div>'
+    + '<div style="font-family:\'Fredoka One\',sans-serif;font-size:18px;color:#fff;margin-bottom:6px;">Delete Profile?</div>'
+    + '<div style="font-size:12px;color:var(--dim);margin-bottom:6px;">This will permanently remove</div>'
+    + '<div style="font-size:14px;font-weight:800;color:#fff;margin-bottom:16px;">"'+escHtml(p.handle||'this profile')+'"</div>'
+    + '<div style="font-size:11px;color:#f04060;margin-bottom:18px;">This cannot be undone.</div>'
+    + '<div style="display:flex;gap:8px;">'
+    + '<button onclick="document.getElementById(\'admin-delete-modal\').style.display=\'none\'" style="flex:1;padding:12px;background:transparent;border:1px solid rgba(91,143,255,.2);border-radius:12px;color:var(--dim);font-size:13px;font-weight:700;font-family:\'Nunito\',sans-serif;">Cancel</button>'
+    + '<button onclick="adminDoDelete()" style="flex:1;padding:12px;background:#f04060;border:none;border-radius:12px;color:#fff;font-size:13px;font-weight:800;font-family:\'Nunito\',sans-serif;">Delete</button>'
+    + '</div>'
+    + '</div>'
+    + '</div>';
+
+  root.innerHTML = html;
+  if (s.dayHistory && s.dayHistory.length > 0) renderProfileHeatmap('admin-profile-heatmap', s.dayHistory);
+}
+
+function adminStatCard(label, value) {
+  return '<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;padding:10px 6px;text-align:center;">'
+    + '<div style="font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">'+label+'</div>'
+    + '<div style="font-size:17px;font-weight:700;color:#fff;">'+value+'</div>'
+    + '</div>';
+}
+
+function adminBackToList() { _adminViewProfile = null; renderAdmin(); }
+
+function adminToggleFreeze() {
+  if (!_adminViewProfile) return;
+  var p = _adminViewProfile;
+  var idx = (typeof allProfiles !== 'undefined') ? allProfiles.findIndex(function(x){ return x.id===p.id; }) : -1;
+  if (idx === -1) return;
+  if (p.frozen) {
+    delete allProfiles[idx].frozen;
+    delete allProfiles[idx].frozenAt;
+    _adminViewProfile = allProfiles[idx];
+  } else {
+    allProfiles[idx].frozen = true;
+    allProfiles[idx].frozenAt = new Date().toISOString();
+    _adminViewProfile = allProfiles[idx];
+    if (typeof activeProfile !== 'undefined' && activeProfile && activeProfile.id === p.id) {
+      activeProfile = null;
+      localStorage.removeItem(typeof ACTIVE_KEY !== 'undefined' ? ACTIVE_KEY : 'nsg_active_id');
+    }
+  }
+  if (typeof saveProfiles === 'function') saveProfiles();
+  else { localStorage.setItem('nsg_profiles', JSON.stringify(allProfiles)); }
+  var root = document.getElementById('admin-root');
+  if (root) renderAdmin();
+}
+
+function adminConfirmDelete() {
+  var modal = document.getElementById('admin-delete-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function adminDoDelete() {
+  if (!_adminViewProfile) return;
+  var p = _adminViewProfile;
+  var idx = (typeof allProfiles !== 'undefined') ? allProfiles.findIndex(function(x){ return x.id===p.id; }) : -1;
+  if (idx === -1) return;
+  if (typeof activeProfile !== 'undefined' && activeProfile && activeProfile.id === p.id) {
+    activeProfile = null;
+    localStorage.removeItem(typeof ACTIVE_KEY !== 'undefined' ? ACTIVE_KEY : 'nsg_active_id');
+  }
+  allProfiles.splice(idx, 1);
+  if (typeof saveProfiles === 'function') saveProfiles();
+  else { localStorage.setItem('nsg_profiles', JSON.stringify(allProfiles)); }
+  _adminViewProfile = null;
+  renderAdmin();
+}
+
+var _adminPrevActiveProfile = null;
+var _adminPrevScreen        = 's-admin';
+
+function adminEnterAsProfile() {
+  if (!_adminViewProfile) return;
+  var p = _adminViewProfile;
+
+  _adminPrevActiveProfile = (typeof activeProfile !== 'undefined') ? activeProfile : null;
+  _adminPrevScreen        = 's-admin';
+
+  activeProfile = p;
+  if (typeof updateAvatarBars === 'function') updateAvatarBars();
+
+  var bar  = document.getElementById('admin-impersonate-bar');
+  var name = document.getElementById('admin-impersonate-name');
+  if (bar)  bar.style.display  = 'flex';
+  if (name) name.textContent   = p.handle || 'Unknown';
+  document.body.classList.add('impersonating');
+
+  if (p.isEducator) {
+    go('s-edu-dash');
+  } else {
+    go('s-profile');
+  }
+}
+
+function adminExitImpersonation() {
+  activeProfile = _adminPrevActiveProfile;
+  if (typeof updateAvatarBars === 'function') updateAvatarBars();
+
+  var bar = document.getElementById('admin-impersonate-bar');
+  if (bar) bar.style.display = 'none';
+  document.body.classList.remove('impersonating');
+
+  renderAdmin(); // standalone: render directly instead of game nav
+}
+
+var _adminRangeKey = 'all';
+
+function adminAllDates(profiles) {
+  var set = {};
+  profiles.forEach(function(p) {
+    ((p.stats&&p.stats.dayHistory)||[]).forEach(function(d){ set[d]=true; });
+  });
+  return Object.keys(set).sort();
+}
+
+function adminRangeCutoff(key) {
+  var d = new Date();
+  if (key==='7d')  { d.setDate(d.getDate()-6);        return d.toISOString().slice(0,10); }
+  if (key==='30d') { d.setDate(d.getDate()-29);        return d.toISOString().slice(0,10); }
+  if (key==='3m')  { d.setMonth(d.getMonth()-3);       return d.toISOString().slice(0,10); }
+  if (key==='6m')  { d.setMonth(d.getMonth()-6);       return d.toISOString().slice(0,10); }
+  if (key==='1y')  { d.setFullYear(d.getFullYear()-1); return d.toISOString().slice(0,10); }
+  return null;
+}
+
+function adminBuildDateArr(minDate, maxDate) {
+  var arr = [], cur = new Date(minDate), end = new Date(maxDate);
+  while (cur <= end) { arr.push(cur.toISOString().slice(0,10)); cur.setDate(cur.getDate()+1); }
+  return arr;
+}
+
+function adminBucket(dateArr, dataSource, mode) {
+  var span = dateArr.length;
+  if (span <= 90) {
+    return dateArr.map(function(date) {
+      var count = mode==='dau'
+        ? dataSource.filter(function(p){ return ((p.stats&&p.stats.dayHistory)||[]).indexOf(date)>=0; }).length
+        : dataSource.filter(function(d){ return d<=date; }).length;
+      return { label: date.slice(5), date: date, count: count };
+    });
+  }
+  if (span <= 730) {
+    var weeks = {};
+    dateArr.forEach(function(date) {
+      var d = new Date(date), day = d.getDay(), diff = (day===0?-6:1-day);
+      d.setDate(d.getDate()+diff);
+      var wk = d.toISOString().slice(0,10);
+      if (!weeks[wk]) weeks[wk] = { label: wk.slice(5), date: wk, dates: [] };
+      weeks[wk].dates.push(date);
+    });
+    return Object.keys(weeks).sort().map(function(wk) {
+      var wd = weeks[wk], count;
+      if (mode==='dau') {
+        var active = {};
+        wd.dates.forEach(function(date) { dataSource.forEach(function(p){ if(((p.stats&&p.stats.dayHistory)||[]).indexOf(date)>=0) active[p.id||p]=true; }); });
+        count = Object.keys(active).length;
+      } else { count = dataSource.filter(function(d){ return d<=wd.dates[wd.dates.length-1]; }).length; }
+      return { label: wd.label, date: wk, count: count };
+    });
+  }
+  var months = {};
+  dateArr.forEach(function(date) {
+    var mo = date.slice(0,7);
+    if (!months[mo]) months[mo] = { label: mo.slice(2), date: mo+'-01', dates: [] };
+    months[mo].dates.push(date);
+  });
+  return Object.keys(months).sort().map(function(mo) {
+    var md = months[mo], count;
+    if (mode==='dau') {
+      var active = {};
+      md.dates.forEach(function(date) { dataSource.forEach(function(p){ if(((p.stats&&p.stats.dayHistory)||[]).indexOf(date)>=0) active[p.id||p]=true; }); });
+      count = Object.keys(active).length;
+    } else { count = dataSource.filter(function(d){ return d<=md.dates[md.dates.length-1]; }).length; }
+    return { label: md.label, date: md.date, count: count };
+  });
+}
+
+function renderAdminAnalytics(profiles) {
+  if (!profiles.length) return '<p style="text-align:center;color:var(--dim);padding:40px 20px;">No data yet.</p>';
+  var totalGames = profiles.reduce(function(a,p){ return a+(p.stats&&p.stats.gamesPlayed||0); }, 0);
+  var totalAns   = profiles.reduce(function(a,p){ return a+(p.stats&&p.stats.totalAnswered||0); }, 0);
+  var totalCorr  = profiles.reduce(function(a,p){ return a+(p.stats&&p.stats.totalCorrect||0); }, 0);
+  var totalStars = profiles.reduce(function(a,p){ return a+(p.stats&&p.stats.cr||0); }, 0);
+  var avgAcc = totalAns>0 ? Math.round(totalCorr/totalAns*100) : 0;
+  var educators = profiles.filter(function(p){ return p.isEducator; }).length;
+  var today = new Date().toISOString().slice(0,10);
+  var activeToday = profiles.filter(function(p){ return (p.stats&&p.stats.dayHistory||[]).indexOf(today)>=0; }).length;
+  var days7=[]; for(var i=0;i<7;i++){ var dd=new Date(); dd.setDate(dd.getDate()-i); days7.push(dd.toISOString().slice(0,10)); }
+  var active7d = profiles.filter(function(p){ return days7.some(function(d){ return (p.stats&&p.stats.dayHistory||[]).indexOf(d)>=0; }); }).length;
+
+  var allDates = adminAllDates(profiles);
+  var earliest = allDates.length ? allDates[0] : today;
+  var spanDays = Math.round((new Date(today)-new Date(earliest))/86400000)+1;
+  var gran = spanDays<=90?'Daily':spanDays<=730?'Weekly':'Monthly';
+
+  var ranges = [{k:'7d',l:'7D'},{k:'30d',l:'30D'},{k:'3m',l:'3M'},{k:'6m',l:'6M'},{k:'1y',l:'1Y'},{k:'all',l:'All Time'}];
+  var rangeHtml = '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;">'
+    + ranges.map(function(r){
+        var act=_adminRangeKey===r.k;
+        return '<button onclick="adminSetRange(\''+r.k+'\')" style="padding:5px 10px;font-size:11px;font-weight:700;font-family:\'Nunito\',sans-serif;border:1px solid '+(act?'#3b6ef8':'rgba(91,143,255,.2)')+';background:'+(act?'rgba(59,110,248,.2)':'transparent')+';color:'+(act?'#fff':'var(--dim)')+';border-radius:8px;cursor:pointer;">'+r.l+'</button>';
+      }).join('')+'</div>';
+
+  var cutoff = adminRangeCutoff(_adminRangeKey);
+  var effectiveFrom = cutoff ? (cutoff>earliest?cutoff:earliest) : earliest;
+  var granLabel = _adminRangeKey==='all' ? gran
+    : (_adminRangeKey==='7d'||_adminRangeKey==='30d') ? 'Daily'
+    : (_adminRangeKey==='3m'||_adminRangeKey==='6m') ? 'Weekly'
+    : 'Monthly';
+
+  return '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px;">'
+    + adminBigCard('👥 Profiles', profiles.length)
+    + adminBigCard('🎮 Games', totalGames.toLocaleString())
+    + adminBigCard('❓ Answered', totalAns.toLocaleString())
+    + adminBigCard('🎯 Avg Acc', avgAcc+'%')
+    + adminBigCard('📅 Today', activeToday)
+    + adminBigCard('📆 7-Day', active7d)
+    + adminBigCard('🎓 Educators', educators)
+    + adminBigCard('⭐ Stars', totalStars.toLocaleString())
+    + '</div>'
+    + rangeHtml
+    + '<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
+    + '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;">Active Users — '+granLabel+'</div>'
+    + '<div style="font-size:9px;color:var(--muted);">from '+effectiveFrom+'</div></div>'
+    + '<div id="admin-chart-dau"></div></div>'
+    + '<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;">'
+    + '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;">Cumulative Users — All Time</div>'
+    + '<div id="admin-chart-growth"></div></div>'
+    + '<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;">'
+    + '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;">Accuracy Distribution</div>'
+    + '<div id="admin-chart-acc"></div></div>'
+    + '<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;">'
+    + '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;">Games Per Profile</div>'
+    + '<div id="admin-chart-games"></div></div>'
+    + renderAdminBlockA(profiles)
+    + renderAdminBlockB(profiles)
+    + renderAdminBlockC()
+    + renderAdminBlockD();
+}
+
+// ─────────────────────────────────────────────────────────────
+// Block A — Play Mode Breakdown (DEGRADED)
+// TODO(phase-4): Replace summary cards with daily stacked bar chart once
+// h2hDayHistory and soloDayHistory per-profile arrays exist. Use the same
+// date-bucketing pattern as adminChartDAU() — iterate adminBuildDateArr(),
+// for each date sum profiles' h2hDayHistory.includes(date) and same for solo.
+// ─────────────────────────────────────────────────────────────
+function renderAdminBlockA(profiles) {
+  var h2hTotal = 0, gamesTotal = 0, h2hActive = 0, soloOnly = 0;
+  profiles.forEach(function(p) {
+    var s = p.stats || {};
+    var h = (s.h2h && s.h2h.matches) || 0;
+    var g = s.gamesPlayed || 0;
+    h2hTotal += h;
+    gamesTotal += g;
+    if (h > 0) h2hActive++;
+    else if (g > 0) soloOnly++;
+  });
+  // gamesPlayed is the grand total of all completed matches (solo + h2h),
+  // so subtracting h2h matches gives an approximate solo count. If a future
+  // phase adds separate solo/h2h counters this becomes exact.
+  var soloTotal = Math.max(0, gamesTotal - h2hTotal);
+  var combined = h2hTotal + soloTotal;
+  var h2hPct = combined > 0 ? Math.round(h2hTotal / combined * 100) : 0;
+
+  return '<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;">'
+    + '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;">Play Mode Breakdown</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">'
+    + adminBigCard('⚔️ H2H Matches', h2hTotal.toLocaleString())
+    + adminBigCard('🎮 Solo Games', soloTotal.toLocaleString())
+    + adminBigCard('📊 H2H Ratio', h2hPct + '%')
+    + adminBigCard('🟢 H2H Players', h2hActive + ' / ' + (h2hActive + soloOnly))
+    + '</div>'
+    + '<div style="font-size:9px;color:var(--muted);margin-top:8px;line-height:1.5;">Solo total is derived: <code>gamesPlayed − h2h.matches</code>. Will upgrade to a true daily stacked bar chart once per-mode day history arrays exist.</div>'
+    + '</div>';
+}
+
+// ─────────────────────────────────────────────────────────────
+// Block B — Educator Growth & Coordination (FULL BUILD)
+// ─────────────────────────────────────────────────────────────
+function adminLoadMessages() {
+  try { var raw = localStorage.getItem(MSG_KEY); return raw ? JSON.parse(raw) : []; }
+  catch(e) { return []; }
+}
+
+function adminMessagesInRange(cutoffDate) {
+  var all = adminLoadMessages();
+  if (!cutoffDate) return all;
+  return all.filter(function(m) { return m.sentAt && m.sentAt.slice(0,10) >= cutoffDate; });
+}
+
+function adminUniqueConvoPairs(msgs) {
+  var pairs = {};
+  msgs.forEach(function(m) {
+    if (!m.fromId || !m.toId) return;
+    var key = [m.fromId, m.toId].sort().join('|');
+    pairs[key] = true;
+  });
+  return Object.keys(pairs).length;
+}
+
+function adminTopEducatorsByVolume(profiles, msgs, n) {
+  var eduIds = {};
+  profiles.forEach(function(p) { if (p.isEducator) eduIds[p.id] = p; });
+  var counts = {};
+  msgs.forEach(function(m) {
+    if (eduIds[m.fromId]) counts[m.fromId] = (counts[m.fromId] || 0) + 1;
+  });
+  return Object.keys(counts)
+    .map(function(id) { return { profile: eduIds[id], count: counts[id] }; })
+    .sort(function(a,b) { return b.count - a.count; })
+    .slice(0, n);
+}
+
+function adminCountLinkedStudents(profiles, educator) {
+  if (!educator.linkCode) return 0;
+  var code = educator.linkCode;
+  var c = 0;
+  profiles.forEach(function(p) {
+    if (!p.isEducator && p.linkedEducators && p.linkedEducators.indexOf(code) >= 0) c++;
+  });
+  return c;
+}
+
+function renderAdminBlockB(profiles) {
+  var educators = profiles.filter(function(p) { return p.isEducator; });
+  var linkedStudents = profiles.filter(function(p) {
+    return !p.isEducator && p.linkedEducators && p.linkedEducators.length > 0;
+  });
+  var avgStudentsPerEdu = educators.length > 0
+    ? (linkedStudents.length / educators.length).toFixed(1)
+    : '0';
+  var largestClass = 0;
+  educators.forEach(function(e) {
+    var c = adminCountLinkedStudents(profiles, e);
+    if (c > largestClass) largestClass = c;
+  });
+
+  var cutoff = adminRangeCutoff(_adminRangeKey);
+  var msgsInRange = adminMessagesInRange(cutoff);
+  var msgCount = msgsInRange.length;
+  var pairCount = adminUniqueConvoPairs(msgsInRange);
+  var avgPerPair = pairCount > 0 ? (msgCount / pairCount).toFixed(1) : '0';
+
+  return '<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;">'
+    + '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;">Educator Growth &amp; Coordination</div>'
+
+    + '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px;">'
+    + adminBigCard('🎓 Educators', educators.length)
+    + adminBigCard('👥 Linked Students', linkedStudents.length)
+    + adminBigCard('📐 Avg / Educator', avgStudentsPerEdu)
+    + adminBigCard('🏆 Largest Class', largestClass)
+    + '</div>'
+
+    + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">'
+    + adminBigCard('💬 Msgs (range)', msgCount.toLocaleString())
+    + adminBigCard('🔗 Pairs (range)', pairCount.toLocaleString())
+    + adminBigCard('∑ Per Pair', avgPerPair)
+    + '</div>'
+
+    + '<div style="margin-bottom:12px;">'
+    + '<div style="font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;">Educator Growth — Cumulative</div>'
+    + '<div id="admin-chart-edu-growth"></div>'
+    + '</div>'
+
+    + '<div>'
+    + '<div style="font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;">Messages Per Day (in range)</div>'
+    + '<div id="admin-chart-msgs-day"></div>'
+    + '</div>'
+
+    + '</div>';
+}
+
+// ─────────────────────────────────────────────────────────────
+// Block C — Feature Engagement (EMPTY STATE)
+// ─────────────────────────────────────────────────────────────
+function renderAdminBlockC() {
+  return '<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;">'
+    + '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;">Feature Engagement</div>'
+    + '<div style="padding:24px 12px;text-align:center;">'
+    + '<div style="font-size:32px;margin-bottom:10px;opacity:.4;">📈</div>'
+    + '<div style="font-size:12px;color:var(--text);line-height:1.6;max-width:280px;margin:0 auto;">Per-feature time tracking, unique users, and repeat-visit rates will be shown here once engagement tracking is enabled.</div>'
+    + '<div style="font-size:10px;color:var(--muted);margin-top:10px;font-style:italic;">Requires Phase 4 (engagement tracking) to be deployed.</div>'
+    + '</div>'
+    + '</div>';
+}
+
+// ─────────────────────────────────────────────────────────────
+// Block D — Revenue (EMPTY STATE)
+// ─────────────────────────────────────────────────────────────
+function renderAdminBlockD() {
+  return '<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:20px;">'
+    + '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;">Revenue</div>'
+    + '<div style="padding:24px 12px;text-align:center;">'
+    + '<div style="font-size:32px;margin-bottom:10px;opacity:.4;">💰</div>'
+    + '<div style="font-size:12px;color:var(--text);line-height:1.6;max-width:280px;margin:0 auto;">Ad revenue (by gameplay source), Remove Ads purchases, and Educator Subscription MRR will appear here once monetization is enabled.</div>'
+    + '<div style="font-size:10px;color:var(--muted);margin-top:10px;font-style:italic;">Requires Phases 2 and 3 (monetization + purchases) to be deployed.</div>'
+    + '</div>'
+    + '</div>';
+}
+
+function adminSetRange(key) {
+  _adminRangeKey = key;
+  var profiles = (typeof allProfiles !== 'undefined') ? allProfiles : [];
+  var content = document.getElementById('admin-content');
+  if (content) { content.innerHTML = renderAdminAnalytics(profiles); renderAdminCharts(profiles); }
+}
+
+function adminBigCard(label, value) {
+  return '<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center;">'
+    + '<div style="font-size:10px;color:var(--dim);margin-bottom:4px;">'+label+'</div>'
+    + '<div style="font-size:22px;font-weight:700;color:#fff;font-family:\'Space Mono\',monospace;">'+value+'</div>'
+    + '</div>';
+}
+
+function renderAdminCharts(profiles) {
+  if (typeof d3 === 'undefined') return;
+  var dauEl    = document.getElementById('admin-chart-dau');
+  var accEl    = document.getElementById('admin-chart-acc');
+  var gamesEl  = document.getElementById('admin-chart-games');
+  var growthEl = document.getElementById('admin-chart-growth');
+  var eduEl    = document.getElementById('admin-chart-edu-growth');
+  var msgsEl   = document.getElementById('admin-chart-msgs-day');
+  if (dauEl)    adminChartDAU(dauEl, profiles);
+  if (growthEl) adminChartGrowth(growthEl, profiles);
+  if (accEl)    adminChartAcc(accEl, profiles);
+  if (gamesEl)  adminChartGames(gamesEl, profiles);
+  if (eduEl)    adminChartEduGrowth(eduEl, profiles);
+  if (msgsEl)   adminChartMsgsPerDay(msgsEl, profiles);
+}
+
+function adminChartDAU(container, profiles) {
+  if (typeof d3 === 'undefined') return;
+  var today = new Date().toISOString().slice(0,10);
+  var cutoff = adminRangeCutoff(_adminRangeKey);
+  var allDates = adminAllDates(profiles);
+  if (!allDates.length) { d3.select(container).append('p').style('color','var(--dim)').style('font-size','11px').style('text-align','center').text('No activity data yet'); return; }
+  var minDate = cutoff ? (cutoff>allDates[0]?cutoff:allDates[0]) : allDates[0];
+  var dateArr = adminBuildDateArr(minDate, today);
+  var bucketed = adminBucket(dateArr, profiles, 'dau');
+  if (!bucketed.length) return;
+
+  var w = container.offsetWidth||300, h = 130;
+  var mg = {top:8,right:8,bottom:24,left:28};
+  var iw = w-mg.left-mg.right, ih = h-mg.top-mg.bottom;
+  var svg = d3.select(container).append('svg').attr('width',w).attr('height',h);
+  var g = svg.append('g').attr('transform','translate('+mg.left+','+mg.top+')');
+  var x = d3.scaleBand().domain(bucketed.map(function(d){return d.date;})).range([0,iw]).padding(.1);
+  var yMax = d3.max(bucketed,function(d){return d.count;})||1;
+  var y = d3.scaleLinear().domain([0,yMax]).nice().range([ih,0]);
+  g.selectAll('.gl').data(y.ticks(4)).enter().append('line').attr('x1',0).attr('x2',iw).attr('y1',function(d){return y(d);}).attr('y2',function(d){return y(d);}).attr('stroke','rgba(91,143,255,.1)');
+  g.selectAll('.bar').data(bucketed).enter().append('rect')
+    .attr('x',function(d){return x(d.date);}).attr('y',function(d){return y(d.count);})
+    .attr('width',x.bandwidth()).attr('height',function(d){return ih-y(d.count);}).attr('rx',2)
+    .attr('fill',function(d){return d.count>0?'#3b6ef8':'rgba(91,143,255,.08)';});
+  g.append('g').call(d3.axisLeft(y).ticks(4).tickSize(0)).selectAll('text').attr('fill','#5a6285').attr('font-size','9px');
+  g.select('.domain').remove();
+  var step = Math.max(1,Math.ceil(bucketed.length/6));
+  bucketed.filter(function(_,i){return i%step===0||i===bucketed.length-1;}).forEach(function(d){
+    g.append('text').attr('x',x(d.date)+x.bandwidth()/2).attr('y',ih+16).attr('text-anchor','middle').attr('fill','#5a6285').attr('font-size','8px').text(d.label);
+  });
+}
+
+function adminChartGrowth(container, profiles) {
+  if (typeof d3 === 'undefined') return;
+  var firstDates = profiles.map(function(p){
+    var dh=(p.stats&&p.stats.dayHistory)||[];
+    return dh.length?dh.slice().sort()[0]:null;
+  }).filter(Boolean).sort();
+  if (!firstDates.length) { d3.select(container).append('p').style('color','var(--dim)').style('font-size','11px').style('text-align','center').text('Not enough history data yet'); return; }
+
+  var today = new Date().toISOString().slice(0,10);
+  var dateArr = adminBuildDateArr(firstDates[0], today);
+  var bucketed = adminBucket(dateArr, firstDates, 'growth');
+
+  var w=container.offsetWidth||300, h=120;
+  var mg={top:8,right:8,bottom:24,left:30};
+  var iw=w-mg.left-mg.right, ih=h-mg.top-mg.bottom;
+  var svg=d3.select(container).append('svg').attr('width',w).attr('height',h);
+  var g=svg.append('g').attr('transform','translate('+mg.left+','+mg.top+')');
+  var x=d3.scalePoint().domain(bucketed.map(function(d){return d.date;})).range([0,iw]);
+  var y=d3.scaleLinear().domain([0,profiles.length||1]).nice().range([ih,0]);
+  g.selectAll('.gl').data(y.ticks(4)).enter().append('line').attr('x1',0).attr('x2',iw).attr('y1',function(d){return y(d);}).attr('y2',function(d){return y(d);}).attr('stroke','rgba(91,143,255,.1)');
+  var line=d3.line().x(function(d){return x(d.date);}).y(function(d){return y(d.count);}).curve(d3.curveMonotoneX);
+  var area=d3.area().x(function(d){return x(d.date);}).y0(ih).y1(function(d){return y(d.count);}).curve(d3.curveMonotoneX);
+  g.append('path').datum(bucketed).attr('fill','rgba(34,209,122,.12)').attr('d',area);
+  g.append('path').datum(bucketed).attr('fill','none').attr('stroke','#22d17a').attr('stroke-width',2).attr('d',line);
+  g.append('g').call(d3.axisLeft(y).ticks(4).tickSize(0)).selectAll('text').attr('fill','#5a6285').attr('font-size','9px');
+  g.select('.domain').remove();
+  var step=Math.max(1,Math.ceil(bucketed.length/6));
+  bucketed.filter(function(_,i){return i%step===0||i===bucketed.length-1;}).forEach(function(d){
+    g.append('text').attr('x',x(d.date)).attr('y',ih+16).attr('text-anchor','middle').attr('fill','#5a6285').attr('font-size','8px').text(d.label);
+  });
+}
+
+// Block B chart — cumulative educator count over time
+// Uses earliest dayHistory entry per educator as proxy unlock date.
+function adminChartEduGrowth(container, profiles) {
+  if (typeof d3 === 'undefined') return;
+  d3.select(container).selectAll('*').remove();
+  var educatorFirstSeen = profiles
+    .filter(function(p) { return p.isEducator; })
+    .map(function(p) {
+      var dh = (p.stats && p.stats.dayHistory) || [];
+      return dh.length ? dh.slice().sort()[0] : null;
+    })
+    .filter(Boolean)
+    .sort();
+  if (!educatorFirstSeen.length) {
+    d3.select(container).append('p').style('color','var(--dim)').style('font-size','11px').style('text-align','center').style('padding','12px 0').text('No educators yet');
+    return;
+  }
+
+  var today = new Date().toISOString().slice(0,10);
+  var cutoff = adminRangeCutoff(_adminRangeKey);
+  var minDate = cutoff ? (cutoff > educatorFirstSeen[0] ? cutoff : educatorFirstSeen[0]) : educatorFirstSeen[0];
+  var dateArr = adminBuildDateArr(minDate, today);
+  if (!dateArr.length) return;
+
+  // Cumulative count at each date
+  var data = dateArr.map(function(date) {
+    return { date: date, count: educatorFirstSeen.filter(function(d) { return d <= date; }).length };
+  });
+
+  var w = container.offsetWidth || 300, h = 110;
+  var mg = {top:8,right:8,bottom:22,left:28};
+  var iw = w-mg.left-mg.right, ih = h-mg.top-mg.bottom;
+  var svg = d3.select(container).append('svg').attr('width',w).attr('height',h);
+  var g = svg.append('g').attr('transform','translate('+mg.left+','+mg.top+')');
+  var x = d3.scalePoint().domain(data.map(function(d){return d.date;})).range([0,iw]);
+  var y = d3.scaleLinear().domain([0, d3.max(data,function(d){return d.count;})||1]).nice().range([ih,0]);
+  g.selectAll('.gl').data(y.ticks(3)).enter().append('line')
+    .attr('x1',0).attr('x2',iw).attr('y1',function(d){return y(d);}).attr('y2',function(d){return y(d);})
+    .attr('stroke','rgba(255,225,53,.08)');
+  var area = d3.area().x(function(d){return x(d.date);}).y0(ih).y1(function(d){return y(d.count);}).curve(d3.curveMonotoneX);
+  var line = d3.line().x(function(d){return x(d.date);}).y(function(d){return y(d.count);}).curve(d3.curveMonotoneX);
+  g.append('path').datum(data).attr('fill','rgba(255,225,53,.12)').attr('d',area);
+  g.append('path').datum(data).attr('fill','none').attr('stroke','#ffe135').attr('stroke-width',2).attr('d',line);
+  g.append('g').call(d3.axisLeft(y).ticks(3).tickSize(0)).selectAll('text').attr('fill','#5a6285').attr('font-size','9px');
+  g.select('.domain').remove();
+  var step = Math.max(1, Math.ceil(data.length/5));
+  data.filter(function(_,i){return i%step===0||i===data.length-1;}).forEach(function(d){
+    g.append('text').attr('x',x(d.date)).attr('y',ih+14).attr('text-anchor','middle').attr('fill','#5a6285').attr('font-size','8px').text(d.date.slice(5));
+  });
+}
+
+// Block B chart — messages per day in the selected range
+function adminChartMsgsPerDay(container, profiles) {
+  if (typeof d3 === 'undefined') return;
+  d3.select(container).selectAll('*').remove();
+
+  var cutoff = adminRangeCutoff(_adminRangeKey);
+  var msgs = adminMessagesInRange(cutoff);
+  if (!msgs.length) {
+    d3.select(container).append('p').style('color','var(--dim)').style('font-size','11px').style('text-align','center').style('padding','12px 0').text('No messages in range');
+    return;
+  }
+
+  // Bucket by day
+  var byDate = {};
+  msgs.forEach(function(m) {
+    if (!m.sentAt) return;
+    var d = m.sentAt.slice(0,10);
+    byDate[d] = (byDate[d] || 0) + 1;
+  });
+  var msgDates = Object.keys(byDate).sort();
+  if (!msgDates.length) return;
+
+  var today = new Date().toISOString().slice(0,10);
+  var minDate = cutoff || msgDates[0];
+  if (minDate > today) return;
+  var dateArr = adminBuildDateArr(minDate, today);
+  var data = dateArr.map(function(date) { return { date: date, count: byDate[date] || 0 }; });
+
+  var w = container.offsetWidth || 300, h = 110;
+  var mg = {top:8,right:8,bottom:22,left:28};
+  var iw = w-mg.left-mg.right, ih = h-mg.top-mg.bottom;
+  var svg = d3.select(container).append('svg').attr('width',w).attr('height',h);
+  var g = svg.append('g').attr('transform','translate('+mg.left+','+mg.top+')');
+  var x = d3.scaleBand().domain(data.map(function(d){return d.date;})).range([0,iw]).padding(.1);
+  var yMax = d3.max(data, function(d){return d.count;}) || 1;
+  var y = d3.scaleLinear().domain([0, yMax]).nice().range([ih, 0]);
+  g.selectAll('.gl').data(y.ticks(3)).enter().append('line')
+    .attr('x1',0).attr('x2',iw).attr('y1',function(d){return y(d);}).attr('y2',function(d){return y(d);})
+    .attr('stroke','rgba(91,143,255,.08)');
+  g.selectAll('.bar').data(data).enter().append('rect')
+    .attr('x',function(d){return x(d.date);}).attr('y',function(d){return y(d.count);})
+    .attr('width',x.bandwidth()).attr('height',function(d){return ih-y(d.count);}).attr('rx',2)
+    .attr('fill',function(d){return d.count>0?'#8eda76':'rgba(142,218,118,.08)';});
+  g.append('g').call(d3.axisLeft(y).ticks(3).tickSize(0)).selectAll('text').attr('fill','#5a6285').attr('font-size','9px');
+  g.select('.domain').remove();
+  var step = Math.max(1, Math.ceil(data.length/6));
+  data.filter(function(_,i){return i%step===0||i===data.length-1;}).forEach(function(d){
+    g.append('text').attr('x',x(d.date)+x.bandwidth()/2).attr('y',ih+14).attr('text-anchor','middle').attr('fill','#5a6285').attr('font-size','8px').text(d.date.slice(5));
+  });
+}
+
+function adminChartAcc(container, profiles) {
+  if (typeof d3 === 'undefined') return;
+  var buckets=[{l:'0–20',r:[0,20],c:0},{l:'21–40',r:[21,40],c:0},{l:'41–60',r:[41,60],c:0},{l:'61–80',r:[61,80],c:0},{l:'81–100',r:[81,100],c:0}];
+  profiles.forEach(function(p){ var s=p.stats||{}; if(!s.totalAnswered)return; var a=Math.round(s.totalCorrect/s.totalAnswered*100); var b=buckets.find(function(b){return a>=b.r[0]&&a<=b.r[1];}); if(b)b.c++; });
+  var w=container.offsetWidth||300, h=100;
+  var mg={top:8,right:8,bottom:22,left:24};
+  var iw=w-mg.left-mg.right, ih=h-mg.top-mg.bottom;
+  var svg=d3.select(container).append('svg').attr('width',w).attr('height',h);
+  var g=svg.append('g').attr('transform','translate('+mg.left+','+mg.top+')');
+  var x=d3.scaleBand().domain(buckets.map(function(b){return b.l;})).range([0,iw]).padding(.2);
+  var y=d3.scaleLinear().domain([0,d3.max(buckets,function(b){return b.c;})||1]).nice().range([ih,0]);
+  var colors=['#f04060','#e07830','#ffe135','#22d17a','#3b6ef8'];
+  g.selectAll('.bar').data(buckets).enter().append('rect').attr('x',function(d){return x(d.l);}).attr('y',function(d){return y(d.c);}).attr('width',x.bandwidth()).attr('height',function(d){return ih-y(d.c);}).attr('rx',3).attr('fill',function(d,i){return colors[i];});
+  g.selectAll('.lbl').data(buckets).enter().append('text').attr('x',function(d){return x(d.l)+x.bandwidth()/2;}).attr('y',function(d){return d.c>0?y(d.c)-4:ih-4;}).attr('text-anchor','middle').attr('fill','#fff').attr('font-size','9px').attr('font-weight','700').text(function(d){return d.c||'';});
+  g.append('g').call(d3.axisLeft(y).ticks(3).tickSize(0)).selectAll('text').attr('fill','#5a6285').attr('font-size','9px');
+  g.selectAll('.domain').remove();
+  g.append('g').attr('transform','translate(0,'+ih+')').call(d3.axisBottom(x).tickSize(0)).selectAll('text').attr('fill','#5a6285').attr('font-size','8px');
+  g.selectAll('.domain').remove();
+}
+
+function adminChartGames(container, profiles) {
+  if (typeof d3 === 'undefined') return;
+  var top=profiles.filter(function(p){return p.stats&&p.stats.gamesPlayed>0;}).sort(function(a,b){return (b.stats.gamesPlayed||0)-(a.stats.gamesPlayed||0);}).slice(0,15);
+  if (!top.length) { d3.select(container).append('p').style('color','var(--dim)').style('font-size','11px').style('text-align','center').text('No game data yet'); return; }
+  var barH=20, gap=4;
+  var mg={top:4,right:44,bottom:4,left:90};
+  var w=container.offsetWidth||300;
+  var h=top.length*(barH+gap)+mg.top+mg.bottom;
+  var iw=w-mg.left-mg.right;
+  var svg=d3.select(container).append('svg').attr('width',w).attr('height',h);
+  var g=svg.append('g').attr('transform','translate('+mg.left+','+mg.top+')');
+  var maxG=d3.max(top,function(p){return p.stats.gamesPlayed;});
+  var x=d3.scaleLinear().domain([0,maxG]).range([0,iw]);
+  top.forEach(function(p,i){
+    var yp=i*(barH+gap), games=p.stats.gamesPlayed;
+    var tc=(typeof getProfileTitleColor==='function')?getProfileTitleColor(p):'#3b6ef8';
+    g.append('text').attr('x',-6).attr('y',yp+barH/2+4).attr('text-anchor','end').attr('fill','#d0d8f0').attr('font-size','10px').text((p.handle||'?').slice(0,12));
+    g.append('rect').attr('x',0).attr('y',yp).attr('width',x(games)).attr('height',barH).attr('rx',4).attr('fill',tc).attr('opacity',.85);
+    g.append('text').attr('x',x(games)+5).attr('y',yp+barH/2+4).attr('fill','#d0d8f0').attr('font-size','10px').attr('font-weight','700').text(games);
+  });
+}
+
+function renderProfileHeatmap(containerId, dayHistory) {
+  if (typeof d3 === 'undefined') return;
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  if (!dayHistory||!dayHistory.length) return;
+
+  var daySet = {};
+  dayHistory.forEach(function(d){ daySet[d]=true; });
+
+  var today = new Date();
+  var sorted = dayHistory.slice().sort();
+  var earliest = new Date(sorted[0]);
+  earliest.setDate(earliest.getDate()-earliest.getDay());
+
+  var allDates = [];
+  var cur = new Date(earliest);
+  var todayStr = new Date().toISOString().slice(0,10);
+  while (cur.toISOString().slice(0,10) <= todayStr) {
+    allDates.push(cur.toISOString().slice(0,10));
+    cur.setDate(cur.getDate()+1);
+  }
+  var endDay = new Date(allDates[allDates.length-1]);
+  while (endDay.getDay() !== 6) {
+    endDay.setDate(endDay.getDate()+1);
+    allDates.push(endDay.toISOString().slice(0,10));
+  }
+
+  var cols = Math.ceil(allDates.length/7);
+  var dot=9, gap=2, labelH=14;
+  var w=cols*(dot+gap), h=7*(dot+gap)+labelH+16;
+
+  var svg=d3.select(el).append('svg').attr('width','100%').attr('height',h).attr('viewBox','0 0 '+w+' '+h).attr('preserveAspectRatio','xMinYMid meet');
+
+  var lastMo='';
+  for (var ci=0;ci<cols;ci++) {
+    var idx=ci*7;
+    if (idx>=allDates.length) break;
+    var mo=allDates[idx].slice(0,7);
+    if (mo!==lastMo) { lastMo=mo; svg.append('text').attr('x',ci*(dot+gap)).attr('y',labelH-2).attr('fill','#5a6285').attr('font-size','7px').text(allDates[idx].slice(2,7)); }
+  }
+
+  allDates.forEach(function(date,i){
+    var col=Math.floor(i/7), row=i%7;
+    svg.append('rect').attr('x',col*(dot+gap)).attr('y',row*(dot+gap)+labelH+2).attr('width',dot).attr('height',dot).attr('rx',2)
+      .attr('fill',daySet[date]?'#3b6ef8':'rgba(91,143,255,.1)');
+  });
+
+  var lx=w-62;
+  svg.append('rect').attr('x',lx).attr('y',h-10).attr('width',7).attr('height',7).attr('rx',1).attr('fill','rgba(91,143,255,.1)');
+  svg.append('text').attr('x',lx+9).attr('y',h-3).attr('fill','#5a6285').attr('font-size','7px').text('None');
+  svg.append('rect').attr('x',lx+32).attr('y',h-10).attr('width',7).attr('height',7).attr('rx',1).attr('fill','#3b6ef8');
+  svg.append('text').attr('x',lx+41).attr('y',h-3).attr('fill','#5a6285').attr('font-size','7px').text('Played');
+}
+
+(function wireAdminRouter(){
+  var prev = go;
+  go = function(id) {
+    prev(id);
+    if (id === 's-admin') { _adminViewProfile = null; setTimeout(renderAdmin, 50); }
+  };
+})();
+
+
+const NOTES_KEY = 'nsg_notes';
+
+function getNotes() {
+  try {
+    var raw = localStorage.getItem(NOTES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+
+function saveNotes(notes) {
+  try { localStorage.setItem(NOTES_KEY, JSON.stringify(notes)); } catch (e) {}
+}
+
+function closeNsgModal() {
+  const overlay = document.querySelector('.nsg-modal-overlay');
+  if (overlay) overlay.remove();
+}
+
+function showBetaWelcome() {
+  const overlay = document.createElement('div');
+  overlay.className = 'nsg-modal-overlay';
+  overlay.innerHTML = `
+    <div class="nsg-modal">
+      <h3>👋 Hello!</h3>
+      <div class="nsg-body">
+        <p>Hello and thank you. If you are reading this, it means you are in the group of trusted friends and family members I've asked to play my geography game.</p>
+        <p>On any page, when you click your avatar image it will take you to your profile page. There you'll find a button to send me notes. Check out the educator panel, head-to-head mode, stats/leaderboard, and in-game rewards. (Most avatar types and associated assets will be "purchasable" with accumulated stars, but I wanted everyone here to have full access.)</p>
+        <p>You can use an anonymous screen name. Send me honest opinions, critiques, and notes — anything that looks wrong, glitches, or has incorrect information, please let me know.</p>
+        <p>There are a few more details I need to build out, but I'm anxious to get this beta version out and start testing data flows. If you have a friend you think might enjoy it, feel free to share the link.</p>
+        <p style="margin-bottom:0;">Thanks for spending time on my game — and especially thank you for your opinions, critiques, and debugging help…hope you like it!!!</p>
+      </div>
+      <button class="nsg-btn-primary" id="btn-beta-ok">Let's Go! ⭐</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById('btn-beta-ok').addEventListener('click', () => {
+    localStorage.setItem('nsg_beta_welcome_shown', '1');
+    closeNsgModal();
+  });
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      localStorage.setItem('nsg_beta_welcome_shown', '1');
+      closeNsgModal();
+    }
+  });
+}
+
+function showNotesModal() {
+  const profile = window.activeProfile;
+  if (!profile) return;
+
+  const notes = getNotes().filter(n => n.profileId === profile.id);
+
+  const allNotes = getNotes();
+  let changed = false;
+  allNotes.forEach(n => {
+    if (n.profileId === profile.id && n.response && !n.replyRead) {
+      n.replyRead = true;
+      changed = true;
+    }
+  });
+  if (changed) saveNotes(allNotes);
+
+  let notesHtml = '';
+  if (notes.length > 0) {
+    notesHtml = '<div style="margin-bottom:14px;">';
+    const sorted = notes.slice().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    for (const note of sorted) {
+      const d = new Date(note.timestamp);
+      const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      notesHtml += '<div class="nsg-note-card">';
+      notesHtml += '<div class="nsg-note-meta">You · ' + dateStr + '</div>';
+      notesHtml += '<div class="nsg-note-msg">' + escHtml(note.message) + '</div>';
+      if (note.response) {
+        const rd = new Date(note.responseAt);
+        const rDateStr = rd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' at ' + rd.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        notesHtml += '<div class="nsg-note-reply">';
+        notesHtml += '<div class="nsg-reply-label">Dev Team · ' + rDateStr + '</div>';
+        notesHtml += '<div class="nsg-reply-text">' + escHtml(note.response) + '</div>';
+        notesHtml += '</div>';
+      }
+      notesHtml += '</div>';
+    }
+    notesHtml += '</div>';
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'nsg-modal-overlay';
+  overlay.innerHTML = `
+    <div class="nsg-modal">
+      <h3>📝 Notes to Dev Team</h3>
+      ${notes.length === 0 ? '<p style="text-align:center;color:var(--dim);font-size:12px;margin-bottom:14px;">No notes yet — send your first one below!</p>' : ''}
+      ${notesHtml}
+      <div style="font-size:11px;color:var(--dim);margin-bottom:6px;font-weight:700;">New Note</div>
+      <textarea id="note-compose" placeholder="Bug report, suggestion, something that looked wrong, or just say hi..."></textarea>
+      <button class="nsg-btn-primary" id="btn-note-send">Send Note 📬</button>
+      <button class="nsg-btn-secondary" id="btn-note-close">Close</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  document.getElementById('btn-note-send').addEventListener('click', () => {
+    const textarea = document.getElementById('note-compose');
+    const msg = textarea.value.trim();
+    if (!msg) { textarea.focus(); return; }
+
+    const allN = getNotes();
+    allN.push({
+      id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2),
+      profileId: profile.id,
+      handle: profile.handle,
+      message: msg,
+      timestamp: new Date().toISOString(),
+      response: null,
+      responseAt: null,
+      read: false,
+      replyRead: false
+    });
+    saveNotes(allN);
+
+    if (typeof showToast === 'function') showToast('Note sent! Thank you 💙');
+    closeNsgModal();
+
+    if (typeof renderProfile === 'function') renderProfile();
+  });
+
+  document.getElementById('btn-note-close').addEventListener('click', closeNsgModal);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeNsgModal(); });
+}
+
+function renderAdminNotes() {
+  var notes = getNotes();
+  if (!notes.length) {
+    return '<div style="text-align:center;padding:30px;color:var(--dim);font-size:12px;">No notes from players yet.</div>';
+  }
+
+  var sorted = notes.slice().sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp); });
+
+  var changed = false;
+  var allN = getNotes();
+  allN.forEach(function(n) { if (!n.read) { n.read = true; changed = true; } });
+  if (changed) saveNotes(allN);
+
+  var html = '';
+  for (var i = 0; i < sorted.length; i++) {
+    var note = sorted[i];
+    var d = new Date(note.timestamp);
+    var dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      + ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+    html += '<div class="nsg-note-card" data-note-id="' + note.id + '">';
+    html += '<div class="nsg-note-meta" style="display:flex;justify-content:space-between;align-items:center;">';
+    html += '<span><strong style="color:var(--blue-lt);">' + (typeof escHtml === 'function' ? escHtml(note.handle) : note.handle) + '</strong> · ' + dateStr + '</span>';
+    html += '<button class="btn-admin-delete-note" data-note-id="' + note.id + '" style="background:none;color:var(--wrong);font-size:10px;font-weight:700;padding:2px 6px;opacity:.6;">✕</button>';
+    html += '</div>';
+    html += '<div class="nsg-note-msg">' + (typeof escHtml === 'function' ? escHtml(note.message) : note.message) + '</div>';
+
+    if (note.response) {
+      var rd = new Date(note.responseAt);
+      var rDateStr = rd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        + ' at ' + rd.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      html += '<div class="nsg-note-reply">';
+      html += '<div class="nsg-reply-label">Your Reply · ' + rDateStr + '</div>';
+      html += '<div class="nsg-reply-text">' + (typeof escHtml === 'function' ? escHtml(note.response) : note.response) + '</div>';
+      html += '</div>';
+    }
+
+    html += '<div style="margin-top:8px;">';
+    if (note.response) {
+      html += '<button class="btn-admin-re-reply" data-note-id="' + note.id + '" style="background:none;color:var(--blue-lt);font-size:11px;font-weight:700;padding:2px 0;">Edit Reply</button>';
+    } else {
+      html += '<button class="btn-admin-reply" data-note-id="' + note.id + '" style="background:rgba(59,110,248,.15);border:1px solid rgba(91,143,255,.25);border-radius:8px;padding:5px 12px;color:var(--blue-lt);font-size:11px;font-weight:700;font-family:\'Nunito\',sans-serif;">Reply</button>';
+    }
+    html += '</div>';
+    html += '</div>';
+  }
+
+  return html;
+}
+
+function wireAdminNotes() {
+  document.querySelectorAll('.btn-admin-reply, .btn-admin-re-reply').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var noteId = btn.getAttribute('data-note-id');
+      showAdminReplyModal(noteId);
+    });
+  });
+
+  document.querySelectorAll('.btn-admin-delete-note').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var noteId = btn.getAttribute('data-note-id');
+      if (confirm('Delete this note?')) {
+        var allN = getNotes().filter(function(n) { return n.id !== noteId; });
+        saveNotes(allN);
+        renderAdmin();
+      }
+    });
+  });
+}
+
+function showAdminReplyModal(noteId) {
+  var notes = getNotes();
+  var note = notes.find(function(n) { return n.id === noteId; });
+  if (!note) return;
+
+  var overlay = document.createElement('div');
+  overlay.className = 'nsg-modal-overlay';
+  overlay.innerHTML = '<div class="nsg-modal">'
+    + '<h3>Reply to ' + (typeof escHtml === 'function' ? escHtml(note.handle) : note.handle) + '</h3>'
+    + '<div class="nsg-note-card" style="margin-bottom:14px;">'
+    + '<div class="nsg-note-msg">' + (typeof escHtml === 'function' ? escHtml(note.message) : note.message) + '</div>'
+    + '</div>'
+    + '<div style="font-size:11px;color:var(--dim);margin-bottom:6px;font-weight:700;">Your Response</div>'
+    + '<textarea id="admin-reply-text" placeholder="Write your response...">' + (note.response ? (typeof escHtml === 'function' ? escHtml(note.response) : note.response) : '') + '</textarea>'
+    + '<button class="nsg-btn-primary" id="btn-admin-reply-send">Send Reply</button>'
+    + '<button class="nsg-btn-secondary" id="btn-admin-reply-cancel">Cancel</button>'
+    + '</div>';
+  document.body.appendChild(overlay);
+
+  document.getElementById('btn-admin-reply-send').addEventListener('click', function() {
+    var textarea = document.getElementById('admin-reply-text');
+    var msg = textarea.value.trim();
+    if (!msg) { textarea.focus(); return; }
+
+    var allN = getNotes();
+    var target = allN.find(function(n) { return n.id === noteId; });
+    if (target) {
+      target.response = msg;
+      target.responseAt = new Date().toISOString();
+      target.replyRead = false;
+      saveNotes(allN);
+    }
+
+    closeNsgModal();
+    if (typeof showToast === 'function') showToast('Reply saved ✓');
+    renderAdmin();
+  });
+
+  document.getElementById('btn-admin-reply-cancel').addEventListener('click', closeNsgModal);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) closeNsgModal(); });
+}
+
+</script>
+
+<script>
+// ── Admin init ─────────────────────────────────────────────────────────────
+// On load: show password gate. renderAdmin() fires after correct password entry.
+(function initAdmin() {
+  var storedPw = localStorage.getItem('nsg_admin_pw');
+  if (storedPw) ADMIN_PW = storedPw;
+
+  var modal = document.getElementById('admin-pw-modal');
+  if (modal) {
+    modal.style.display = 'flex';
+    var inp = document.getElementById('admin-pw-input');
+    if (inp) setTimeout(function(){ inp.focus(); }, 80);
+  }
+
+  document.addEventListener('keydown', function(e) {
+    var m = document.getElementById('admin-pw-modal');
+    if (!m || m.style.display === 'none') return;
+    if (e.key === 'Enter')  adminSubmitPw();
+    if (e.key === 'Escape') m.style.display = 'none';
+  });
+})();
+</script>
+
 </body>
 </html>
