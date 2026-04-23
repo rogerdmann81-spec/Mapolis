@@ -6,24 +6,32 @@
 const SUPABASE_URL = 'https://tbibeuwpollcrlvowcpg.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_EK5hsEwqwxDABJ8TsiYmLg_LCZZDgUX';
 
-const SYNC_QUEUE_KEY        = 'nsg_syncQueue';
+const SYNC_QUEUE_KEY = 'nsg_syncQueue';
 const LEADERBOARD_CACHE_KEY = 'nsg_leaderboard_cache';
-const LEADERBOARD_TS_KEY    = 'nsg_leaderboard_ts';
+const LEADERBOARD_TS_KEY = 'nsg_leaderboard_ts';
 
 // ─── Supabase helpers ──────────────────────────────────────────────────────
 
 function isSupabaseConfigured() {
   return SUPABASE_URL !== 'https://your-project.supabase.co'
-      && SUPABASE_KEY !== 'your-anon-key-here';
+    && SUPABASE_KEY !== 'your-anon-key-here';
 }
 
 function supabaseHeaders() {
   return {
-    'Content-Type':  'application/json',
-    'apikey':        SUPABASE_KEY,
+    'Content-Type': 'application/json',
+    'apikey': SUPABASE_KEY,
     'Authorization': 'Bearer ' + SUPABASE_KEY,
-    'Prefer':        'resolution=merge-duplicates'
+    'Prefer': 'resolution=merge-duplicates'
   };
+}
+
+let _supabaseClient = null;
+function getSupabase() {
+  if (!_supabaseClient && typeof window !== 'undefined' && window.supabase) {
+    _supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  }
+  return _supabaseClient;
 }
 
 // ─── Auth session storage ──────────────────────────────────────────────────
@@ -49,10 +57,10 @@ function _clearSession() {
 // Headers using the live access token when available, falls back to anon key.
 function authedHeaders() {
   const session = _getSession();
-  const bearer  = (session && session.access_token) ? session.access_token : SUPABASE_KEY;
+  const bearer = (session && session.access_token) ? session.access_token : SUPABASE_KEY;
   return {
-    'Content-Type':  'application/json',
-    'apikey':        SUPABASE_KEY,
+    'Content-Type': 'application/json',
+    'apikey': SUPABASE_KEY,
     'Authorization': 'Bearer ' + bearer
   };
 }
@@ -67,9 +75,9 @@ async function signInAnonymous() {
   if (existing && existing.user && existing.user.id) return existing.user.id;
 
   const resp = await fetch(SUPABASE_URL + '/auth/v1/signup', {
-    method:  'POST',
+    method: 'POST',
     headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-    body:    JSON.stringify({})
+    body: JSON.stringify({})
   });
 
   if (!resp.ok) {
@@ -87,9 +95,9 @@ async function signInWithEmail(email, password) {
   if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
 
   const resp = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=password', {
-    method:  'POST',
+    method: 'POST',
     headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-    body:    JSON.stringify({ email, password })
+    body: JSON.stringify({ email, password })
   });
 
   if (!resp.ok) {
@@ -108,10 +116,10 @@ async function signOut() {
   if (session && session.access_token && isSupabaseConfigured()) {
     try {
       await fetch(SUPABASE_URL + '/auth/v1/logout', {
-        method:  'POST',
+        method: 'POST',
         headers: {
-          'Content-Type':  'application/json',
-          'apikey':        SUPABASE_KEY,
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_KEY,
           'Authorization': 'Bearer ' + session.access_token
         }
       });
@@ -142,7 +150,7 @@ async function getCurrentUser() {
     if (!rows.length) return { id: null, authUid, isAdmin: false };
 
     return {
-      id:      rows[0].id,
+      id: rows[0].id,
       authUid,
       isAdmin: rows[0].is_admin === true
     };
@@ -210,11 +218,11 @@ const syncStore = {
     const remaining = [];
     for (const item of queue) {
       try {
-        const url  = SUPABASE_URL + '/rest/v1/' + item.table;
+        const url = SUPABASE_URL + '/rest/v1/' + item.table;
         const resp = await fetch(url, {
-          method:  'POST',
+          method: 'POST',
           headers: authedHeaders(),
-          body:    JSON.stringify(item.payload)
+          body: JSON.stringify(item.payload)
         });
         if (!resp.ok) {
           console.warn('[syncStore] Sync failed for', item.table, resp.status);
@@ -229,11 +237,11 @@ const syncStore = {
 
   _buildProfileRow(p) {
     return {
-      player_id:  p.id,
-      handle:     p.handle    || null,
-      country:    p.country   || null,
+      player_id: p.id,
+      handle: p.handle || null,
+      country: p.country || null,
       birth_year: p.birthYear || null,
-      stats:      p.stats     || {},
+      stats: p.stats || {},
       updated_at: new Date().toISOString()
     };
   },
@@ -252,11 +260,11 @@ const syncStore = {
   },
 
   _enqueue(item) {
-    const queue    = syncStore._getQueue();
+    const queue = syncStore._getQueue();
     const existing = queue.findIndex(
       q => q.table === item.table &&
-           q.payload && item.payload &&
-           q.payload.player_id === item.payload.player_id
+        q.payload && item.payload &&
+        q.payload.player_id === item.payload.player_id
     );
     if (existing >= 0) {
       queue[existing] = item;
@@ -267,3 +275,89 @@ const syncStore = {
   }
 
 };
+
+// ═══════════════════════════════════════════════════════════
+// §6 — Solo round submission + pending cache
+// ═══════════════════════════════════════════════════════════
+
+const PENDING_ROUNDS_KEY = 'mapolis_pending_rounds';
+const DEBUG_ROUND = new URLSearchParams(location.search).has('debug');
+
+function _logRound(label, data) {
+  if (!DEBUG_ROUND) return;
+  console.log(`[roundData] ${label}:`, data);
+}
+
+// Submit a completed round to Supabase via RPC
+async function submitRound(roundData) {
+  _logRound('submitting', roundData.session.id);
+
+  // First, flush any previously cached rounds
+  await flushPendingRounds();
+
+  try {
+    if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
+
+    const { data, error } = await getSupabase().rpc('submit_round', { payload: roundData });
+    if (error) throw error;
+
+    _logRound('success', data);
+    clearPendingRound(roundData.session.id);
+    return { success: true, sessionId: data };
+
+  } catch (err) {
+    console.warn('[submitRound] Failed, caching for retry:', err);
+    cachePendingRound(roundData);
+    return { success: false, error: err };
+  }
+}
+
+// Cache a failed round in localStorage for retry
+function cachePendingRound(roundData) {
+  try {
+    const pending = JSON.parse(localStorage.getItem(PENDING_ROUNDS_KEY) || '[]');
+    // Deduplicate by session.id
+    const idx = pending.findIndex(r => r.session.id === roundData.session.id);
+    if (idx >= 0) pending[idx] = roundData;
+    else pending.push(roundData);
+    localStorage.setItem(PENDING_ROUNDS_KEY, JSON.stringify(pending));
+    _logRound('cached', { sessionId: roundData.session.id, queueLength: pending.length });
+  } catch (e) {
+    console.warn('[cachePendingRound] localStorage failed:', e);
+  }
+}
+
+// Remove a successfully submitted round from cache
+function clearPendingRound(sessionId) {
+  try {
+    const pending = JSON.parse(localStorage.getItem(PENDING_ROUNDS_KEY) || '[]');
+    const filtered = pending.filter(r => r.session.id !== sessionId);
+    localStorage.setItem(PENDING_ROUNDS_KEY, JSON.stringify(filtered));
+  } catch (e) { /* ignore */ }
+}
+
+// Retry all cached pending rounds
+async function flushPendingRounds() {
+  const raw = localStorage.getItem(PENDING_ROUNDS_KEY);
+  if (!raw) return;
+  let pending;
+  try { pending = JSON.parse(raw); } catch (e) { return; }
+  if (!pending.length) return;
+
+  _logRound('flushing', { count: pending.length });
+
+  const remaining = [];
+  for (const round of pending) {
+    try {
+      if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
+      const { data, error } = await getSupabase().rpc('submit_round', { payload: round });
+      if (error) throw error;
+      _logRound('flush success', round.session.id);
+    } catch (err) {
+      remaining.push(round);
+    }
+  }
+
+  localStorage.setItem(PENDING_ROUNDS_KEY, JSON.stringify(remaining));
+  _logRound('flush done', { remaining: remaining.length });
+}
