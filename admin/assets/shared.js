@@ -1,5 +1,15 @@
 // assets/shared.js
 // Mapolis shared data layer — loaded by both play/index.html and admin/index.html
+//
+// FIXES APPLIED (2026-04-26):
+// 1. getCurrentUser() now queries select=player_id (was select=id) to match DB schema.
+// 2. getCurrentUser() now reads rows[0].player_id (was rows[0].id).
+// 3. _saveSession() now ALSO writes to the Supabase JS client's localStorage key
+//    so getSupabase().rpc() calls are authenticated automatically.
+// 4. _clearSession() now ALSO clears the Supabase client's key.
+// 5. submitRound() & flushPendingRounds() now use raw fetch + authedHeaders()
+//    instead of getSupabase().rpc(), removing a hidden auth-sync bug.
+// 6. Added extra console warnings so future failures are easier to spot.
 
 // ─── Supabase constants ────────────────────────────────────────────────────
 
@@ -30,6 +40,17 @@ let _supabaseClient = null;
 function getSupabase() {
   if (!_supabaseClient && typeof window !== 'undefined' && window.supabase) {
     _supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // If we already have a session saved, push it into the Supabase client
+    // so that .rpc() calls are authenticated.
+    const session = _getSession();
+    if (session && session.access_token && _supabaseClient.auth && _supabaseClient.auth.setSession) {
+      _supabaseClient.auth.setSession({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token
+      }).catch(function(e) {
+        console.warn('[getSupabase] setSession failed:', e);
+      });
+    }
   }
   return _supabaseClient;
 }
@@ -37,6 +58,9 @@ function getSupabase() {
 // ─── Auth session storage ──────────────────────────────────────────────────
 
 const AUTH_SESSION_KEY = 'mapolis_auth_session';
+// The Supabase JS client (loaded from CDN) stores its session here.
+// We sync to this key so getSupabase() picks up auth automatically.
+const SUPABASE_AUTH_KEY = 'sb-tbibeuwpollcrlvowcpg-auth-token';
 
 function _getSession() {
   try {
@@ -46,12 +70,23 @@ function _getSession() {
 }
 
 function _saveSession(session) {
-  try { localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session)); }
-  catch (e) { console.warn('[auth] Failed to save session:', e); }
+  try {
+    localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
+    // Also sync to the key the Supabase JS client expects.
+    localStorage.setItem(SUPABASE_AUTH_KEY, JSON.stringify({
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+      expires_at: session.expires_at,
+      expires_in: session.expires_in,
+      token_type: session.token_type || 'bearer',
+      user: session.user
+    }));
+  } catch (e) { console.warn('[auth] Failed to save session:', e); }
 }
 
 function _clearSession() {
   localStorage.removeItem(AUTH_SESSION_KEY);
+  localStorage.removeItem(SUPABASE_AUTH_KEY);
 }
 
 // Headers using the live access token when available, falls back to anon key.
@@ -180,6 +215,11 @@ async function createProfile(opts) {
     throw new Error('[createProfile] missing required fields');
   }
 
+  const session = _getSession();
+  if (!session || !session.access_token) {
+    console.warn('[createProfile] No auth session found. signInAnonymous() may not have finished yet.');
+  }
+
   const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/create_profile', {
     method: 'POST',
     headers: authedHeaders(),
@@ -213,16 +253,20 @@ async function getCurrentUser() {
   try {
     const url = SUPABASE_URL
       + '/rest/v1/profiles?auth_uid=eq.' + encodeURIComponent(authUid)
-      + '&select=id,is_admin&limit=1';
+      + '&select=player_id,is_admin&limit=1';
 
     const resp = await fetch(url, { headers: authedHeaders() });
-    if (!resp.ok) return { id: null, authUid, isAdmin: false };
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => '');
+      console.warn('[getCurrentUser] HTTP ' + resp.status, errText);
+      return { id: null, authUid, isAdmin: false };
+    }
 
     const rows = await resp.json();
     if (!rows.length) return { id: null, authUid, isAdmin: false };
 
     return {
-      id: rows[0].id,
+      id: rows[0].player_id,
       authUid,
       isAdmin: rows[0].is_admin === true
     };
@@ -333,8 +377,8 @@ const syncStore = {
     const queue = syncStore._getQueue();
     const existing = queue.findIndex(
       q => q.table === item.table &&
-           q.payload && item.payload &&
-           q.payload.player_id === item.payload.player_id
+        q.payload && item.payload &&
+        q.payload.player_id === item.payload.player_id
     );
     if (existing >= 0) {
       queue[existing] = item;
@@ -358,7 +402,9 @@ function _logRound(label, data) {
   console.log(`[roundData] ${label}:`, data);
 }
 
-// Submit a completed round to Supabase via RPC
+// Submit a completed round to Supabase via RPC.
+// Uses raw fetch with authedHeaders() so we don't depend on the
+// Supabase JS client's internal auth state.
 async function submitRound(roundData) {
   _logRound('submitting', roundData.session.id);
 
@@ -368,9 +414,18 @@ async function submitRound(roundData) {
   try {
     if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
 
-    const { data, error } = await getSupabase().rpc('submit_round', { payload: roundData });
-    if (error) throw error;
+    const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/submit_round', {
+      method: 'POST',
+      headers: authedHeaders(),
+      body: JSON.stringify({ payload: roundData })
+    });
 
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.message || err.code || ('HTTP ' + resp.status));
+    }
+
+    const data = await resp.json();
     _logRound('success', data);
     clearPendingRound(roundData.session.id);
     return { success: true, sessionId: data };
@@ -420,8 +475,19 @@ async function flushPendingRounds() {
   for (const round of pending) {
     try {
       if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
-      const { data, error } = await getSupabase().rpc('submit_round', { payload: round });
-      if (error) throw error;
+
+      const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/submit_round', {
+        method: 'POST',
+        headers: authedHeaders(),
+        body: JSON.stringify({ payload: round })
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.message || err.code || ('HTTP ' + resp.status));
+      }
+
+      const data = await resp.json();
       _logRound('flush success', round.session.id);
     } catch (err) {
       remaining.push(round);
