@@ -12131,6 +12131,44 @@ function openRestoreProfileModal() {
         match = allProfiles[i]; break;
       }
     }
+    // ── Fallback: query Supabase for profiles created on other devices ──
+    if (!match && typeof supabase !== 'undefined' && supabase.from) {
+      try {
+        var { data: sbProfiles, error: sbErr } = await supabase
+          .from('profiles')
+          .select('*')
+          .ilike('handle', handle)
+          .eq('password_hash', hash)
+          .limit(1);
+        if (!sbErr && sbProfiles && sbProfiles.length > 0) {
+          var sbP = sbProfiles[0];
+          match = {
+            id: sbP.player_id || sbP.id,
+            handle: sbP.handle,
+            birthYear: sbP.birth_year,
+            country: sbP.country,
+            parentEmail: sbP.parent_email,
+            passwordHash: sbP.password_hash,
+            createdAt: sbP.created_at,
+            consentAgeAtCreate: sbP.consent_age,
+            frozen: sbP.frozen || false,
+            stats: sbP.stats || { gamesPlayed:0, totalScore:0, totalCorrect:0, totalWrong:0, bestStreak:0, h2h:{played:0,won:0,lost:0,tied:0} },
+            badges: sbP.badges || [],
+            accessories: sbP.accessories || [],
+            cr: sbP.cr || 0,
+            stars: sbP.stars || 0,
+            tier: sbP.tier || 1,
+            xp: sbP.xp || 0,
+            avatar: sbP.avatar || null
+          };
+          allProfiles.push(match);
+          saveProfiles();
+        }
+      } catch (e) {
+        console.warn('[restore] Supabase fallback failed:', e);
+      }
+    }
+
     if (!match) {
       showToast('Handle or password not recognised');
       return;
@@ -12140,6 +12178,7 @@ function openRestoreProfileModal() {
       return;
     }
     activeProfile = match;
+    window.activeProfile = match;
     try { localStorage.setItem(ACTIVE_KEY, activeProfile.id); } catch (e) {}
     updateAvatarBars();
     close();
@@ -12173,6 +12212,7 @@ function openRestoreProfileModal() {
       return;
     }
     activeProfile = match;
+    window.activeProfile = match;
     try { localStorage.setItem(ACTIVE_KEY, activeProfile.id); } catch (e) {}
     updateAvatarBars();
     close();
@@ -21590,9 +21630,9 @@ const STAR_COLOR = '#ffe135';
 function badgeImgHtml(badge, sizePx) {
   const safeName = (badge.name || '').replace(/"/g, '&quot;');
   const initials = (badge.name || '?').trim().charAt(0).toUpperCase();
-  return '<img src="' + FLUENT3D_BASE + badge.cp + '.webp" alt="' + safeName + '" loading="lazy" '
+  return '<img src="' + FLUENT3D_BASE + badge.cp + '.webp" alt="' + safeName + '" loading="lazy" crossorigin="anonymous" '
        + 'style="width:' + sizePx + 'px;height:' + sizePx + 'px;object-fit:contain;display:inline-block;vertical-align:middle;" '
-       + 'onerror="this.outerHTML=\'<span style=&quot;display:inline-flex;align-items:center;justify-content:center;width:' + sizePx + 'px;height:' + sizePx + 'px;border-radius:50%;background:var(--bg-deep);border:1px dashed var(--border);font-size:' + Math.round(sizePx * 0.4) + 'px;color:var(--dim);font-weight:700;&quot;>' + initials + '</span>\'">';
+       + 'onerror="this.onerror=null;this.src=\'\';this.outerHTML=\'<span style=\\'display:inline-flex;align-items:center;justify-content:center;width:' + sizePx + 'px;height:' + sizePx + 'px;border-radius:50%;background:var(--bg-deep);border:1px dashed var(--border);font-size:' + Math.round(sizePx * 0.4) + 'px;color:var(--dim);font-weight:700;\\'>' + initials + '</span>\'">';
 }
 
 // ── Card universe (lazy build, cached) — for completion badges ──
@@ -21865,7 +21905,7 @@ const ACCESSORY_UNLOCKS = ANIMAL_PRESERVE;
 // ── Animal image rendering ──
 // Each animal carries a Fluent Emoji codepoint (`cp`) that maps directly to a
 // Microsoft Fluent Emoji 3D WebP file served via the jsDelivr CDN.
-const FLUENT3D_BASE = 'https://unpkg.com/@lobehub/fluent-emoji-3d@1.1.0/assets/';
+const FLUENT3D_BASE = 'https://cdn.jsdelivr.net/npm/@lobehub/fluent-emoji-3d@1.1.0/assets/';
 function animalImgHtml(animal, sizePx) {
   const safeName = (animal.name || '').replace(/"/g, '&quot;');
   const initials = (animal.name || '?').trim().charAt(0).toUpperCase();
