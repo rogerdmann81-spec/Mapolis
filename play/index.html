@@ -21632,7 +21632,7 @@ function badgeImgHtml(badge, sizePx) {
   const initials = (badge.name || '?').trim().charAt(0).toUpperCase();
   return '<img src="' + FLUENT3D_BASE + badge.cp + '.webp" alt="' + safeName + '" loading="lazy" crossorigin="anonymous" '
        + 'style="width:' + sizePx + 'px;height:' + sizePx + 'px;object-fit:contain;display:inline-block;vertical-align:middle;" '
-       + 'onerror="this.onerror=null;this.src=\'\';this.outerHTML=\'<span style=\\'display:inline-flex;align-items:center;justify-content:center;width:' + sizePx + 'px;height:' + sizePx + 'px;border-radius:50%;background:var(--bg-deep);border:1px dashed var(--border);font-size:' + Math.round(sizePx * 0.4) + 'px;color:var(--dim);font-weight:700;\\'>' + initials + '</span>\'">';
+       + 'onerror="this.onerror=null;this.src=\'\';this.outerHTML=\'<span style="display:inline-flex;align-items:center;justify-content:center;width:' + sizePx + 'px;height:' + sizePx + 'px;border-radius:50%;background:var(--bg-deep);border:1px dashed var(--border);font-size:' + Math.round(sizePx * 0.4) + 'px;color:var(--dim);font-weight:700;">' + initials + '</span>\'">';
 }
 
 // ── Card universe (lazy build, cached) — for completion badges ──
