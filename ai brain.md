@@ -1,4 +1,4 @@
-MAPOLIS - AI BRAIN & SOURCE OF TRUTH
+MAPOLIS (currently working in "modularization" branch) - AI BRAIN & SOURCE OF TRUTH
 1. Project Overview
 Name: Mapolis
 Description: A feature-rich, interactive educational geography game.
