@@ -45,10 +45,10 @@ RLS_TESTS.sql
 index.html
 
 4. AI Rules for Interaction
-The User: Is not a coder, but is actively learning systems architecture.
+The User (Roger): Is not a coder, but is actively learning systems architecture.
 The AI Must: Explain the "Why" (architecture/concept) and the "How" (the exact syntax) for every step.
 Code Rules: Do NOT use HTML tags inside CSS files. Do not introduce third-party libraries without permission. Keep everything modular (Separation of Concerns).
-
+Ai never makes changes to the code, when ai engages any file it can READ ONLY.  The user will cut and paiste all code alterations.  
 5. Current Task / Where We Left Off
 We just successfully moved the Base64 fonts out of index.html and into fonts.css.
 We learned about Caching, Content Security Policy (CSP), and why HTML <style> tags don't belong in .css files.
