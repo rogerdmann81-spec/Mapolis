@@ -3302,3 +3302,56 @@ headband:'<g transform="translate(100 42) scale(.6) translate(-100 -46)"><path d
 none:''
 
 };
+
+
+var s='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">';
+
+s+=(bodies[st.body]||bodies.round);
+
+s+=(feets[st.feet]||'');
+
+s+=(arms[st.arms]||'');
+
+s+=(eyes[st.eyes]||eyes.normal);
+
+s+=(mouths[st.mouth]||mouths.smile);
+
+s+=(blushes[st.blush]||'');
+
+s+=(hats[st.hat]||'');
+
+s+='</svg>';
+
+return s;
+
+},
+
+plk:function(cat){return cat.cp==="bodyColor"?{ck:"bodyColor",pk:"body"}:null;}
+
+},
+
+bigSmile:{label:"Big Smile",pals:{skin:SK,hair:HR},
+
+cats:function(){return[
+
+{k:"skin",l:"Skin",p:"_skin",cp:"skinColor",i:[]},
+
+{k:"hair",l:"Hair",p:"hair",cp:"hairColor",i:Object.keys(F.hair)},
+
+{k:"eyes",l:"Eyes",p:"eyes",cp:null,i:Object.keys(F.eyes)},
+
+{k:"mouth",l:"Mouth",p:"mouth",cp:null,i:Object.keys(F.mouth)},
+
+{k:"accs",l:"Accs",p:"accessories",cp:null,i:["none"].concat(Object.keys(F.accessories))}
+
+];},
+
+def:{s:{hair:"shortHair",eyes:"normal",mouth:"openedSmile",accessories:"none"},c:{skinColor:"#edb98a",hairColor:"#2c1b18"}},
+
+svg:function(st){var co={skin:st.skinColor,hair:st.hairColor};var r=function(t,n){return rc(F,t,n,{},co);};return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 480"><g transform="matrix(.85775 0 0 .85427 52 47)">'+r("face","base")+'</g><g transform="matrix(.85472 0 0 .855 19 -17)">'+r("mouth",st.mouth)+'</g><g transform="matrix(.85472 0 0 .855 19 -17)">'+r("eyes",st.eyes)+'</g><g transform="matrix(.85472 0 0 .85667 18 -15)">'+r("hair",st.hair)+'</g><g transform="matrix(.85472 0 0 .85667 14 -12)">'+r("accessories",st.accessories)+'</g></svg>';},
+
+plk:function(cat){var m={skinColor:"skin",hairColor:"hair"};return cat.cp?{ck:cat.cp,pk:m[cat.cp]||"skin"}:null;}
+
+}
+
+};
