@@ -160,3 +160,55 @@ the lowest-risk extraction because:
 Note: /assets/shared.js is NOT a blocker for further JS extraction — it's already a
 separate, readable file (not embedded in index.html), and its contents (Supabase client,
 auth functions, syncStore) are known. The real remaining work is finishing the modularization process (including by determining at what granularity the index file should be split) and connecting supabase so that users can create and log into their profile.  we also need to talk about what our plan is to close the compliance gap.
+
+brain update #2
+----------------------------------------------------------------------------------------------------------
+1. Completed Task: CSS Consolidation & CSP Preparation
+Status: ✅ Complete
+Target: `play/index.html` -> `play/styles.css`
+
+We successfully extracted approximately 1,900 lines of CSS scattered across Mapolis into a single, unified `styles.css` file.
+
+Crucial Discoveries During Extraction:
+- **Dynamic CSS Injection:** We discovered that the original developer used an "IKEA flat-pack" pattern for the UI. JavaScript functions (`renderH2HQueue`, `renderH2HResults`, `renderGlobePage`) were manually building `<style>` tags via string concatenation (`html += '<style>...'`) and injecting them into the DOM at runtime.
+- **The Fix:** We stripped the CSS out of the JavaScript variables, moved it to `styles.css`, and safely re-wired the JavaScript to only build the structural HTML `divs`.
+
+Architectural Wins:
+- **Performance:** Browsers now download and cache Mapolis styling once per session, preventing lag spikes when opening new screens. Eliminates FOUC (Flash of Unstyled Content).
+- **Security (CSP):** By removing JavaScript's ability to inject raw `<style>` tags, we are systematically closing vulnerabilities to prepare for strict COPPA/FERPA Content Security Policy enforcement.
+
+Key Technical Rules Learned:
+1. **Never use HTML inside CSS:** `<style>` is an HTML tag and does not belong in a `.css` file — a CSS parser will fail to parse it correctly.
+2. **CSS Comments:** Never use JavaScript `//` comments in a CSS file. Use only block comments `/* ... */`.
+3. **Variable Initialization:** When building strings in JavaScript, always initialize the variable (`var html = '';`) before appending to it (`html += '...';`) to prevent `undefined` errors.
+
+----------------------------------------------------------------------------------------------------------
+2. Strategic Roadmap (What Lies Ahead)
+
+To achieve COPPA/FERPA compliance, robust state management, and seamless offline-play, we will execute the following three phases in strict order:
+
+### Phase A: Closing the Third-Party Compliance Gap (Immediate Next Step)
+*   **The Problem:** The app currently loads libraries (D3.js, TopoJSON) and external APIs (DiceBear, Fluent Emojis) from third-party CDNs. This leaks student IP addresses and browser fingerprints, violating strict privacy constraints.
+*   **The Fix:** We will determine if any of the information being used from these third-party CDNs is already available in our data files (map-data.js, avatar-assets.js, fonts.css, and styles.css), then download all missing external JavaScript and JSON dependencies into an `/assets/vendor/` directory. We will rip out the external DiceBear API entirely and replace it with local avatar generation using the previously extracted `avatar-assets.js`.
+*   **Scoping note:** DiceBear is used in exactly one place — a seed-based procedural avatar generator (`.../svg?seed=...`). `avatar-assets.js` is already structured the right way to replace it (composable SVG part functions, e.g. multiple named eye/mouth/hair variants), but it was not built for deterministic seed→avatar generation the way DiceBear does it. This is not a simple URL swap — it requires writing a new seed-to-parts mapping function on top of the existing asset data.
+
+### Phase B: Slicing the JS Monolith (Modularisation)
+*   **The Problem:** A 14,050-line JavaScript monolith is an architectural liability. Furthermore, it contains inline `style=""` and `onclick=""` handlers that violate Strict CSP. (These are separate from the `<style>` block tags removed in Step 1 — 739 inline `style=""` attributes and 25 `onclick=""` handlers remain scattered through the monolith's HTML-generation code.)
+*   **The Fix:** We will systematically slice the monolith into a new `/play/js/` directory using domain-driven Separation of Concerns. Extraction order:
+    1.  `app.js` (Bootstrapping, PWA Service Worker)
+    2.  `router.js` (SPA Navigation)
+    3.  `audio.js` (Audio/Music Managers)
+    4.  `security.js` (Compliance validation, hashing)
+    5.  `profile.js` (User state CRUD)
+    6.  `map.js` (D3/TopoJSON rendering)
+    7.  `game.js` (Solo loop)
+    8.  `h2h.js` (Multiplayer stub)
+    9.  `dashboard.js` (Educator admin panels)
+*   *Note:* During extraction, inline HTML handlers (`onclick`) will be converted to safe JavaScript Event Listeners (`addEventListener`).
+
+### Phase C: Supabase Integration (Offline-First Source of Truth)
+*   **The Problem:** `localStorage` is vulnerable to being cleared and does not persist across devices (e.g., school Chromebook vs. home iPad). Today's `loadProfiles()` reads only from `localStorage` with no network check at all, so a profile edited on one device can silently show stale data on another.
+*   **The Fix:** Implement an **Offline-First Synchronization Pattern**.
+    *   *Read Path:* On load, authenticate via session token and fetch the latest profile/progress from Supabase (source of truth). Only serve the cached `localStorage` copy if that fetch fails (offline or network error) — never assume the local cache is current when the network is available.
+    *   *Write Path:* Update `localStorage` immediately (for zero-latency UI updates), then silently push the state to Supabase in the background via the existing `syncStore` queue logic found in `shared.js`.
+*   **Scoping note:** No localStorage encryption exists yet anywhere in the current code — today's app only does password hashing (`crypto.subtle.digest('SHA-256', ...)`) and UUID generation via Web Crypto. The "encrypted localStorage" piece is genuinely new work, though the existing use of `crypto.subtle` means the browser APIs needed (e.g. `crypto.subtle.encrypt`) are readily available to build on.
