@@ -61,6 +61,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
 
 
+  <script src="/env.js"></script>
   <script src="/assets/shared.js"></script>
 </head>
 
@@ -1327,9 +1328,29 @@ function initApp() {
   // Step 5.2 — establish anonymous Supabase session on every launch.
   // Captures auth_uid and stamps it onto any local profiles missing it.
   if (typeof signInAnonymous === 'function') {
-    signInAnonymous().then(function(authUid) {
+    signInAnonymous().then(async function(authUid) {
       loadProfiles();
-      var changed = false;
+      let changed = false;
+      if (typeof syncStore !== 'undefined' && syncStore.fetchProfiles) {
+        const remoteProfiles = await syncStore.fetchProfiles(authUid);
+        if (remoteProfiles && remoteProfiles.length > 0) {
+          remoteProfiles.forEach(rp => {
+            const idx = allProfiles.findIndex(p => p.id === rp.id);
+            if (idx >= 0) {
+              allProfiles[idx] = { ...allProfiles[idx], ...rp };
+            } else {
+              allProfiles.push(rp);
+            }
+          });
+          changed = true;
+          if (currentScreen === 's-profiles') renderProfileGrid();
+          const aid = localStorage.getItem(ACTIVE_KEY);
+          if (aid) {
+            activeProfile = allProfiles.find(p => p.id === aid) || null;
+            if (activeProfile && typeof updateAvatarBars === 'function') updateAvatarBars();
+          }
+        }
+      }
       allProfiles.forEach(function(p) {
         if (!p.auth_uid) { p.auth_uid = authUid; changed = true; }
       });
@@ -1514,7 +1535,10 @@ function loadProfiles() {
 
   } catch (e) { console.warn('Profile load error:', e); }
 
-  const aid = localStorage.getItem(ACTIVE_KEY);
+  let aid = null;
+  try {
+    aid = localStorage.getItem(ACTIVE_KEY);
+  } catch (e) {}
 
   if (aid) {
 
@@ -1536,7 +1560,7 @@ function saveProfiles() {
 
   if (typeof syncStore !== 'undefined' && activeProfile) {
 
-    syncStore.save('profile_' + activeProfile.id, activeProfile);
+    syncStore.syncProfile(activeProfile);
 
   }
 
@@ -1797,9 +1821,6 @@ function openRestoreProfileModal() {
   document.getElementById('restore-tab-email').addEventListener('click', function() { switchTab('email'); });
 
   // ── Handle + Password restore ──
-  // Pre-backend: walk allProfiles, match handle, hash-compare password.
-  // Post-backend (phase-b-9): single Supabase RPC — lookup by handle,
-  // compare password_hash server-side, return profile row.
   document.getElementById('restore-pw-submit').addEventListener('click', async function() {
     var handle = (document.getElementById('restore-handle-input').value || '').trim();
     var pw = document.getElementById('restore-pw-input').value || '';
@@ -1811,21 +1832,57 @@ function openRestoreProfileModal() {
     catch (e) { showToast('Could not process password — try again'); return; }
 
     var match = null;
-    for (var i = 0; i < allProfiles.length; i++) {
-      if (allProfiles[i].handle &&
-          allProfiles[i].handle.toLowerCase() === handle.toLowerCase() &&
-          allProfiles[i].passwordHash && allProfiles[i].passwordHash === hash) {
-        match = allProfiles[i]; break;
+    if (isSupabaseConfigured()) {
+      try {
+        const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/restore_profile', {
+          method: 'POST',
+          headers: authedHeaders(),
+          body: JSON.stringify({ p_handle: handle, p_password_hash: hash })
+        });
+        if (!resp.ok) {
+          const errText = await resp.text();
+          console.error('[restore_profile] backend error:', errText, resp.status);
+          if (errText.includes('Invalid handle')) {
+            showToast('Handle or password not recognised');
+          } else if (errText.includes('frozen')) {
+            showToast('That profile has been frozen by an administrator');
+          } else {
+            showToast('Error connecting to backend: ' + errText);
+          }
+          return;
+        }
+        const data = await resp.json();
+        if (data) {
+          // Remap DB row back to local app format
+          match = syncStore._mapRowToProfile(data, data.auth_uid);
+          // Overwrite our local list/cache so we don't have dupes
+          const existingIdx = allProfiles.findIndex(p => p.id === match.id);
+          if (existingIdx >= 0) allProfiles[existingIdx] = match;
+          else allProfiles.push(match);
+          saveProfiles();
+        }
+      } catch (err) {
+        showToast('Network error while restoring profile');
+        return;
+      }
+    } else {
+      for (var i = 0; i < allProfiles.length; i++) {
+        if (allProfiles[i].handle &&
+            allProfiles[i].handle.toLowerCase() === handle.toLowerCase() &&
+            allProfiles[i].passwordHash && allProfiles[i].passwordHash === hash) {
+          match = allProfiles[i]; break;
+        }
+      }
+      if (!match) {
+        showToast('Handle or password not recognised');
+        return;
+      }
+      if (match.frozen) {
+        showToast('That profile has been frozen by an administrator');
+        return;
       }
     }
-    if (!match) {
-      showToast('Handle or password not recognised');
-      return;
-    }
-    if (match.frozen) {
-      showToast('That profile has been frozen by an administrator');
-      return;
-    }
+
     activeProfile = match;
     try { localStorage.setItem(ACTIVE_KEY, activeProfile.id); } catch (e) {}
     updateAvatarBars();
@@ -1838,7 +1895,7 @@ function openRestoreProfileModal() {
   // TODO(phase-b-9): Post-backend this will trigger a real verification
   // email with a one-time token (PHASE_B_BLUEPRINT Section 9). Pre-
   // backend we just match against the stored parent_email field.
-  document.getElementById('restore-email-submit').addEventListener('click', function() {
+  document.getElementById('restore-email-submit').addEventListener('click', async function() {
     var raw = document.getElementById('restore-email-input').value;
     if (!isValidEmailShape(raw)) {
       showToast("That doesn't look like a valid email");
@@ -1846,19 +1903,54 @@ function openRestoreProfileModal() {
     }
     var norm = normalizeEmail(raw);
     var match = null;
-    for (var i = 0; i < allProfiles.length; i++) {
-      if (allProfiles[i].parentEmail && normalizeEmail(allProfiles[i].parentEmail) === norm) {
-        match = allProfiles[i]; break;
+
+    if (isSupabaseConfigured()) {
+      try {
+        const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/restore_profile_by_email', {
+          method: 'POST',
+          headers: authedHeaders(),
+          body: JSON.stringify({ p_parent_email: norm })
+        });
+        if (!resp.ok) {
+          const errText = await resp.text();
+          console.error('[restore_profile_by_email] backend error:', errText, resp.status);
+          if (errText.includes('Email not found')) {
+            showToast('No profile matches that parent email');
+          } else if (errText.includes('frozen')) {
+            showToast('That profile has been frozen by an administrator');
+          } else {
+            showToast('Error connecting to backend: ' + errText);
+          }
+          return;
+        }
+        const data = await resp.json();
+        if (data) {
+          match = syncStore._mapRowToProfile(data, data.auth_uid);
+          const existingIdx = allProfiles.findIndex(p => p.id === match.id);
+          if (existingIdx >= 0) allProfiles[existingIdx] = match;
+          else allProfiles.push(match);
+          saveProfiles();
+        }
+      } catch (err) {
+        showToast('Network error while restoring profile');
+        return;
+      }
+    } else {
+      for (var i = 0; i < allProfiles.length; i++) {
+        if (allProfiles[i].parentEmail && normalizeEmail(allProfiles[i].parentEmail) === norm) {
+          match = allProfiles[i]; break;
+        }
+      }
+      if (!match) {
+        showToast('No profile matches that parent email on this device');
+        return;
+      }
+      if (match.frozen) {
+        showToast('That profile has been frozen by an administrator');
+        return;
       }
     }
-    if (!match) {
-      showToast('No profile matches that parent email on this device');
-      return;
-    }
-    if (match.frozen) {
-      showToast('That profile has been frozen by an administrator');
-      return;
-    }
+
     activeProfile = match;
     try { localStorage.setItem(ACTIVE_KEY, activeProfile.id); } catch (e) {}
     updateAvatarBars();
@@ -2083,13 +2175,13 @@ function renderCreateStep() {
       section.style.display = 'block';
 
       if (age >= CONSENT_AGE_THRESHOLD) {
-        // Adult path: optional password for profile recovery
+        // Adult path: mandatory password for profile recovery
         section.innerHTML = `
-          <div class="field-lbl">Password <span style="color:var(--dim);font-weight:400;">(optional — used to restore your profile)</span></div>
+          <div class="field-lbl">Password</div>
           <input class="field-in" type="password" id="c-password" placeholder="Min 8 characters" autocomplete="new-password" style="margin-bottom:6px;">
           <input class="field-in" type="password" id="c-password-confirm" placeholder="Confirm password" autocomplete="new-password">
           <div style="font-size:10px;color:var(--dim);margin-top:6px;line-height:1.4;">
-            🔑 If you clear your browser, your handle + password can restore your profile. Skip this if you prefer to play without one.
+            🔑 If you clear your browser, your handle + password can restore your profile.
           </div>
         `;
       } else {
@@ -2149,33 +2241,31 @@ function renderCreateStep() {
       let parentEmail = null;
 
       if (age !== null && age >= CONSENT_AGE_THRESHOLD) {
-        // Adult — optional password for profile recovery
+        // Adult — mandatory password for profile recovery
         const pwEl = document.getElementById('c-password');
         const pwConfEl = document.getElementById('c-password-confirm');
         const rawPw = pwEl ? pwEl.value : '';
         const rawPwConf = pwConfEl ? pwConfEl.value : '';
-        if (rawPw || rawPwConf) {
-          if (!rawPw || !rawPwConf) {
-            showToast('Fill in both password fields to enable recovery');
-            return;
-          }
-          if (rawPw !== rawPwConf) {
-            showToast("Passwords don't match — try again");
-            return;
-          }
-          if (rawPw.length < 8) {
-            showToast('Password must be at least 8 characters');
-            return;
-          }
-          try {
-            passwordHash = await hashPassword(rawPw);
-          } catch (e) {
-            console.warn('[create] password hash failed:', e);
-            showToast('Could not save password — try again');
-            return;
-          }
+        
+        if (!rawPw || !rawPwConf) {
+          showToast('Please create and confirm a password');
+          return;
         }
-        // else: user left it blank → no recovery configured, that's allowed
+        if (rawPw !== rawPwConf) {
+          showToast("Passwords don't match — try again");
+          return;
+        }
+        if (rawPw.length < 8) {
+          showToast('Password must be at least 8 characters');
+          return;
+        }
+        try {
+          passwordHash = await hashPassword(rawPw);
+        } catch (e) {
+          console.warn('[create] password hash failed:', e);
+          showToast('Could not save password — try again');
+          return;
+        }
       } else if (age !== null && age < CONSENT_AGE_THRESHOLD) {
         // Minor — optional parent email
         const emailEl = document.getElementById('c-parent-email');
@@ -8193,6 +8283,26 @@ function renderResults() {
     newBadges = checkBadges(profile, gr);
     newAccs = checkAccessories(profile);
     saveProfiles();
+    if (typeof submitRound === 'function') {
+      const sessionId = 'ses_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+      submitRound({
+        session: {
+          id: sessionId,
+          player_id: profile.id,
+          started_at: (new Date(Date.now() - ((gr.elapsed || 0) * 1000))).toISOString(),
+          ended_at: new Date().toISOString(),
+          mode: gr.mode || 'solo',
+          tier: gr.tierCeiling || 1,
+          category: gr.continent || 'geo',
+          final_score: gr.score || 0,
+          cards_answered: gr.correct + gr.wrong,
+          cards_correct: gr.correct
+        },
+        card_attempts: [],
+        star_events: [],
+        progress_updates: []
+      });
+    }
   }
 
   const total = gr.correct + gr.wrong;
@@ -8976,6 +9086,9 @@ function createEduGroup(name) {
   const id = 'grp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   groups.push({ id, name, studentIds: [] });
   saveEduGroups(groups);
+  if (typeof syncStore !== 'undefined') {
+    syncStore.syncClassroom({ id: id, owner_id: activeProfile.id, name: name });
+  }
   return id;
 }
 
@@ -8991,6 +9104,9 @@ function addStudentToGroup(groupId, studentId) {
   if (g && !g.studentIds.includes(studentId)) {
     g.studentIds.push(studentId);
     saveEduGroups(groups);
+    if (typeof syncStore !== 'undefined') {
+      syncStore.syncClassroomMember({ classroom_id: groupId, profile_id: studentId });
+    }
   }
 }
 
@@ -9068,7 +9184,7 @@ async function fetchLinkedStudents() {
   try {
     const linksUrl = SUPABASE_URL + '/rest/v1/educator_links?educator_id=eq.' +
       encodeURIComponent(activeProfile.id) + '&select=student_id';
-    const linksResp = await fetch(linksUrl, { headers: supabaseHeaders() });
+    const linksResp = await fetch(linksUrl, { headers: authedHeaders() });
 
     if (!linksResp.ok) throw new Error('Links fetch failed');
 
@@ -9081,12 +9197,32 @@ async function fetchLinkedStudents() {
     const studentIds = links.map(l => l.student_id);
     const idsParam = '(' + studentIds.map(id => '"' + id + '"').join(',') + ')';
     const profilesUrl = SUPABASE_URL + '/rest/v1/profiles?player_id=in.' + idsParam +
-      '&select=player_id,handle,avatar_svg,cr,accuracy,total_correct,best_streak,tier_avg,games_played,last_played';
-    const profilesResp = await fetch(profilesUrl, { headers: supabaseHeaders() });
+      '&select=player_id,handle,avatar_svg,stats';
+    const profilesResp = await fetch(profilesUrl, { headers: authedHeaders() });
 
     if (!profilesResp.ok) throw new Error('Student profiles fetch failed');
-
-    const students = await profilesResp.json();
+    
+    const rows = await profilesResp.json();
+    const students = rows.map(r => {
+      const s = r.stats || {};
+      const totalAnswered = (s.totalCorrect || 0) + (s.totalMistakes || 0);
+      return {
+        player_id: r.player_id,
+        handle: r.handle || 'Unknown',
+        avatar_svg: r.avatar_svg || null,
+        cr: s.cr || 0,
+        accuracy: totalAnswered > 0 ? (s.totalCorrect || 0) / totalAnswered : 0,
+        total_correct: s.totalCorrect || 0,
+        total_mistakes: s.totalMistakes || 0,
+        mistakes_corrected: s.mistakesCorrected || 0,
+        best_streak: s.bestStreak || 0,
+        day_streak: s.currentDayStreak || 0,
+        tier_avg: s.tierAvg || 0,
+        games_played: s.gamesPlayed || 0,
+        last_played: s.lastPlayed || null
+      };
+    });
+    
     saveLinkedStudents(students);
     return students;
   } catch (e) {
@@ -9165,7 +9301,7 @@ async function joinClass(code) {
   try {
     const findUrl = SUPABASE_URL + '/rest/v1/profiles?link_code=eq.' +
       encodeURIComponent(code) + '&is_educator=eq.true&select=player_id,handle&limit=1';
-    const findResp = await fetch(findUrl, { headers: supabaseHeaders() });
+    const findResp = await fetch(findUrl, { headers: authedHeaders() });
 
     if (!findResp.ok) throw new Error('Search failed');
 
@@ -9180,7 +9316,7 @@ async function joinClass(code) {
     const linkUrl = SUPABASE_URL + '/rest/v1/educator_links';
     const linkResp = await fetch(linkUrl, {
       method: 'POST',
-      headers: supabaseHeaders(),
+      headers: authedHeaders(),
       body: JSON.stringify({
         educator_id: educator.player_id,
         student_id: activeProfile.id
@@ -9249,7 +9385,7 @@ async function unlinkStudent(studentId) {
     try {
       var url = SUPABASE_URL + '/rest/v1/educator_links?educator_id=eq.' +
         encodeURIComponent(activeProfile.id) + '&student_id=eq.' + encodeURIComponent(studentId);
-      await fetch(url, { method: 'DELETE', headers: supabaseHeaders() });
+      await fetch(url, { method: 'DELETE', headers: authedHeaders() });
     } catch (e) {
       console.warn('[educator] Supabase unlink failed:', e);
     }
@@ -9823,7 +9959,7 @@ async function performEducatorSearch(query) {
     var url = SUPABASE_URL + '/rest/v1/profiles?is_educator=eq.true&or=(handle.ilike.*' +
       encodeURIComponent(query) + '*,link_code.eq.' + encodeURIComponent(query.toUpperCase()) +
       ')&select=player_id,handle,avatar_svg,link_code,cr,games_played&limit=20';
-    var resp = await fetch(url, { headers: supabaseHeaders() });
+    var resp = await fetch(url, { headers: authedHeaders() });
 
     if (!resp.ok) throw new Error('Search failed');
 

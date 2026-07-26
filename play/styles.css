@@ -1050,7 +1050,7 @@ border-radius:var(--pill); padding:9px 20px;
 
 font-size:13px; font-weight:700; color:#fff; white-space:nowrap;
 
-z-index:9999; transition:transform .3s cubic-bezier(.34,1.56,.64,1);
+z-index:99999; transition:transform .3s cubic-bezier(.34,1.56,.64,1);
 
 pointer-events:none;
 

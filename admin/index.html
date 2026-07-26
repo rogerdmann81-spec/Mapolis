@@ -13,6 +13,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 
   <!-- Shared data layer -->
+  <script src="/env.js"></script>
   <script src="../assets/shared.js"></script>
 
   <style>
@@ -60,7 +61,7 @@
       background:var(--bg-panel); border:1px solid var(--border);
       border-radius:var(--pill); padding:9px 20px;
       font-size:13px; font-weight:700; color:#fff; white-space:nowrap;
-      z-index:9999; transition:transform .3s cubic-bezier(.34,1.56,.64,1);
+      z-index:99999; transition:transform .3s cubic-bezier(.34,1.56,.64,1);
       pointer-events:none;
     }
     .toast.show { transform:translateX(-50%) translateY(0); }

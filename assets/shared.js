@@ -3,8 +3,8 @@
 
 // ─── Supabase constants ────────────────────────────────────────────────────
 
-const SUPABASE_URL = 'https://tbibeuwpollcrlvowcpg.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_EK5hsEwqwxDABJ8TsiYmLg_LCZZDgUX';
+const SUPABASE_URL = (window.ENV && window.ENV.SUPABASE_URL ? window.ENV.SUPABASE_URL : 'https://your-project.supabase.co').replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
+const SUPABASE_KEY = window.ENV && window.ENV.SUPABASE_ANON_KEY ? window.ENV.SUPABASE_ANON_KEY : 'your-anon-key-here';
 
 const SYNC_QUEUE_KEY = 'nsg_syncQueue';
 const LEADERBOARD_CACHE_KEY = 'nsg_leaderboard_cache';
@@ -37,21 +37,24 @@ function getSupabase() {
 // ─── Auth session storage ──────────────────────────────────────────────────
 
 const AUTH_SESSION_KEY = 'mapolis_auth_session';
+let _memorySession = null;
 
 function _getSession() {
   try {
     const raw = localStorage.getItem(AUTH_SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch (e) { return null; }
+    return raw ? JSON.parse(raw) : _memorySession;
+  } catch (e) { return _memorySession; }
 }
 
 function _saveSession(session) {
+  _memorySession = session;
   try { localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session)); }
-  catch (e) { console.warn('[auth] Failed to save session:', e); }
+  catch (e) { console.warn('[auth] Failed to save session to localStorage, using memory:', e); }
 }
 
 function _clearSession() {
-  localStorage.removeItem(AUTH_SESSION_KEY);
+  _memorySession = null;
+  try { localStorage.removeItem(AUTH_SESSION_KEY); } catch (e) {}
 }
 
 // Headers using the live access token when available, falls back to anon key.
@@ -257,6 +260,57 @@ const syncStore = {
     }
   },
 
+  _mapRowToProfile(row, authUid) {
+    return {
+      id: row.player_id,
+      handle: row.handle || '',
+      birthYear: row.birth_year || null,
+      country: row.country || '',
+      stats: row.stats || { cr: 0, totalAnswered: 0, totalCorrect: 0 },
+      avatar: { face: '🧑', selections: row.avatar_selections || null, svg: row.avatar_svg || null },
+      linkCode: row.link_code || null,
+      passwordHash: row.password_hash || null,
+      parentEmail: row.parent_email || null,
+      auth_uid: authUid,
+      frozen: row.frozen === true,
+      isAdmin: row.is_admin === true,
+      createdAt: row.created_at || new Date().toISOString()
+    };
+  },
+
+  async fetchProfiles(authUid) {
+    if (!navigator.onLine || !isSupabaseConfigured() || !authUid) return null;
+    try {
+      const url = SUPABASE_URL + '/rest/v1/profiles?auth_uid=eq.' + encodeURIComponent(authUid);
+      const resp = await fetch(url, { headers: authedHeaders() });
+      if (resp.ok) {
+        const rows = await resp.json();
+        return rows.map(r => this._mapRowToProfile(r, authUid));
+      }
+      console.warn('[syncStore] fetchProfiles failed:', resp.status);
+    } catch (e) {
+      console.warn('[syncStore] fetchProfiles error:', e);
+    }
+    return null;
+  },
+
+  syncProfile(profile) {
+    if (!profile || !profile.id) return;
+    const entry = this._buildProfileRow(profile);
+    this._enqueue({ table: 'profiles', payload: entry });
+    this.processQueue();
+  },
+
+  syncClassroom(classroom) {
+    this._enqueue({ table: 'classrooms', payload: classroom });
+    this.processQueue();
+  },
+
+  syncClassroomMember(member) {
+    this._enqueue({ table: 'classroom_members', payload: member });
+    this.processQueue();
+  },
+
   async fetchLeaderboard() {
     if (navigator.onLine && isSupabaseConfigured()) {
       try {
@@ -312,6 +366,8 @@ const syncStore = {
       country: p.country || null,
       birth_year: p.birthYear || null,
       stats: p.stats || {},
+      avatar_svg: p.avatar && p.avatar.svg ? p.avatar.svg : null,
+      link_code: p.linkCode || null,
       updated_at: new Date().toISOString()
     };
   },
@@ -368,8 +424,16 @@ async function submitRound(roundData) {
   try {
     if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
 
-    const { data, error } = await getSupabase().rpc('submit_round', { payload: roundData });
-    if (error) throw error;
+    const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/submit_round', {
+      method: 'POST',
+      headers: authedHeaders(),
+      body: JSON.stringify({ payload: roundData })
+    });
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(errText);
+    }
+    const data = await resp.json();
 
     _logRound('success', data);
     clearPendingRound(roundData.session.id);
@@ -420,8 +484,16 @@ async function flushPendingRounds() {
   for (const round of pending) {
     try {
       if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
-      const { data, error } = await getSupabase().rpc('submit_round', { payload: round });
-      if (error) throw error;
+      const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/submit_round', {
+        method: 'POST',
+        headers: authedHeaders(),
+        body: JSON.stringify({ payload: round })
+      });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(errText);
+      }
+      const data = await resp.json();
       _logRound('flush success', round.session.id);
     } catch (err) {
       remaining.push(round);

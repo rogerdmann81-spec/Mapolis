@@ -1,0 +1,16 @@
+{
+  "name": "mapolis",
+  "version": "1.0.0",
+  "description": "Mapolis Web App",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node server.js",
+    "build": "echo 'No build required for static site'",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "jsdom": "^29.1.1",
+    "pg": "^8.22.0"
+  }
+}
