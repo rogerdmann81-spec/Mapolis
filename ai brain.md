@@ -224,4 +224,5 @@ Crucial Technical Steps Taken:
 
 Architectural Wins:
 - **Cross-Device Recovery:** The RPCs allow a client to securely claim a profile based on credentials (password or parent email) and link it to their current `auth_uid` without violating RLS.
-- **COPPA Compliance:** Enforcing that a recovered profile does not bypass RLS policies prevents unauthorized access to student profiles.
+- **COPPA Compliance:** Enforcing that a recovered profile does not bypass RLS policies prevents unauthorized access to student profiles.  testing a branch deploy then updating main if everything is good.
+- 
