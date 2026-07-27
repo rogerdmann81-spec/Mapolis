@@ -1,0 +1,13 @@
+[build]
+  command = "npm run build"
+  publish = "."
+
+[dev]
+  port = 3000
+  framework = "#static"
+  publish = "."
+
+[[redirects]]
+  from = "/"
+  to = "/play/"
+  status = 301
