@@ -1842,6 +1842,7 @@ function openRestoreProfileModal() {
           saveProfiles();
         }
       } catch (err) {
+        console.error("[restore_profile] Fetch error:", err);
         showToast('Network error while restoring profile');
         return;
       }
@@ -1913,6 +1914,7 @@ function openRestoreProfileModal() {
           saveProfiles();
         }
       } catch (err) {
+        console.error("[restore_profile_by_email] Fetch error:", err);
         showToast('Network error while restoring profile');
         return;
       }
