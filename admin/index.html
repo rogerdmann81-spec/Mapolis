@@ -213,18 +213,20 @@ body.impersonating .screen { padding-bottom: 54px !important; }
   <div id="admin-root"></div>
 </div>
 
-<!-- Admin password modal -->
+<!-- Admin login modal -->
 <div id="admin-pw-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(6,13,46,.92);backdrop-filter:blur(8px);align-items:center;justify-content:center;">
   <div style="background:#111428;border:1px solid rgba(91,143,255,.25);border-radius:20px;padding:28px 24px;width:min(320px,90vw);text-align:center;">
     <div style="font-size:28px;margin-bottom:8px;">🔐</div>
     <div style="font-family:'Fredoka One',sans-serif;font-size:18px;color:#fff;margin-bottom:4px;">Master Access</div>
-    <div style="font-size:11px;color:var(--dim);margin-bottom:18px;">Enter password to continue</div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:18px;">Sign in to continue</div>
+    <input id="admin-email-input" type="email" placeholder="Email Address"
+      style="width:100%;background:#0d0f1a;border:1px solid rgba(91,143,255,.3);border-radius:12px;padding:12px 14px;color:#fff;font-size:14px;font-family:'Nunito',sans-serif;margin-bottom:8px;box-sizing:border-box;">
     <input id="admin-pw-input" type="password" placeholder="Password"
       style="width:100%;background:#0d0f1a;border:1px solid rgba(91,143,255,.3);border-radius:12px;padding:12px 14px;color:#fff;font-size:14px;font-family:'Nunito',sans-serif;margin-bottom:8px;box-sizing:border-box;">
-    <div id="admin-pw-error" style="display:none;color:#f04060;font-size:11px;margin-bottom:8px;">Incorrect password</div>
+    <div id="admin-pw-error" style="display:none;color:#f04060;font-size:11px;margin-bottom:8px;">Sign in failed</div>
     <div style="display:flex;gap:8px;">
       <button onclick="document.getElementById('admin-pw-modal').style.display='none'" style="flex:1;padding:11px;background:transparent;border:1px solid rgba(91,143,255,.2);border-radius:12px;color:var(--dim);font-size:13px;font-weight:700;">Cancel</button>
-      <button onclick="adminSubmitPw()" style="flex:2;padding:11px;background:#3b6ef8;border:none;border-radius:12px;color:#fff;font-size:13px;font-weight:800;">Enter</button>
+      <button id="btn-admin-login" onclick="adminSubmitPw()" style="flex:2;padding:11px;background:#3b6ef8;border:none;border-radius:12px;color:#fff;font-size:13px;font-weight:800;">Sign In</button>
     </div>
   </div>
 </div>
@@ -305,7 +307,6 @@ var activeProfile = null;
 
 </script>
 <script>
-var ADMIN_PW = 'mapolisfuckyeah';
 
 function adminTriggerClick() {
   var m = document.getElementById('admin-pw-modal');
@@ -316,18 +317,33 @@ function adminTriggerClick() {
   if (err) err.style.display = 'none';
 }
 
-function adminSubmitPw() {
-  var val = (document.getElementById('admin-pw-input') || {}).value || '';
+async function adminSubmitPw() {
+  var email = (document.getElementById('admin-email-input') || {}).value || '';
+  var pw = (document.getElementById('admin-pw-input') || {}).value || '';
   var err = document.getElementById('admin-pw-error');
   var modal = document.getElementById('admin-pw-modal');
-  if (val === ADMIN_PW) {
+  var btn = document.getElementById('btn-admin-login');
+
+  if (err) err.style.display = 'none';
+  if (!email || !pw) {
+    if (err) { err.textContent = 'Enter email and password'; err.style.display = 'block'; }
+    return;
+  }
+
+  if (btn) btn.textContent = 'Signing in...';
+
+  try {
+    await signInWithEmail(email, pw);
     if (modal) modal.style.display = 'none';
     _adminViewProfile = null;
     renderAdmin(); // standalone: render directly instead of game nav
-  } else {
-    if (err) err.style.display = 'block';
+  } catch (e) {
+    console.error('Login failed:', e);
+    if (err) { err.textContent = 'Invalid email or password'; err.style.display = 'block'; }
     var inp = document.getElementById('admin-pw-input');
     if (inp) { inp.value = ''; inp.focus(); }
+  } finally {
+    if (btn) btn.textContent = 'Sign In';
   }
 }
 
@@ -392,39 +408,17 @@ function adminSetTab(tab) { _adminTab = tab; renderAdmin(); }
 function adminExit() { go('s-credits'); }
 
 function adminShowChangePw() {
-  ['admin-cpw-cur','admin-cpw-new','admin-cpw-confirm'].forEach(function(id){
-    var el = document.getElementById(id); if (el) el.value = '';
-  });
-  var err = document.getElementById('admin-cpw-error');
-  var ok  = document.getElementById('admin-cpw-success');
-  if (err) err.style.display = 'none';
-  if (ok)  ok.style.display  = 'none';
-  var m = document.getElementById('admin-changepw-modal');
-  if (m) { m.style.display = 'flex'; setTimeout(function(){ var el=document.getElementById('admin-cpw-cur'); if(el) el.focus(); }, 80); }
+  alert("Password management is now handled via Supabase Auth.");
 }
 
 function adminCloseCPW() {
-  var m = document.getElementById('admin-changepw-modal');
-  if (m) m.style.display = 'none';
+  var m = document.getElementById("admin-changepw-modal");
+  if (m) m.style.display = "none";
 }
 
 function adminDoChangePw() {
-  var cur     = (document.getElementById('admin-cpw-cur')     || {}).value || '';
-  var nw      = (document.getElementById('admin-cpw-new')     || {}).value || '';
-  var confirm = (document.getElementById('admin-cpw-confirm') || {}).value || '';
-  var err = document.getElementById('admin-cpw-error');
-  var ok  = document.getElementById('admin-cpw-success');
-  function showErr(msg) { if(err){ err.textContent=msg; err.style.display='block'; } if(ok) ok.style.display='none'; }
-  if (cur !== ADMIN_PW)    { showErr('Current password is incorrect.'); return; }
-  if (nw.length < 8)       { showErr('New password must be at least 8 characters.'); return; }
-  if (nw !== confirm)      { showErr('Passwords do not match.'); return; }
-  ADMIN_PW = nw;
-  localStorage.setItem('nsg_admin_pw', ADMIN_PW);
-  if (err) err.style.display = 'none';
-  if (ok)  ok.style.display  = 'block';
-  setTimeout(adminCloseCPW, 1400);
+  alert("Password management is now handled via Supabase Auth.");
 }
-
 function renderAdminProfilesList(sorted, allP) {
   if (!sorted.length) return '<p style="text-align:center;color:var(--dim);padding:40px 20px;">No profiles in local storage.</p>';
   var html = '<div class="admin-prof-list">';
@@ -1497,8 +1491,8 @@ function showAdminReplyModal(noteId) {
 // ── Admin init ─────────────────────────────────────────────────────────────
 // On load: show password gate. renderAdmin() fires after correct password entry.
 (function initAdmin() {
-  var storedPw = localStorage.getItem('nsg_admin_pw');
-  if (storedPw) ADMIN_PW = storedPw;
+  
+  
 
   var modal = document.getElementById('admin-pw-modal');
   if (modal) {
