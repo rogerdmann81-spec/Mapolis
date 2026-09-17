@@ -225,3 +225,20 @@ Crucial Technical Steps Taken:
 Architectural Wins:
 - **Cross-Device Recovery:** The RPCs allow a client to securely claim a profile based on credentials (password or parent email) and link it to their current `auth_uid` without violating RLS.
 - **COPPA Compliance:** Enforcing that a recovered profile does not bypass RLS policies prevents unauthorized access to student profiles.
+
+----------------------------------------------------------------------------------------------------------
+4. Completed Task: Full Profile Recovery & Branch Cleanup
+Status: ✅ Complete
+Target: `play/index.html` & `assets/shared.js`
+
+We successfully identified and resolved a critical bug blocking cross-device profile recovery on production. The UI now fully supports restoring a profile by Handle + Password, seamlessly synchronizing the Supabase database with the user's new local session.
+
+Crucial Discoveries During Debugging (The Netlify vs. AI Studio Quirks):
+- **Duplicate Files:** The repository contained identical copies of `shared.js` in `/assets/`, `/play/assets/`, and `/admin/assets/`. While the AI Studio preview environment automatically referenced the correct root `assets/shared.js` due to its node server configuration, Netlify's production build correctly loaded the duplicate `play/assets/shared.js` relative to the HTML file. Because the duplicate was missing the new `_mapRowToProfile()` function, profile recovery crashed only in production.
+- **The Fix:** We ran a synchronization script that synced the updated `shared.js` across all directories, standardizing the application logic. 
+- **Environment Variables in Production:** We transitioned from hardcoded Supabase keys to a dynamic `window.ENV` pattern (served via `/env.js`), ensuring environment variables are securely and reliably injected on both Netlify and the AI Studio preview server.
+- **Clean Slate:** After fixing the issue, we completely sanitized the `main` branch, removing over 150 temporary test files, SQL patches, and backup directories generated during debugging. The `wiring-supabase` branch was hard-reset to mirror `main`.
+
+Architectural Wins:
+- **Resilient Delivery:** The application can now safely recover missing profiles in any environment (local, AI Studio preview, or Netlify production) with identical behavior.
+- **Improved Security Posture:** Environment variables are properly separated from source code.
