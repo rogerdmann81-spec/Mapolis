@@ -3,8 +3,8 @@
 
 // ─── Supabase constants ────────────────────────────────────────────────────
 
-const SUPABASE_URL = (window.ENV && window.ENV.SUPABASE_URL ? window.ENV.SUPABASE_URL : 'https://your-project.supabase.co').replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
-const SUPABASE_KEY = window.ENV && window.ENV.SUPABASE_ANON_KEY ? window.ENV.SUPABASE_ANON_KEY : 'your-anon-key-here';
+const SUPABASE_URL = (typeof window !== 'undefined' && window.ENV && window.ENV.SUPABASE_URL) || 'https://tbibeuwpollcrlvowcpg.supabase.co';
+const SUPABASE_KEY = (typeof window !== 'undefined' && window.ENV && window.ENV.SUPABASE_ANON_KEY) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRiaWJldXdwb2xsY3Jsdm93Y3BnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxODg5MTUsImV4cCI6MjA5MTc2NDkxNX0.2fIzL1Fn0aKLwCfOjOMXXQV-3WtvbwY4YoanJJ-Vys8';
 
 const SYNC_QUEUE_KEY = 'nsg_syncQueue';
 const LEADERBOARD_CACHE_KEY = 'nsg_leaderboard_cache';
