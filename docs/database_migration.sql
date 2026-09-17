@@ -1,6 +1,8 @@
 -- 1. Add missing columns to profiles
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_selections JSONB;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_svg TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_face TEXT DEFAULT '🧑';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS unlocked_avatar JSONB;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS stats JSONB DEFAULT '{"cr":0,"totalAnswered":0,"totalCorrect":0}'::jsonb;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS link_code TEXT;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS password_hash TEXT;
@@ -27,6 +29,7 @@ CREATE OR REPLACE FUNCTION restore_profile(
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_auth_uid uuid := auth.uid();
@@ -64,6 +67,7 @@ CREATE OR REPLACE FUNCTION restore_profile_by_email(
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_auth_uid uuid := auth.uid();

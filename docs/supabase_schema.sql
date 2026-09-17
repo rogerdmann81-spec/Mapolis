@@ -8,6 +8,16 @@ CREATE TABLE profiles (
     handle TEXT UNIQUE NOT NULL,
     country TEXT,
     birth_year INT,
+    avatar_face TEXT DEFAULT '🧑',
+    avatar_svg TEXT,
+    avatar_selections JSONB,
+    unlocked_avatar JSONB,
+    stats JSONB DEFAULT '{"cr":0,"totalAnswered":0,"totalCorrect":0}'::jsonb,
+    badges JSONB DEFAULT '[]'::jsonb,
+    accessories JSONB DEFAULT '[]'::jsonb,
+    link_code TEXT,
+    password_hash TEXT,
+    parent_email TEXT,
     is_admin BOOLEAN DEFAULT false,
     is_educator BOOLEAN DEFAULT false,
     frozen BOOLEAN DEFAULT false,
@@ -186,80 +196,11 @@ BEGIN
     
     RETURN v_session_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
-CREATE OR REPLACE FUNCTION restore_profile(
-  p_handle text,
-  p_password_hash text
-) RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_auth_uid uuid := auth.uid();
-  v_profile profiles%ROWTYPE;
-BEGIN
-  IF v_auth_uid IS NULL THEN
-    RAISE EXCEPTION 'Not authenticated';
-  END IF;
 
-  SELECT * INTO v_profile
-  FROM profiles
-  WHERE lower(handle) = lower(p_handle)
-    AND password_hash = p_password_hash;
+CREATE POLICY "Users can update own profile" ON profiles
+    FOR UPDATE USING (auth_uid = auth.uid());
 
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Invalid handle or password';
-  END IF;
-
-  IF v_profile.frozen = true THEN
-    RAISE EXCEPTION 'Profile is frozen';
-  END IF;
-
-  -- Take ownership of the profile for the current device session
-  UPDATE profiles
-  SET auth_uid = v_auth_uid,
-      recovery_created_at = now()
-  WHERE player_id = v_profile.player_id
-  RETURNING * INTO v_profile;
-
-  RETURN row_to_json(v_profile)::jsonb;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION restore_profile_by_email(
-  p_parent_email text
-) RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_auth_uid uuid := auth.uid();
-  v_profile profiles%ROWTYPE;
-BEGIN
-  IF v_auth_uid IS NULL THEN
-    RAISE EXCEPTION 'Not authenticated';
-  END IF;
-
-  SELECT * INTO v_profile
-  FROM profiles
-  WHERE lower(parent_email) = lower(p_parent_email)
-  LIMIT 1;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Email not found';
-  END IF;
-
-  IF v_profile.frozen = true THEN
-    RAISE EXCEPTION 'Profile is frozen';
-  END IF;
-
-  UPDATE profiles
-  SET auth_uid = v_auth_uid,
-      recovery_created_at = now()
-  WHERE player_id = v_profile.player_id
-  RETURNING * INTO v_profile;
-
-  RETURN row_to_json(v_profile)::jsonb;
-END;
-$$;
+CREATE POLICY "Users can insert own profile" ON profiles
+    FOR INSERT WITH CHECK (auth_uid = auth.uid());

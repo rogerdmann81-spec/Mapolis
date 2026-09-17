@@ -4,6 +4,7 @@ CREATE OR REPLACE FUNCTION restore_profile(
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_auth_uid uuid := auth.uid();
@@ -42,6 +43,7 @@ CREATE OR REPLACE FUNCTION restore_profile_by_email(
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_auth_uid uuid := auth.uid();

@@ -134,6 +134,12 @@
 </div>
 
 <script>
+  if (window.location.search.includes('clear_cache=1')) {
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.href = window.location.pathname;
+  }
+
 /* ── Title screen spinning globe ────────────────────────────────────────── */
 (function initTitleGlobe(){
   var svgEl = document.getElementById('title-globe');
@@ -1833,8 +1839,14 @@ function openRestoreProfileModal() {
         }
         const data = await resp.json();
         if (data) {
-          // Remap DB row back to local app format
-          match = syncStore._mapRowToProfile(data, data.auth_uid);
+          var rowData = Array.isArray(data) ? data[0] : data;
+          if (typeof rowData === 'string') {
+            try { rowData = JSON.parse(rowData); } catch(e) {}
+          }
+          var sess = typeof _getSession === 'function' ? _getSession() : null;
+          if (!rowData) { showToast('Profile data missing'); return; }
+          var currUid = sess && sess.user ? sess.user.id : rowData.auth_uid;
+          match = syncStore._mapRowToProfile(rowData, currUid);
           // Overwrite our local list/cache so we don't have dupes
           const existingIdx = allProfiles.findIndex(p => p.id === match.id);
           if (existingIdx >= 0) allProfiles[existingIdx] = match;
@@ -1864,6 +1876,7 @@ function openRestoreProfileModal() {
       }
     }
 
+    if (!match) { showToast('Profile not found.'); return; }
     activeProfile = match;
     try { localStorage.setItem(ACTIVE_KEY, activeProfile.id); } catch (e) {}
     updateAvatarBars();
@@ -1907,8 +1920,15 @@ function openRestoreProfileModal() {
         }
         const data = await resp.json();
         if (data) {
-          match = syncStore._mapRowToProfile(data, data.auth_uid);
-          const existingIdx = allProfiles.findIndex(p => p.id === match.id);
+          var rowData = Array.isArray(data) ? data[0] : data;
+          if (typeof rowData === 'string') {
+            try { rowData = JSON.parse(rowData); } catch(e) {}
+          }
+          var sessEmail = typeof _getSession === 'function' ? _getSession() : null;
+          if (!rowData) { showToast('Profile data missing'); return; }
+          var currUidEmail = sessEmail && sessEmail.user ? sessEmail.user.id : rowData.auth_uid;
+          match = syncStore._mapRowToProfile(rowData, currUidEmail);
+          var existingIdx = allProfiles.findIndex(p => p.id === match.id);
           if (existingIdx >= 0) allProfiles[existingIdx] = match;
           else allProfiles.push(match);
           saveProfiles();
@@ -1934,6 +1954,7 @@ function openRestoreProfileModal() {
       }
     }
 
+    if (!match) { showToast('Profile not found.'); return; }
     activeProfile = match;
     try { localStorage.setItem(ACTIVE_KEY, activeProfile.id); } catch (e) {}
     updateAvatarBars();
@@ -2273,7 +2294,14 @@ function renderCreateStep() {
       // don't drift if CONSENT_AGE_THRESHOLD changes in a future build.
       newProfile.consentAgeAtCreate = CONSENT_AGE_THRESHOLD;
 
-      finalizeProfile(goToAvatar);
+      try {
+        await finalizeProfile(goToAvatar);
+      } catch (err) {
+        showToast('That handle is taken — pick another');
+        const el = document.getElementById('c-handle');
+        if (el) { el.focus(); el.select && el.select(); }
+        return;
+      }
     }
 
     document.getElementById('btn-create-next').addEventListener('click', () => { runCreate(true); });
@@ -2281,7 +2309,7 @@ function renderCreateStep() {
 
 }
 
-function finalizeProfile(goToAvatar) {
+async function finalizeProfile(goToAvatar) {
 
   newProfile.id = (typeof mapolisUUID === 'function')
     ? mapolisUUID()
@@ -2289,26 +2317,30 @@ function finalizeProfile(goToAvatar) {
 
   newProfile.createdAt = new Date().toISOString();
 
+  // Step 5.2.1 — persist to Supabase via create_profile RPC.
+  // Wait for it so we can catch uniqueness errors BEFORE saving locally.
+  if (typeof createProfile === 'function') {
+    try {
+      await createProfile({
+        playerId:     newProfile.id,
+        handle:       newProfile.handle,
+        birthYear:    newProfile.birthYear,
+        country:      newProfile.country,
+        parentEmail:  newProfile.parentEmail,
+        passwordHash: newProfile.passwordHash,
+        consentAge:   newProfile.consentAgeAtCreate
+      });
+    } catch (err) {
+      console.warn('[finalizeProfile] create_profile RPC failed:', err);
+      if (err.message && (err.message.includes('unique') || err.message.includes('taken') || err.message.includes('23505') || err.message.includes('already exists'))) {
+        throw err;
+      }
+    }
+  }
+
   allProfiles.push(newProfile);
 
   saveProfiles();
-
-  // Step 5.2.1 — persist to Supabase via create_profile RPC (fire-and-forget).
-  // Server-side auth_uid comes from auth.uid(); no need to pass it.
-  // Local profile stays usable offline even if this fails.
-  if (typeof createProfile === 'function') {
-    createProfile({
-      playerId:     newProfile.id,
-      handle:       newProfile.handle,
-      birthYear:    newProfile.birthYear,
-      country:      newProfile.country,
-      parentEmail:  newProfile.parentEmail,
-      passwordHash: newProfile.passwordHash,
-      consentAge:   newProfile.consentAgeAtCreate
-    }).catch(function(err) {
-      console.warn('[finalizeProfile] create_profile RPC failed:', err);
-    });
-  }
 
   activeProfile = newProfile;
 

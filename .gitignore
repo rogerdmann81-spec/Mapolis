@@ -7,3 +7,6 @@ ios/
 android/
 .DS_Store
 *.log
+
+# Local Netlify folder
+.netlify

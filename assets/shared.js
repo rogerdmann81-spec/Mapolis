@@ -245,9 +245,6 @@ const syncStore = {
     } catch (e) {
       console.warn('[syncStore] localStorage write failed:', e);
     }
-    // Step 5.2.1 — profile writes no longer POST directly. Inserts go via
-    // the create_profile RPC (called from finalizeProfile in play/index.html).
-    // Future updates (stats, handle rename) will go through their own RPCs.
   },
 
   load(key) {
@@ -267,7 +264,10 @@ const syncStore = {
       birthYear: row.birth_year || null,
       country: row.country || '',
       stats: row.stats || { cr: 0, totalAnswered: 0, totalCorrect: 0 },
-      avatar: { face: '🧑', selections: row.avatar_selections || null, svg: row.avatar_svg || null },
+      badges: row.badges || [],
+      accessories: row.accessories || [],
+      avatar: { face: row.avatar_face || '🧑', selections: row.avatar_selections || null, svg: row.avatar_svg || null },
+      unlockedAvatar: row.unlocked_avatar || null,
       linkCode: row.link_code || null,
       passwordHash: row.password_hash || null,
       parentEmail: row.parent_email || null,
@@ -339,13 +339,18 @@ const syncStore = {
     if (!navigator.onLine || !isSupabaseConfigured()) return;
     const queue = syncStore._getQueue();
     if (!queue.length) return;
+
     const remaining = [];
     for (const item of queue) {
       try {
-        const url = SUPABASE_URL + '/rest/v1/' + item.table;
+        const url = SUPABASE_URL + '/rest/v1/' + item.table + (item.table === 'profiles' ? '?on_conflict=player_id' : '');
+        const hdrs = authedHeaders();
+        if (item.table === 'profiles') {
+          hdrs['Prefer'] = 'resolution=merge-duplicates';
+        }
         const resp = await fetch(url, {
           method: 'POST',
-          headers: authedHeaders(),
+          headers: hdrs,
           body: JSON.stringify(item.payload)
         });
         if (!resp.ok) {
@@ -362,12 +367,20 @@ const syncStore = {
   _buildProfileRow(p) {
     return {
       player_id: p.id,
+      auth_uid: p.auth_uid || (typeof _getSession === 'function' && _getSession() && _getSession().user ? _getSession().user.id : null),
       handle: p.handle || null,
       country: p.country || null,
       birth_year: p.birthYear || null,
       stats: p.stats || {},
+      badges: p.badges || [],
+      accessories: p.accessories || [],
+      avatar_face: p.avatar && p.avatar.face ? p.avatar.face : null,
       avatar_svg: p.avatar && p.avatar.svg ? p.avatar.svg : null,
+      avatar_selections: p.avatar && p.avatar.selections ? p.avatar.selections : null,
+      unlocked_avatar: p.unlockedAvatar || null,
       link_code: p.linkCode || null,
+      password_hash: p.passwordHash || null,
+      parent_email: p.parentEmail || null,
       updated_at: new Date().toISOString()
     };
   },
@@ -378,128 +391,23 @@ const syncStore = {
       return raw ? JSON.parse(raw) : [];
     } catch (e) { return []; }
   },
-
-  _saveQueue(queue) {
+  _saveQueue(q) {
     try {
-      localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
+      localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(q));
     } catch (e) { console.warn('[syncStore] Queue save failed:', e); }
   },
-
   _enqueue(item) {
     const queue = syncStore._getQueue();
-    const existing = queue.findIndex(
-      q => q.table === item.table &&
-           q.payload && item.payload &&
-           q.payload.player_id === item.payload.player_id
-    );
-    if (existing >= 0) {
-      queue[existing] = item;
-    } else {
-      queue.push(item);
+    // Dedup: if updating the same profile, replace it.
+    if (item.table === 'profiles') {
+      const existing = queue.findIndex(q => q.table === 'profiles' && q.payload.player_id === item.payload.player_id);
+      if (existing >= 0) {
+        queue[existing] = item;
+        syncStore._saveQueue(queue);
+        return;
+      }
     }
+    queue.push(item);
     syncStore._saveQueue(queue);
   }
-
 };
-
-// ═══════════════════════════════════════════════════════════
-// §6 — Solo round submission + pending cache
-// ═══════════════════════════════════════════════════════════
-
-const PENDING_ROUNDS_KEY = 'mapolis_pending_rounds';
-const DEBUG_ROUND = new URLSearchParams(location.search).has('debug');
-
-function _logRound(label, data) {
-  if (!DEBUG_ROUND) return;
-  console.log(`[roundData] ${label}:`, data);
-}
-
-// Submit a completed round to Supabase via RPC
-async function submitRound(roundData) {
-  _logRound('submitting', roundData.session.id);
-
-  // First, flush any previously cached rounds
-  await flushPendingRounds();
-
-  try {
-    if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
-
-    const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/submit_round', {
-      method: 'POST',
-      headers: authedHeaders(),
-      body: JSON.stringify({ payload: roundData })
-    });
-    if (!resp.ok) {
-      const errText = await resp.text();
-      throw new Error(errText);
-    }
-    const data = await resp.json();
-
-    _logRound('success', data);
-    clearPendingRound(roundData.session.id);
-    return { success: true, sessionId: data };
-
-  } catch (err) {
-    console.warn('[submitRound] Failed, caching for retry:', err);
-    cachePendingRound(roundData);
-    return { success: false, error: err };
-  }
-}
-
-// Cache a failed round in localStorage for retry
-function cachePendingRound(roundData) {
-  try {
-    const pending = JSON.parse(localStorage.getItem(PENDING_ROUNDS_KEY) || '[]');
-    // Deduplicate by session.id
-    const idx = pending.findIndex(r => r.session.id === roundData.session.id);
-    if (idx >= 0) pending[idx] = roundData;
-    else pending.push(roundData);
-    localStorage.setItem(PENDING_ROUNDS_KEY, JSON.stringify(pending));
-    _logRound('cached', { sessionId: roundData.session.id, queueLength: pending.length });
-  } catch (e) {
-    console.warn('[cachePendingRound] localStorage failed:', e);
-  }
-}
-
-// Remove a successfully submitted round from cache
-function clearPendingRound(sessionId) {
-  try {
-    const pending = JSON.parse(localStorage.getItem(PENDING_ROUNDS_KEY) || '[]');
-    const filtered = pending.filter(r => r.session.id !== sessionId);
-    localStorage.setItem(PENDING_ROUNDS_KEY, JSON.stringify(filtered));
-  } catch (e) { /* ignore */ }
-}
-
-// Retry all cached pending rounds
-async function flushPendingRounds() {
-  const raw = localStorage.getItem(PENDING_ROUNDS_KEY);
-  if (!raw) return;
-  let pending;
-  try { pending = JSON.parse(raw); } catch (e) { return; }
-  if (!pending.length) return;
-
-  _logRound('flushing', { count: pending.length });
-
-  const remaining = [];
-  for (const round of pending) {
-    try {
-      if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
-      const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/submit_round', {
-        method: 'POST',
-        headers: authedHeaders(),
-        body: JSON.stringify({ payload: round })
-      });
-      if (!resp.ok) {
-        const errText = await resp.text();
-        throw new Error(errText);
-      }
-      const data = await resp.json();
-      _logRound('flush success', round.session.id);
-    } catch (err) {
-      remaining.push(round);
-    }
-  }
-
-  localStorage.setItem(PENDING_ROUNDS_KEY, JSON.stringify(remaining));
-  _logRound('flush done', { remaining: remaining.length });
-}

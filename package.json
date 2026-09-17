@@ -9,6 +9,8 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "acorn": "^8.18.0",
+    "acorn-walk": "^8.3.5",
     "express": "^4.21.0",
     "jsdom": "^29.1.1",
     "pg": "^8.22.0"
