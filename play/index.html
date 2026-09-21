@@ -1323,7 +1323,7 @@ function initApp() {
           remoteProfiles.forEach(rp => {
             const idx = allProfiles.findIndex(p => p.id === rp.id);
             if (idx >= 0) {
-              allProfiles[idx] = { ...allProfiles[idx], ...rp };
+              allProfiles[idx] = (typeof mergeProfiles === "function") ? mergeProfiles(allProfiles[idx], rp) : { ...allProfiles[idx], ...rp };
             } else {
               allProfiles.push(rp);
             }
@@ -5758,6 +5758,15 @@ function finishH2HMatch() {
       profile.stats.cr = (profile.stats.cr || 0) + h2hStarsEarned;
       profile._lastCRDelta = h2hStarsEarned;
     }
+    const h2hSessId = 'h2h_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+    if (!profile.stats.processedSessions) profile.stats.processedSessions = {};
+    profile.stats.processedSessions[h2hSessId] = {
+      crGain: h2hStarsEarned,
+      h2hMatches: 1,
+      outcome: _h2h.outcome,
+      ts: new Date().toISOString()
+    };
+    profile.updatedAt = new Date().toISOString();
     try { if (typeof saveProfiles === 'function') saveProfiles(); } catch(e) {}
   }
 
@@ -8171,6 +8180,17 @@ function updateProfileStats(profile, gr) {
   s.gamesPlayed = (s.gamesPlayed || 0) + 1;
   s.totalAnswered = (s.totalAnswered || 0) + gr.correct + gr.wrong;
   s.totalCorrect = (s.totalCorrect || 0) + gr.correct;
+  // Track session delta for cross-device idempotent merging
+  const sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+  if (!s.processedSessions) s.processedSessions = {};
+  s.processedSessions[sessionId] = {
+    crGain: crGain,
+    gamesPlayed: 1,
+    answered: gr.correct + gr.wrong,
+    correct: gr.correct,
+    ts: new Date().toISOString()
+  };
+  profile.updatedAt = new Date().toISOString();
   s.totalMistakes = (s.totalMistakes || 0) + gr.wrong;
   s.mistakesCorrected = (s.mistakesCorrected || 0) + (gr.mistakesCorrected || 0);
   if (gr.streak > (s.bestStreak || 0)) s.bestStreak = gr.streak;

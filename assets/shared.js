@@ -274,7 +274,8 @@ const syncStore = {
       auth_uid: authUid,
       frozen: row.frozen === true,
       isAdmin: row.is_admin === true,
-      createdAt: row.created_at || new Date().toISOString()
+      createdAt: row.created_at || new Date().toISOString(),
+      updatedAt: row.updated_at || row.created_at || new Date().toISOString()
     };
   },
 
@@ -411,3 +412,141 @@ const syncStore = {
     syncStore._saveQueue(queue);
   }
 };
+
+
+// ─── Profile Merge Engine ──────────────────────────────────────────────────
+// Implements session-tracked delta merging for progress/stars and latest-timestamp
+// precedence for cosmetics, preventing lost achievements across devices.
+function mergeProfiles(local, remote) {
+  if (!local && !remote) return null;
+  if (!local) return remote;
+  if (!remote) return local;
+
+  const result = { ...remote, ...local };
+
+  // 1. Resolve cosmetics by updatedAt timestamp (newest equipped look wins)
+  const localTs = local.updatedAt ? new Date(local.updatedAt).getTime() : 0;
+  const remoteTs = remote.updatedAt ? new Date(remote.updatedAt).getTime() : 0;
+  if (remoteTs > localTs) {
+    result.avatar = remote.avatar || local.avatar;
+    result.handle = remote.handle || local.handle;
+    result.country = remote.country || local.country;
+    result.birthYear = remote.birthYear || local.birthYear;
+  } else {
+    result.avatar = local.avatar || remote.avatar;
+    result.handle = local.handle || remote.handle;
+    result.country = local.country || remote.country;
+    result.birthYear = local.birthYear || remote.birthYear;
+  }
+  result.updatedAt = new Date(Math.max(localTs, remoteTs, Date.now())).toISOString();
+
+  // 2. Badges: Strict Set Union (an earned badge is NEVER lost)
+  const badgeSet = new Set([...(local.badges || []), ...(remote.badges || [])]);
+  result.badges = Array.from(badgeSet);
+
+  // 3. Accessories: Strict Set Union
+  const accSet = new Set([...(local.accessories || []), ...(remote.accessories || [])]);
+  result.accessories = Array.from(accSet);
+
+  // 4. Store Unlocks (unlockedAvatar types & packs): Object Union
+  const lTypes = (local.unlockedAvatar && local.unlockedAvatar.types) || {};
+  const rTypes = (remote.unlockedAvatar && remote.unlockedAvatar.types) || {};
+  const lPacks = (local.unlockedAvatar && local.unlockedAvatar.packs) || {};
+  const rPacks = (remote.unlockedAvatar && remote.unlockedAvatar.packs) || {};
+  result.unlockedAvatar = {
+    types: { ...rTypes, ...lTypes },
+    packs: { ...rPacks, ...lPacks }
+  };
+
+  // 5. Stats Reconciliation
+  const lStats = local.stats || {};
+  const rStats = remote.stats || {};
+  const mergedStats = { ...rStats, ...lStats };
+
+  // A. Mastered cards/territories: Union
+  mergedStats.mastered = { ...(rStats.mastered || {}), ...(lStats.mastered || {}) };
+
+  // B. Day History (Heatmap): Deduplicated date set union, sorted
+  const daySet = new Set([...(lStats.dayHistory || []), ...(rStats.dayHistory || [])]);
+  mergedStats.dayHistory = Array.from(daySet).sort();
+
+  // C. High water marks for single-best records
+  mergedStats.bestStreak = Math.max(lStats.bestStreak || 0, rStats.bestStreak || 0);
+
+  // D. H2H stats merge
+  const lH2H = lStats.h2h || {};
+  const rH2H = rStats.h2h || {};
+  mergedStats.h2h = {
+    ...rH2H,
+    ...lH2H,
+    rating: (remoteTs > localTs ? (rH2H.rating ?? lH2H.rating) : (lH2H.rating ?? rH2H.rating)) ?? 1200,
+    matches: Math.max(lH2H.matches || 0, rH2H.matches || 0),
+    wins: Math.max(lH2H.wins || 0, rH2H.wins || 0),
+    losses: Math.max(lH2H.losses || 0, rH2H.losses || 0),
+    ties: Math.max(lH2H.ties || 0, rH2H.ties || 0),
+    bestStreak: Math.max(lH2H.bestStreak || 0, rH2H.bestStreak || 0),
+    currentStreak: remoteTs > localTs ? (rH2H.currentStreak || 0) : (lH2H.currentStreak || 0)
+  };
+
+  // E. Session-tracked Stars (cr) & Play Counts
+  const lSessions = lStats.processedSessions || {};
+  const rSessions = rStats.processedSessions || {};
+  const mergedSessions = { ...rSessions, ...lSessions };
+
+  // Calculate base stars from the profile with more baseline or higher timestamp
+  let baseCR = remoteTs > localTs ? (rStats.cr || 0) : (lStats.cr || 0);
+  let baseAnswered = remoteTs > localTs ? (rStats.totalAnswered || 0) : (lStats.totalAnswered || 0);
+  let baseCorrect = remoteTs > localTs ? (rStats.totalCorrect || 0) : (lStats.totalCorrect || 0);
+  let baseGames = remoteTs > localTs ? (rStats.gamesPlayed || 0) : (lStats.gamesPlayed || 0);
+
+  // Add any unapplied sessions from the other side
+  if (remoteTs > localTs) {
+    // Remote is baseline, apply local sessions that remote didn't have
+    for (const [sessId, sess] of Object.entries(lSessions)) {
+      if (!rSessions[sessId]) {
+        baseCR += (sess.crGain || 0);
+        baseAnswered += (sess.answered || 0);
+        baseCorrect += (sess.correct || 0);
+        baseGames += (sess.gamesPlayed || 0);
+      }
+    }
+  } else {
+    // Local is baseline, apply remote sessions that local didn't have
+    for (const [sessId, sess] of Object.entries(rSessions)) {
+      if (!lSessions[sessId]) {
+        baseCR += (sess.crGain || 0);
+        baseAnswered += (sess.answered || 0);
+        baseCorrect += (sess.correct || 0);
+        baseGames += (sess.gamesPlayed || 0);
+      }
+    }
+  }
+
+  // Safety floor: Stars can never drop below the high-water mark of either profile
+  mergedStats.cr = Math.max(baseCR, lStats.cr || 0, rStats.cr || 0);
+  mergedStats.totalAnswered = Math.max(baseAnswered, lStats.totalAnswered || 0, rStats.totalAnswered || 0);
+  mergedStats.totalCorrect = Math.max(baseCorrect, lStats.totalCorrect || 0, rStats.totalCorrect || 0);
+  mergedStats.gamesPlayed = Math.max(baseGames, lStats.gamesPlayed || 0, rStats.gamesPlayed || 0);
+
+  // Prune processed sessions to last 100 to prevent unbounded storage
+  const sessionEntries = Object.entries(mergedSessions);
+  if (sessionEntries.length > 100) {
+    sessionEntries.sort((a, b) => (a[1].ts || '').localeCompare(b[1].ts || ''));
+    const pruned = {};
+    for (const [k, v] of sessionEntries.slice(-100)) {
+      pruned[k] = v;
+    }
+    mergedStats.processedSessions = pruned;
+  } else {
+    mergedStats.processedSessions = mergedSessions;
+  }
+
+  result.stats = mergedStats;
+  return result;
+}
+if (typeof window !== 'undefined') {
+  window.mergeProfiles = mergeProfiles;
+}
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { mergeProfiles };
+}
