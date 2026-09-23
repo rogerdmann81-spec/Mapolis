@@ -242,3 +242,26 @@ Crucial Discoveries During Debugging (The Netlify vs. AI Studio Quirks):
 Architectural Wins:
 - **Resilient Delivery:** The application can now safely recover missing profiles in any environment (local, AI Studio preview, or Netlify production) with identical behavior.
 - **Improved Security Posture:** Environment variables are properly separated from source code.
+- -------------------------------------------------------------------------------------------------------
+The update that should be applied to pre-beta1 is:
+- Record the current findings about mergeProfiles():
+  - gameplay currently mutates profile.updatedAt, so it cannot safely determine which avatar/profile metadata is newer;
+  - avatar needs its own mutation timestamp;
+  - handle/country/birthYear should not be coupled to avatar timestamp;
+  - merge must not manufacture a new updatedAt with Date.now();
+  - the 100-entry processedSessions pruning can cause double-counting after an old session is reintroduced.
+- Establish Supabase's durable gameplay ledger as authoritative, rather than adding a timestamp watermark workaround.
+- Document that the existing durable session UUID plus live submit_round(payload) already provides the necessary idempotency mechanism through sessions.id / ON CONFLICT DO NOTHING.
+- Document the remaining implementation:
+  1. Generate a session UUID at game start.
+  2. Initialize currentRoundData.
+  3. Record every card_attempt.
+  4. Record every star_event.
+  5. Finalize the session at round completion.
+  6. Submit through the existing submit_round RPC.
+  7. Persist failed round payloads in pending_rounds and retry on app open/next completion.
+  8. Use the server gameplay ledger to reconcile/materialize profile gameplay statistics.
+  9. Then simplify/finalize mergeProfiles() so it handles profile metadata rather than trying to reconstruct authoritative gameplay history.
+- Finalization sequence must explicitly be:
+  implementation → integration testing → code cleaning/refactoring → final debug/verification.
+The code-cleaning phase should occur immediately before the final debug, not after it, so the final debug validates the actual cleaned implementation.
