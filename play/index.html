@@ -13931,4 +13931,141 @@ document.addEventListener('keydown', function(e) {
 })();
 
 
+
+// ─── PLAYER NOTES & BETA MODAL ──────────────────────────────────────────────
+const NOTES_KEY = "nsg_notes";
+function getNotes() {
+  try {
+    var raw = localStorage.getItem(NOTES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+function saveNotes(notes) {
+  try { localStorage.setItem(NOTES_KEY, JSON.stringify(notes)); } catch (e) {}
+}
+function closeNsgModal() {
+  const overlay = document.querySelector(".nsg-modal-overlay");
+  if (overlay) overlay.remove();
+}
+function showBetaWelcome() {
+  const overlay = document.createElement("div");
+  overlay.className = "nsg-modal-overlay";
+  overlay.innerHTML = `
+    <div class="nsg-modal">
+      <h3>👋 Hello!</h3>
+      <div class="nsg-body">
+        <p>Hello and thank you. If you are reading this, it means you are in the group of trusted friends and family members I have asked to play my geography game.</p>
+        <p>On any page, when you click your avatar image it will take you to your profile page. There you will find a button to send me notes. Check out the educator panel, head-to-head mode, stats/leaderboard, and in-game rewards. (Most avatar types and associated assets will be purchasable with accumulated stars, but I wanted everyone here to have full access.)</p>
+        <p>You can use an anonymous screen name. Send me honest opinions, critiques, and notes — anything that looks wrong, glitches, or has incorrect information, please let me know.</p>
+        <p>There are a few more details I need to build out, but I am anxious to get this beta version out and start testing data flows. If you have a friend you think might enjoy it, feel free to share the link.</p>
+        <p style="margin-bottom:0;">Thanks for spending time on my game — and especially thank you for your opinions, critiques, and debugging help…hope you like it!!!</p>
+      </div>
+      <button class="nsg-btn-primary" id="btn-beta-ok">Let us Go! ⭐</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById("btn-beta-ok").addEventListener("click", () => {
+    localStorage.setItem("nsg_beta_welcome_shown", "1");
+    closeNsgModal();
+  });
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) {
+      localStorage.setItem("nsg_beta_welcome_shown", "1");
+      closeNsgModal();
+    }
+  });
+}
+function showNotesModal() {
+  const profile = window.activeProfile;
+  if (!profile) return;
+  const notes = getNotes().filter(n => n.profileId === profile.id);
+  const allNotes = getNotes();
+  let changed = false;
+  allNotes.forEach(n => {
+    if (n.profileId === profile.id && n.response && !n.replyRead) {
+      n.replyRead = true;
+      changed = true;
+    }
+  });
+  if (changed) saveNotes(allNotes);
+  if (window.notesStore && typeof window.notesStore.markRepliesRead === "function") {
+    window.notesStore.markRepliesRead(profile.id);
+  }
+
+  let notesHtml = "";
+  if (notes.length > 0) {
+    notesHtml = "<div style=\"margin-bottom:14px;\">";
+    const sorted = notes.slice().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    for (const note of sorted) {
+      const d = new Date(note.timestamp);
+      const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " at " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+      notesHtml += "<div class=\"nsg-note-card\">";
+      notesHtml += "<div class=\"nsg-note-meta\">You · " + dateStr + "</div>";
+      notesHtml += "<div class=\"nsg-note-msg\">" + (typeof escHtml === "function" ? escHtml(note.message) : note.message) + "</div>";
+      if (note.response) {
+        const rd = new Date(note.responseAt);
+        const rDateStr = rd.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " at " + rd.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+        notesHtml += "<div class=\"nsg-note-reply\">";
+        notesHtml += "<div class=\"nsg-reply-label\">Dev Team · " + rDateStr + "</div>";
+        notesHtml += "<div class=\"nsg-reply-text\">" + (typeof escHtml === "function" ? escHtml(note.response) : note.response) + "</div>";
+        notesHtml += "</div>";
+      }
+      notesHtml += "</div>";
+    }
+    notesHtml += "</div>";
+  }
+
+  const overlay = document.createElement("div");
+  overlay.className = "nsg-modal-overlay";
+  overlay.innerHTML = `
+    <div class="nsg-modal">
+      <h3>📝 Notes to Dev Team</h3>
+      ${notes.length === 0 ? "<p style=\"text-align:center;color:var(--dim);font-size:12px;margin-bottom:14px;\">No notes yet — send your first one below!</p>" : ""}
+      ${notesHtml}
+      <div style="font-size:11px;color:var(--dim);margin-bottom:6px;font-weight:700;">New Note</div>
+      <textarea id="note-compose" placeholder="Bug report, suggestion, something that looked wrong, or just say hi..."></textarea>
+      <button class="nsg-btn-primary" id="btn-note-send">Send Note 📬</button>
+      <button class="nsg-btn-secondary" id="btn-note-close">Close</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  document.getElementById("btn-note-send").addEventListener("click", async () => {
+    const textarea = document.getElementById("note-compose");
+    const msg = textarea.value.trim();
+    if (!msg) { textarea.focus(); return; }
+
+    const newNote = {
+      id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2),
+      profileId: profile.id,
+      handle: profile.handle,
+      message: msg,
+      timestamp: new Date().toISOString(),
+      response: null,
+      responseAt: null,
+      read: false,
+      replyRead: false
+    };
+
+    const allN = getNotes();
+    allN.push(newNote);
+    saveNotes(allN);
+
+    if (window.notesStore && typeof window.notesStore.saveNote === "function") {
+      try {
+        await window.notesStore.saveNote(newNote);
+      } catch (err) {
+        console.warn("[notes] Failed to save note to Supabase cloud:", err);
+      }
+    }
+
+    if (typeof showToast === "function") showToast("Note sent! Thank you 💙");
+    closeNsgModal();
+    if (typeof renderProfile === "function") renderProfile();
+  });
+
+  document.getElementById("btn-note-close").addEventListener("click", closeNsgModal);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) closeNsgModal(); });
+}
+
 </script>
