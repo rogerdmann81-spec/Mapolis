@@ -317,37 +317,65 @@ function adminTriggerClick() {
   if (err) err.style.display = 'none';
 }
 
+var ADMIN_PW = 'mapolisfuckyeah';
+
 async function adminSubmitPw() {
-  var email = (document.getElementById('admin-email-input') || {}).value || '';
-  var pw = (document.getElementById('admin-pw-input') || {}).value || '';
+  var pwInp = document.getElementById('admin-pw-input');
+  var emailInp = document.getElementById('admin-email-input');
   var err = document.getElementById('admin-pw-error');
   var modal = document.getElementById('admin-pw-modal');
   var btn = document.getElementById('btn-admin-login');
 
+  var pw = (pwInp ? pwInp.value : '').trim();
+  var email = (emailInp ? emailInp.value : '').trim();
+
   if (err) err.style.display = 'none';
-  if (!email || !pw) {
-    if (err) { err.textContent = 'Enter email and password'; err.style.display = 'block'; }
+
+  if (!pw) {
+    if (err) { err.textContent = 'Please enter password'; err.style.display = 'block'; }
+    if (pwInp) pwInp.focus();
     return;
   }
 
-  if (btn) btn.textContent = 'Signing in...';
-
-  try {
-    await signInWithEmail(email, pw);
+  // 1. Direct Master Password match (case-insensitive & trimmed)
+  var masterPass = (localStorage.getItem('nsg_admin_pw') || ADMIN_PW).trim();
+  if (pw.toLowerCase() === masterPass.toLowerCase()) {
+    if (btn) btn.textContent = 'Entering...';
     if (modal) modal.style.display = 'none';
     _adminViewProfile = null;
-    renderAdmin(); // standalone: render directly instead of game nav
-  } catch (e) {
-    console.error('Login failed:', e);
-    if (err) { err.textContent = 'Invalid email or password'; err.style.display = 'block'; }
-    var inp = document.getElementById('admin-pw-input');
-    if (inp) { inp.value = ''; inp.focus(); }
-  } finally {
-    if (btn) btn.textContent = 'Sign In';
+    await refreshCloudData();
+    renderAdmin();
+    return;
+  }
+
+  // 2. Supabase Auth if email provided
+  if (email) {
+    if (btn) btn.textContent = 'Signing in...';
+    try {
+      if (typeof signInWithEmail === 'function') {
+        await signInWithEmail(email, pw);
+        if (modal) modal.style.display = 'none';
+        _adminViewProfile = null;
+        await refreshCloudData();
+        renderAdmin();
+        return;
+      }
+    } catch (e) {
+      console.error('Supabase auth failed:', e);
+    } finally {
+      if (btn) btn.textContent = 'Enter Master Panel';
+    }
+  }
+
+  if (err) {
+    err.textContent = 'Incorrect password';
+    err.style.display = 'block';
+  }
+  if (pwInp) {
+    pwInp.value = '';
+    pwInp.focus();
   }
 }
-
-document.addEventListener('keydown', function(e) {
   var modal = document.getElementById('admin-pw-modal');
   if (!modal || modal.style.display === 'none') return;
   if (e.key === 'Enter') adminSubmitPw();
