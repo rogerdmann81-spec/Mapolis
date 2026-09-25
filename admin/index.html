@@ -340,22 +340,17 @@ async function adminSubmitPw() {
   // 1. Direct Master Password match (case-insensitive & trimmed)
   var masterPass = (localStorage.getItem('nsg_admin_pw') || ADMIN_PW).trim();
   if (pw.toLowerCase() === masterPass.toLowerCase()) {
-    if (btn) btn.textContent = 'Entering...';
-    if (modal) modal.style.display = 'none';
-    _adminViewProfile = null;
+    if (btn) btn.textContent = "Syncing Cloud...";
     try {
-      renderAdmin();
-    } catch (e) {
-      console.error('Initial renderAdmin error:', e);
+      await refreshCloudData();
+    } catch (err) {
+      console.warn("Initial cloud sync error:", err);
     }
-    refreshCloudData().then(function() {
-      try { renderAdmin(); } catch (err) { console.error('refresh render error:', err); }
-    }).catch(function(err) {
-      console.warn('refreshCloudData error:', err);
-    });
+    if (modal) modal.style.display = "none";
+    _adminViewProfile = null;
+    renderAdmin();
     return;
   }
-
   // 2. Supabase Auth if email provided
   if (email) {
     if (btn) btn.textContent = 'Signing in...';
@@ -395,26 +390,45 @@ document.addEventListener('keydown', function(e) {
 
 var _adminCloudLoaded = false;
 async function refreshCloudData() {
+  console.log("[refreshCloudData] Starting Supabase sync...");
   try {
-    if (window.syncStore && typeof window.syncStore.fetchAllProfiles === 'function') {
+    if (window.syncStore && typeof window.syncStore.fetchAllProfiles === "function") {
       var cloudProfiles = await window.syncStore.fetchAllProfiles();
+      console.log("[refreshCloudData] syncStore.fetchAllProfiles returned:", cloudProfiles ? cloudProfiles.length : 0);
       if (cloudProfiles && cloudProfiles.length > 0) {
         allProfiles = cloudProfiles;
       }
+    } else {
+      console.warn("[refreshCloudData] window.syncStore.fetchAllProfiles is not available");
     }
   } catch (e) {
-    console.warn('[refreshCloudData] Failed to fetch profiles from cloud:', e);
+    console.error("[refreshCloudData] Failed to fetch profiles from cloud:", e);
   }
+
   try {
-    if (window.notesStore && typeof window.notesStore.fetchNotes === 'function') {
+    if (window.notesStore && typeof window.notesStore.fetchNotes === "function") {
       await window.notesStore.fetchNotes();
+      console.log("[refreshCloudData] notesStore.fetchNotes complete");
     }
   } catch (e) {
-    console.warn('[refreshCloudData] Failed to fetch notes from cloud:', e);
+    console.error("[refreshCloudData] Failed to fetch notes from cloud:", e);
   }
   _adminCloudLoaded = true;
 }
 
+async function triggerManualSync(btn) {
+  if (btn) {
+    btn.textContent = "🔄 Syncing...";
+    btn.disabled = true;
+  }
+  await refreshCloudData();
+  renderAdmin();
+  if (typeof showToast === "function") showToast("Synced " + allProfiles.length + " profiles from Supabase ✓");
+  if (btn) {
+    btn.textContent = "🔄 Sync Cloud";
+    btn.disabled = false;
+  }
+}
 var _adminTab = 'profiles';
 var _adminViewProfile = null;
 
@@ -433,7 +447,10 @@ function renderAdmin() {
     + '<button onclick="adminShowChangePw()" style="background:rgba(59,110,248,.15);border:1px solid rgba(91,143,255,.25);border-radius:8px;padding:5px 10px;color:var(--dim);font-size:11px;font-weight:700;font-family:\'Nunito\',sans-serif;">⚙ Password</button>'
     + '</div>'
     + '<div style="font-family:\'Fredoka One\',sans-serif;font-size:20px;color:#fff;margin-top:4px;">🔐 Master Panel</div>'
-    + '<div style="font-size:11px;color:var(--dim);">' + profiles.length + ' profile' + (profiles.length!==1?'s':'') + ' · local</div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px;">'
+    + '<div style="font-size:11px;color:var(--blue-lt);font-weight:700;">' + profiles.length + ' profile' + (profiles.length!==1?'s':'') + ' · ' + (_adminCloudLoaded ? "☁️ Supabase Cloud" : "local cache") + '</div>'
+    + '<button onclick="triggerManualSync(this)" style="background:rgba(59,110,248,.18);border:1px solid rgba(91,143,255,.3);border-radius:6px;padding:3px 8px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;">🔄 Sync Cloud</button>'
+    + '</div>'
     + '</div>'
     + '<div class="admin-tabs">'
     + '<button class="admin-tab' + (_adminTab==='profiles'?' active':'') + '" onclick="adminSetTab(\'profiles\')">👥 Profiles</button>'
