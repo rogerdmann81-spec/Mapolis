@@ -9,7 +9,7 @@
 
 ## Current State (as of this document)
 
-- **Publisher name:** **Gnalopey LLC** — current name as of April 2026. Previously evaluated as Mapolis Games LLC (selected April 9, 2026 after Levvl was abandoned for common-law conflicts — see Step 2 below); subsequently updated to Gnalopey LLC. Maryland state name search for Gnalopey LLC required before filing.
+- **Publisher name:** **Gnapoley LLC** — current name as of April 2026. Previously evaluated as Mapolis Games LLC (selected April 9, 2026 after Levvl was abandoned for common-law conflicts — see Step 2 below); subsequently updated to Gnapoley LLC. Maryland state name search for Gnapoley LLC required before filing.
 - **Product name:** **Mapolis** — cleared April 2026 (see Step 1 for findings)
 - **LLC status:** Not yet formed (Maryland name confirmed available April 9, 2026)
 - **Domain status:** Not yet registered (`mapolis.app` is the chosen primary; `mapolis.com` is unavailable but in an unrelated category)
@@ -19,7 +19,7 @@
 
 After multiple rounds of trademark research that ruled out "North Star Global" (conflict with North Star Games, Reg. 4905664, Class 9 + Class 28) and "North Star" alone (descriptive crowding plus the Bright Ideas Press "North Star Geography" curriculum), the project moved to invented and distinctive name candidates. **Mapolis** was selected after a clearance pass that surfaced no commercial conflicts in the kids' education / geography game category. See Step 1 below for the full findings on file.
 
-The publisher name went through its own pivot. **Levvl** was originally selected as the publisher name on the basis of a USPTO-only search returning zero hits for the exact spelling. A second-pass common-law clearance run on April 9, 2026 surfaced disqualifying evidence the original search missed (LEVVELUP registered mark owned by Endava, plus substantial commercial use of the phonetic neighbor "Levvel"). Levvl was abandoned and three Mapolis-rooted publisher candidates were evaluated: **Mapolis Labs**, **Mapolis Studios**, and **Mapolis Games**. The lowest-risk candidate, **Mapolis Games**, was selected at that time. The publisher name was subsequently updated to **Gnalopey LLC**. See Step 2 below for the full Levvl reassessment.
+The publisher name went through its own pivot. **Levvl** was originally selected as the publisher name on the basis of a USPTO-only search returning zero hits for the exact spelling. A second-pass common-law clearance run on April 9, 2026 surfaced disqualifying evidence the original search missed (LEVVELUP registered mark owned by Endava, plus substantial commercial use of the phonetic neighbor "Levvel"). Levvl was abandoned and three Mapolis-rooted publisher candidates were evaluated: **Mapolis Labs**, **Mapolis Studios**, and **Mapolis Games**. The lowest-risk candidate, **Mapolis Games**, was selected at that time. The publisher name was subsequently updated to **Gnapoley LLC**. See Step 2 below for the full Levvl reassessment.
 
 ---
 
@@ -125,11 +125,11 @@ No US game studio called Mapolis Games. No app store presence. No trademark fili
 
 ### 2.3 Decision
 
-**Publisher name: Gnalopey LLC.** (Evaluated as Mapolis Games LLC April 9, 2026; subsequently updated to Gnalopey LLC. Run Maryland SDAT name search for Gnalopey LLC before filing.)
+**Publisher name: Gnapoley LLC.** (Evaluated as Mapolis Games LLC April 9, 2026; subsequently updated to Gnapoley LLC. Run Maryland SDAT name search for Gnapoley LLC before filing.)
 
 ---
 
-## Step 3 — Form Gnalopey LLC
+## Step 3 — Form Gnapoley LLC
 
 Once both names are cleared (Steps 1 and 2 — both complete), form the legal entity. The LLC is what will own the domain, the trademark application, the Apple Developer account ($99/year), the Google Play Developer account ($25 one-time), the Stripe account, the privacy policy, and any future revenue.
 
@@ -144,7 +144,7 @@ For a kids' education app run by a sole proprietor with no investor plans, Maryl
 
 ### 3.2 Name availability check (state level) — ✅ CONFIRMED AVAILABLE (April 9, 2026)
 
-The Maryland SDAT Business Entity Search at `egov.maryland.gov/businessexpress/entitysearch` returned **zero matches** for the partial-name query "mapolis". No active, forfeited, dissolved, or cancelled Maryland entity uses any variation of the Mapolis stem. **Run the same search for "Gnalopey" before filing Gnalopey LLC.**
+The Maryland SDAT Business Entity Search at `egov.maryland.gov/businessexpress/entitysearch` returned **zero matches** for the partial-name query "mapolis". No active, forfeited, dissolved, or cancelled Maryland entity uses any variation of the Mapolis stem. **Run the same search for "Gnapoley" before filing Gnapoley LLC.**
 
 *Optional but worth considering:* file a Name Reservation Application with SDAT for $25 to lock the name for 30 days if there will be any gap between today and submission of Articles of Organization.
 
@@ -166,7 +166,7 @@ For a beta-stage solo project, DIY or LegalZoom is fine. A lawyer is worth it if
 
 ### Verification gate 3
 
-- [ ] Gnalopey LLC formed and approved by Maryland SDAT
+- [ ] Gnapoley LLC formed and approved by Maryland SDAT
 - [ ] EIN obtained
 - [ ] Business bank account open
 - [ ] Operating agreement on file
@@ -187,7 +187,7 @@ Only after both names are cleared (Steps 1 and 2) and the LLC is formed (Step 3)
 
 - [ ] Register the chosen primary domain: **`mapolis.app`** (note: `mapolis.com` is owned by mapolis AG, a German real estate B2B platform — different category, no legal conflict, but unavailable)
 - [ ] Optionally register defensive variants: `mapolis.io`, `playmapolis.app`, `getmapolis.app`, common typos
-- [ ] **Set registrant to Gnalopey LLC**, not your personal name
+- [ ] **Set registrant to Gnapoley LLC**, not your personal name
 - [ ] Enable WHOIS privacy
 - [ ] Enable auto-renew
 - [ ] Enable domain lock (prevents unauthorized transfers)
@@ -195,7 +195,7 @@ Only after both names are cleared (Steps 1 and 2) and the LLC is formed (Step 3)
 
 ### Verification gate 4
 
-- [ ] Domain registered in Gnalopey LLC name
+- [ ] Domain registered in Gnapoley LLC name
 - [ ] WHOIS privacy active
 - [ ] Auto-renew on
 - [ ] Domain lock on
@@ -229,8 +229,8 @@ For "Mapolis" and "Mapolis Games", an attorney consultation is worth the money (
 
 ### 5.4 Tasks
 
-- [ ] Run USPTO + common-law clearance for "Gnalopey" before filing
-- [ ] File "Gnalopey" application (Class 9 + Class 41)
+- [ ] Run USPTO + common-law clearance for "Gnapoley" before filing
+- [ ] File "Gnapoley" application (Class 9 + Class 41)
 - [ ] File "Mapolis" application (Class 9 + Class 41)
 - [ ] Save filing receipts
 - [ ] Calendar the publication date and any USPTO correspondence deadlines (typically 6-12 months after filing)
@@ -264,8 +264,8 @@ The educator pages now display "MG" inside the rounded square badge (using the s
 You are ready to start Phase B Step 1 when **all** of these are true:
 
 - [x] Product name is fully cleared (Mapolis — TESS, common-law, App Store, domain availability all checked April 2026)
-- [ ] Publisher name clearance required for Gnalopey — run USPTO TESS + common-law Google pass + Maryland SDAT search
-- [ ] Gnalopey LLC is formed and in good standing
+- [ ] Publisher name clearance required for Gnapoley — run USPTO TESS + common-law Google pass + Maryland SDAT search
+- [ ] Gnapoley LLC is formed and in good standing
 - [ ] EIN obtained
 - [ ] Business bank account open
 - [ ] Domain registered in LLC name with privacy and auto-renew on
@@ -297,4 +297,4 @@ Doing it in any other order means you'll throw work away if anything fails.
 
 ---
 
-*Last updated: April 2026 — Publisher name updated to Gnalopey LLC. Gnalopey LLC clearance (USPTO + common-law + Maryland SDAT) required before filing.*
+*Last updated: April 2026 — Publisher name updated to Gnapoley LLC. Gnapoley LLC clearance (USPTO + common-law + Maryland SDAT) required before filing.*
