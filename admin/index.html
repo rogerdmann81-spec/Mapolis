@@ -14,7 +14,7 @@
 
   <!-- Shared data layer -->
   <script src="/env.js"></script>
-  <script src="../assets/shared.js"></script>
+  <script src="/assets/shared.js"></script>
 
   <style>
     /* ── Reset + CSS variables ─────────────────────────────── */
@@ -343,8 +343,16 @@ async function adminSubmitPw() {
     if (btn) btn.textContent = 'Entering...';
     if (modal) modal.style.display = 'none';
     _adminViewProfile = null;
-    await refreshCloudData();
-    renderAdmin();
+    try {
+      renderAdmin();
+    } catch (e) {
+      console.error('Initial renderAdmin error:', e);
+    }
+    refreshCloudData().then(function() {
+      try { renderAdmin(); } catch (err) { console.error('refresh render error:', err); }
+    }).catch(function(err) {
+      console.warn('refreshCloudData error:', err);
+    });
     return;
   }
 
@@ -376,6 +384,8 @@ async function adminSubmitPw() {
     pwInp.focus();
   }
 }
+
+document.addEventListener('keydown', function(e) {
   var modal = document.getElementById('admin-pw-modal');
   if (!modal || modal.style.display === 'none') return;
   if (e.key === 'Enter') adminSubmitPw();
