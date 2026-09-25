@@ -386,3 +386,32 @@ We eliminated avatar rendering latency so changes made in the Avatar Builder imm
      - Ensured `shouldGoBack` detects when the avatar builder was opened from `s-profile`, returning directly to the profile view with the updated avatar instantly visible.
 
 
+
+----------------------------------------------------------------------------------------------------------
+11. Completed Task: Cloud-Backed Player Notes to Dev Team & Master Admin Inbox
+Status: ✅ Complete
+Target: Supabase Database, assets/shared.js, play/index.html, index.html, admin/index.html
+Branch: pre-beta2
+
+We wired the "Notes to Dev Team" feature on the player profile to Supabase and connected it seamlessly to the Master Admin Panel notes inbox.
+
+1. What It Is:
+   - Supabase Persistence (player_notes): Notes submitted by players in the "Notes to Dev Team" modal are saved to a durable Supabase table with Row-Level Security (RLS) policies allowing anon inserts, reads, updates (replies/read statuses), and deletes.
+   - Dual-Layer Sync Architecture (notesStore in assets/shared.js): Transparently handles online/offline states, writes immediately to local storage cache for instant UI feedback, and pushes to Supabase.
+   - Live Master Admin Inbox (s-admin): The 📝 Notes tab in the Master Panel pulls live notes from all players directly from Supabase, marks notes read, allows replying, and syncs responses back to Supabase.
+   - In-Game Reply Notification: When a player views their profile, notesStore.fetchNotes(profile.id) queries Supabase in the background and surfaces an unread badge ("X new replies") on the "Notes to Dev Team" button. When the modal opens, the player sees the dev team's reply and replies are marked read.
+
+2. Why We Chose It:
+   - Previous Local-Storage Isolation: Previously, player notes were stored strictly in the user's browser local storage, meaning dev team members could never see notes sent by players on different devices.
+   - Ledger Completeness: Establishes a permanent, two-way feedback channel between players and administrators directly within the app without requiring third-party helpdesk widgets.
+
+3. How We Achieved It:
+   - Supabase Migration:
+     - Created player_notes table with id (UUID), profile_id, handle, message, created_at, admin_response, admin_response_at, is_read_by_admin, and is_read_by_player.
+     - Enabled RLS with anon policies for SELECT, INSERT, UPDATE, and DELETE.
+   - assets/shared.js (and mirrors in play/assets/shared.js and admin/assets/shared.js):
+     - Added notesStore object providing fetchNotes(profileId), sendNote(profileId, handle, message), replyToNote(noteId, responseText), markRepliesRead(profileId), markAdminRead(), and deleteNote(noteId).
+   - play/index.html & index.html:
+     - Updated btn-note-send handler in showNotesModal() to invoke notesStore.sendNote() with a responsive "Sending..." button state and toast confirmation.
+     - Added background cloud polling to renderProfile() so unread reply badges update automatically.
+     - Updated Master Admin panel (renderAdminNotes and wireAdminNotes) to sync reply creations and deletions with Supabase.

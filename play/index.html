@@ -9056,12 +9056,18 @@ function renderProfile() {
     });
     try {
       if (typeof getNotes === 'function') {
-        const _mn = getNotes().filter(n => n.profileId === profile.id);
-        const _ur = _mn.filter(n => n.response && !n.replyRead).length;
-        let badge = '';
-        if (_ur > 0) badge += '<span class="nsg-unread-dot" style="display:inline-block;width:8px;height:8px;background:var(--wrong);border-radius:50%;margin-left:6px;"></span> <span style="font-size:11px;color:var(--wrong);">' + _ur + ' new repl' + (_ur > 1 ? 'ies' : 'y') + '</span>';
-        if (_mn.length > 0) badge += ' <span style="font-size:11px;color:var(--dim);">(' + _mn.length + ')</span>';
-        if (badge) noteBtn.innerHTML = '📝 Notes to Dev Team' + badge;
+        const _updateBadge = () => {
+          const _mn = getNotes().filter(n => n.profileId === profile.id);
+          const _ur = _mn.filter(n => n.response && !n.replyRead).length;
+          let badge = '';
+          if (_ur > 0) badge += '<span class="nsg-unread-dot" style="display:inline-block;width:8px;height:8px;background:var(--wrong);border-radius:50%;margin-left:6px;"></span> <span style="font-size:11px;color:var(--wrong);">' + _ur + ' new repl' + (_ur > 1 ? 'ies' : 'y') + '</span>';
+          if (_mn.length > 0) badge += ' <span style="font-size:11px;color:var(--dim);">(' + _mn.length + ')</span>';
+          if (badge) noteBtn.innerHTML = '📝 Notes to Dev Team' + badge;
+        };
+        _updateBadge();
+        if (window.notesStore && typeof window.notesStore.fetchNotes === 'function') {
+          window.notesStore.fetchNotes(profile.id).then(() => _updateBadge()).catch(() => {});
+        }
       }
     } catch (e) { /* notes module not ready yet */ }
   }
@@ -14034,7 +14040,15 @@ function renderAdmin() {
   });
 }
 
-function adminSetTab(tab) { _adminTab = tab; renderAdmin(); }
+function adminSetTab(tab) {
+  _adminTab = tab;
+  renderAdmin();
+  if (tab === 'notes' && window.notesStore && typeof window.notesStore.fetchNotes === 'function') {
+    window.notesStore.fetchNotes().then(function() {
+      if (_adminTab === 'notes') renderAdmin();
+    }).catch(function() {});
+  }
+}
 function adminExit() { go('s-credits'); }
 
 function adminShowChangePw() {
@@ -14889,7 +14903,13 @@ function renderProfileHeatmap(containerId, dayHistory) {
   var prev = go;
   go = function(id) {
     prev(id);
-    if (id === 's-admin') { _adminViewProfile = null; setTimeout(renderAdmin, 50); }
+    if (id === 's-admin') {
+      _adminViewProfile = null;
+      if (window.notesStore && typeof window.notesStore.fetchNotes === 'function') {
+        window.notesStore.fetchNotes().then(() => { if (currentScreen === 's-admin') renderAdmin(); }).catch(() => {});
+      }
+      setTimeout(renderAdmin, 50);
+    }
   };
 })();
 
@@ -14956,6 +14976,9 @@ function showNotesModal() {
     }
   });
   if (changed) saveNotes(allNotes);
+  if (window.notesStore && typeof window.notesStore.markRepliesRead === 'function') {
+    window.notesStore.markRepliesRead(profile.id);
+  }
 
   let notesHtml = '';
   if (notes.length > 0) {
@@ -15036,6 +15059,9 @@ function renderAdminNotes() {
   var allN = getNotes();
   allN.forEach(function(n) { if (!n.read) { n.read = true; changed = true; } });
   if (changed) saveNotes(allN);
+  if (window.notesStore && typeof window.notesStore.markAdminRead === 'function') {
+    window.notesStore.markAdminRead();
+  }
 
   var html = '';
   for (var i = 0; i < sorted.length; i++) {
@@ -15089,6 +15115,9 @@ function wireAdminNotes() {
       if (confirm('Delete this note?')) {
         var allN = getNotes().filter(function(n) { return n.id !== noteId; });
         saveNotes(allN);
+        if (window.notesStore && typeof window.notesStore.deleteNote === 'function') {
+          window.notesStore.deleteNote(noteId);
+        }
         renderAdmin();
       }
     });

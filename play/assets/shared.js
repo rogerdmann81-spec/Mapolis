@@ -703,6 +703,225 @@ async function flushPendingRounds() {
   }
 }
 
+
+// ─── Player Notes (Supabase Integration) ──────────────────────────────────
+function getLocalNotes() {
+  try {
+    const storage = (typeof window !== 'undefined' && window.localStorage) ? window.localStorage : ((typeof localStorage !== 'undefined') ? localStorage : null);
+    const raw = storage ? storage.getItem(NOTES_KEY) : null;
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveLocalNotes(notes) {
+  try {
+    const storage = (typeof window !== 'undefined' && window.localStorage) ? window.localStorage : ((typeof localStorage !== 'undefined') ? localStorage : null);
+    if (storage) {
+      storage.setItem(NOTES_KEY, JSON.stringify(notes));
+    }
+  } catch (e) {}
+}
+
+function _mapRowToNote(r) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    profileId: r.profile_id,
+    handle: r.handle,
+    message: r.message,
+    timestamp: r.created_at,
+    response: r.admin_response || null,
+    responseAt: r.admin_response_at || null,
+    read: !!r.is_read_by_admin,
+    replyRead: !!r.is_read_by_player
+  };
+}
+
+const notesStore = {
+  async fetchNotes(profileId) {
+    const local = getLocalNotes();
+    if (!isSupabaseConfigured() || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+      return profileId ? local.filter(n => n.profileId === profileId) : local;
+    }
+    try {
+      let url = SUPABASE_URL + '/rest/v1/player_notes?select=*&order=created_at.desc';
+      if (profileId) {
+        url += '&profile_id=eq.' + encodeURIComponent(profileId);
+      }
+      const resp = await fetch(url, {
+        method: 'GET',
+        headers: authedHeaders()
+      });
+      if (!resp.ok) throw new Error('fetchNotes returned ' + resp.status);
+      const rows = await resp.json();
+      const mapped = rows.map(_mapRowToNote);
+      
+      const map = new Map();
+      mapped.forEach(n => map.set(n.id, n));
+      local.forEach(n => {
+        if (!map.has(n.id)) {
+          if (!profileId || n.profileId === profileId) map.set(n.id, n);
+        }
+      });
+      const combined = Array.from(map.values()).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      
+      try {
+        const fullLocalMap = new Map();
+        local.forEach(n => fullLocalMap.set(n.id, n));
+        mapped.forEach(n => fullLocalMap.set(n.id, n));
+        saveLocalNotes(Array.from(fullLocalMap.values()));
+      } catch (_) {}
+      
+      return combined;
+    } catch (e) {
+      console.warn('[notesStore.fetchNotes] Failed to fetch cloud notes, falling back to local:', e);
+      return profileId ? local.filter(n => n.profileId === profileId) : local;
+    }
+  },
+
+  async sendNote(profileId, handle, message) {
+    const tempId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+    const newNote = {
+      id: tempId,
+      profileId: profileId,
+      handle: handle,
+      message: message,
+      timestamp: new Date().toISOString(),
+      response: null,
+      responseAt: null,
+      read: false,
+      replyRead: false
+    };
+
+    try {
+      const all = getLocalNotes();
+      all.push(newNote);
+      saveLocalNotes(all);
+    } catch (_) {}
+
+    if (isSupabaseConfigured() && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
+      try {
+        const url = SUPABASE_URL + '/rest/v1/player_notes';
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: authedHeaders(),
+          body: JSON.stringify({
+            id: tempId,
+            profile_id: profileId,
+            handle: handle,
+            message: message,
+            created_at: newNote.timestamp,
+            is_read_by_admin: false,
+            is_read_by_player: false
+          })
+        });
+        if (!resp.ok) console.warn('[notesStore.sendNote] Cloud write status ' + resp.status);
+      } catch (err) {
+        console.warn('[notesStore.sendNote] Failed to push note to cloud:', err);
+      }
+    }
+    return newNote;
+  },
+
+  async markRepliesRead(profileId) {
+    try {
+      const all = getLocalNotes();
+      let changed = false;
+      all.forEach(n => {
+        if (n.profileId === profileId && n.response && !n.replyRead) {
+          n.replyRead = true;
+          changed = true;
+        }
+      });
+      if (changed) saveLocalNotes(all);
+    } catch (_) {}
+
+    if (isSupabaseConfigured() && (typeof navigator === 'undefined' || navigator.onLine !== false) && profileId) {
+      try {
+        const url = SUPABASE_URL + '/rest/v1/player_notes?profile_id=eq.' + encodeURIComponent(profileId) + '&is_read_by_player=eq.false';
+        await fetch(url, {
+          method: 'PATCH',
+          headers: authedHeaders(),
+          body: JSON.stringify({ is_read_by_player: true })
+        });
+      } catch (_) {}
+    }
+  },
+
+  async markAdminRead() {
+    try {
+      const all = getLocalNotes();
+      let changed = false;
+      all.forEach(n => {
+        if (!n.read) { n.read = true; changed = true; }
+      });
+      if (changed) saveLocalNotes(all);
+    } catch (_) {}
+
+    if (isSupabaseConfigured() && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
+      try {
+        const url = SUPABASE_URL + '/rest/v1/player_notes?is_read_by_admin=eq.false';
+        await fetch(url, {
+          method: 'PATCH',
+          headers: authedHeaders(),
+          body: JSON.stringify({ is_read_by_admin: true })
+        });
+      } catch (_) {}
+    }
+  },
+
+  async replyToNote(noteId, responseText) {
+    const nowIso = new Date().toISOString();
+    try {
+      const all = getLocalNotes();
+      const target = all.find(n => n.id === noteId);
+      if (target) {
+        target.response = responseText;
+        target.responseAt = nowIso;
+        target.replyRead = false;
+        saveLocalNotes(all);
+      }
+    } catch (_) {}
+
+    if (isSupabaseConfigured() && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
+      try {
+        const url = SUPABASE_URL + '/rest/v1/player_notes?id=eq.' + encodeURIComponent(noteId);
+        const resp = await fetch(url, {
+          method: 'PATCH',
+          headers: authedHeaders(),
+          body: JSON.stringify({
+            admin_response: responseText,
+            admin_response_at: nowIso,
+            is_read_by_player: false
+          })
+        });
+        if (!resp.ok) console.warn('[notesStore.replyToNote] Cloud update status: ' + resp.status);
+      } catch (e) {
+        console.warn('[notesStore.replyToNote] Error writing reply to cloud:', e);
+      }
+    }
+  },
+
+  async deleteNote(noteId) {
+    try {
+      const all = getLocalNotes().filter(n => n.id !== noteId);
+      saveLocalNotes(all);
+    } catch (_) {}
+
+    if (isSupabaseConfigured() && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
+      try {
+        const url = SUPABASE_URL + '/rest/v1/player_notes?id=eq.' + encodeURIComponent(noteId);
+        await fetch(url, {
+          method: 'DELETE',
+          headers: authedHeaders()
+        });
+      } catch (_) {}
+    }
+  }
+};
+
 if (typeof window !== 'undefined') {
   window.syncStore = syncStore;
   window.mapolisUUID = mapolisUUID;
@@ -714,7 +933,8 @@ if (typeof window !== 'undefined') {
   window.isSupabaseConfigured = isSupabaseConfigured;
   window.authedHeaders = authedHeaders;
   window.signInAnonymous = signInAnonymous;
+  window.notesStore = notesStore;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { syncStore, mapolisUUID, mergeProfiles, submitRound, flushPendingRounds, getPendingRounds, ensureAuthSession };
+  module.exports = { syncStore, mapolisUUID, mergeProfiles, submitRound, flushPendingRounds, getPendingRounds, ensureAuthSession, notesStore, authedHeaders, isSupabaseConfigured, SUPABASE_URL };
 }

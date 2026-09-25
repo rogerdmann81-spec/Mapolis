@@ -404,7 +404,15 @@ function renderAdmin() {
   });
 }
 
-function adminSetTab(tab) { _adminTab = tab; renderAdmin(); }
+function adminSetTab(tab) {
+  _adminTab = tab;
+  renderAdmin();
+  if (tab === 'notes' && window.notesStore && typeof window.notesStore.fetchNotes === 'function') {
+    window.notesStore.fetchNotes().then(function() {
+      if (_adminTab === 'notes') renderAdmin();
+    }).catch(function() {});
+  }
+}
 function adminExit() { go('s-credits'); }
 
 function adminShowChangePw() {
@@ -1304,6 +1312,9 @@ function showNotesModal() {
     }
   });
   if (changed) saveNotes(allNotes);
+  if (window.notesStore && typeof window.notesStore.markRepliesRead === 'function') {
+    window.notesStore.markRepliesRead(profile.id);
+  }
 
   let notesHtml = '';
   if (notes.length > 0) {
@@ -1384,6 +1395,9 @@ function renderAdminNotes() {
   var allN = getNotes();
   allN.forEach(function(n) { if (!n.read) { n.read = true; changed = true; } });
   if (changed) saveNotes(allN);
+  if (window.notesStore && typeof window.notesStore.markAdminRead === 'function') {
+    window.notesStore.markAdminRead();
+  }
 
   var html = '';
   for (var i = 0; i < sorted.length; i++) {
@@ -1437,6 +1451,9 @@ function wireAdminNotes() {
       if (confirm('Delete this note?')) {
         var allN = getNotes().filter(function(n) { return n.id !== noteId; });
         saveNotes(allN);
+        if (window.notesStore && typeof window.notesStore.deleteNote === 'function') {
+          window.notesStore.deleteNote(noteId);
+        }
         renderAdmin();
       }
     });
