@@ -4,7 +4,7 @@
   "description": "Mapolis Web App",
   "main": "server.js",
   "scripts": {
-    "dev": "netlify dev --port 3000",
+    "dev": "node server.js",
     "build": "node build-env.js",
     "start": "node server.js"
   },

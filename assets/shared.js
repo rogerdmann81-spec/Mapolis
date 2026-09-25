@@ -3,8 +3,18 @@
 
 // ─── Supabase constants ────────────────────────────────────────────────────
 
-const SUPABASE_URL = (typeof window !== 'undefined' && window.ENV && window.ENV.SUPABASE_URL) || 'https://tbibeuwpollcrlvowcpg.supabase.co';
+function _sanitizeSupabaseUrl(url) {
+  if (!url || typeof url !== 'string') return 'https://tbibeuwpollcrlvowcpg.supabase.co';
+  return url.trim().replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+}
+
+const SUPABASE_URL = _sanitizeSupabaseUrl((typeof window !== 'undefined' && window.ENV && window.ENV.SUPABASE_URL) || 'https://tbibeuwpollcrlvowcpg.supabase.co');
 const SUPABASE_KEY = (typeof window !== 'undefined' && window.ENV && window.ENV.SUPABASE_ANON_KEY) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRiaWJldXdwb2xsY3Jsdm93Y3BnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxODg5MTUsImV4cCI6MjA5MTc2NDkxNX0.2fIzL1Fn0aKLwCfOjOMXXQV-3WtvbwY4YoanJJ-Vys8';
+
+if (typeof window !== 'undefined') {
+  window.SUPABASE_URL = SUPABASE_URL;
+  window.SUPABASE_KEY = SUPABASE_KEY;
+}
 
 const SYNC_QUEUE_KEY = 'nsg_syncQueue';
 const LEADERBOARD_CACHE_KEY = 'nsg_leaderboard_cache';
@@ -118,6 +128,25 @@ async function signInAnonymous() {
   const session = await resp.json();
   _saveSession(session);
   return session.user.id;
+}
+
+// Ensures an active session exists (valid token or anonymous session).
+// Returns the access_token or null.
+async function ensureAuthSession() {
+  if (!isSupabaseConfigured()) return null;
+  const sess = _getSession();
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (sess && sess.access_token && sess.expires_at && sess.expires_at > nowSec + 30) {
+    return sess.access_token;
+  }
+  try {
+    await signInAnonymous();
+    const fresh = _getSession();
+    return (fresh && fresh.access_token) || null;
+  } catch (e) {
+    console.warn('[ensureAuthSession] error establishing session:', e);
+    return null;
+  }
 }
 
 // Sign in with email + password (educators and admins). Returns auth.uid() or throws.
@@ -279,18 +308,48 @@ const syncStore = {
     };
   },
 
-  async fetchProfiles(authUid) {
-    if (!navigator.onLine || !isSupabaseConfigured() || !authUid) return null;
+  async fetchProfiles(authUid, localProfileIds = []) {
+    if (!navigator.onLine || !isSupabaseConfigured()) return null;
     try {
-      const url = SUPABASE_URL + '/rest/v1/profiles?auth_uid=eq.' + encodeURIComponent(authUid);
+      let query = '';
+      const validIds = Array.isArray(localProfileIds) ? localProfileIds.filter(Boolean) : [];
+      if (authUid && validIds.length > 0) {
+        query = '?or=(auth_uid.eq.' + encodeURIComponent(authUid) + ',player_id.in.(' + validIds.map(encodeURIComponent).join(',') + '))';
+      } else if (authUid) {
+        query = '?auth_uid=eq.' + encodeURIComponent(authUid);
+      } else if (validIds.length > 0) {
+        query = '?player_id=in.(' + validIds.map(encodeURIComponent).join(',') + ')';
+      } else {
+        return null;
+      }
+      const url = SUPABASE_URL + '/rest/v1/profiles' + query;
       const resp = await fetch(url, { headers: authedHeaders() });
       if (resp.ok) {
         const rows = await resp.json();
-        return rows.map(r => this._mapRowToProfile(r, authUid));
+        return rows.map(r => this._mapRowToProfile(r, authUid || r.auth_uid));
       }
       console.warn('[syncStore] fetchProfiles failed:', resp.status);
     } catch (e) {
       console.warn('[syncStore] fetchProfiles error:', e);
+    }
+    return null;
+  },
+
+  async fetchProfileById(playerId) {
+    if (!navigator.onLine || !isSupabaseConfigured() || !playerId) return null;
+    try {
+      const url = SUPABASE_URL + '/rest/v1/profiles?player_id=eq.' + encodeURIComponent(playerId);
+      const resp = await fetch(url, { headers: authedHeaders() });
+      if (resp.ok) {
+        const rows = await resp.json();
+        if (rows && rows.length > 0) {
+          const authUid = (typeof _getSession === 'function' && _getSession() && _getSession().user) ? _getSession().user.id : rows[0].auth_uid;
+          return this._mapRowToProfile(rows[0], authUid);
+        }
+      }
+      console.warn('[syncStore] fetchProfileById failed:', resp.status);
+    } catch (e) {
+      console.warn('[syncStore] fetchProfileById error:', e);
     }
     return null;
   },
@@ -544,9 +603,118 @@ function mergeProfiles(local, remote) {
   result.stats = mergedStats;
   return result;
 }
+
+// ─── Solo Game Round Submission & Ledger Cache ──────────────────────────────
+const PENDING_ROUNDS_KEY = 'mapolis_pending_rounds';
+
+function getPendingRounds() {
+  try {
+    const raw = localStorage.getItem(PENDING_ROUNDS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function cachePendingRound(roundData) {
+  if (!roundData || !roundData.session || !roundData.session.id) return;
+  const pending = getPendingRounds();
+  if (!pending.some(r => r.session && r.session.id === roundData.session.id)) {
+    pending.push(roundData);
+    try {
+      localStorage.setItem(PENDING_ROUNDS_KEY, JSON.stringify(pending));
+    } catch (e) {
+      console.warn('[cachePendingRound] localStorage write failed:', e);
+    }
+  }
+}
+
+function clearPendingRound(sessionId) {
+  if (!sessionId) return;
+  const pending = getPendingRounds().filter(r => r.session && r.session.id !== sessionId);
+  try {
+    localStorage.setItem(PENDING_ROUNDS_KEY, JSON.stringify(pending));
+  } catch (e) {
+    console.warn('[clearPendingRound] localStorage write failed:', e);
+  }
+}
+
+async function submitRound(roundData) {
+  if (!roundData || !roundData.session) return { success: false, error: 'No round data' };
+
+  if (typeof window !== 'undefined' && window.location && window.location.search && window.location.search.indexOf('debug=1') !== -1) {
+    console.log('[submitRound] Submitting round payload:', roundData);
+  }
+
+  if (!navigator.onLine || !isSupabaseConfigured()) {
+    cachePendingRound(roundData);
+    return { success: false, offline: true };
+  }
+
+  try {
+    const url = SUPABASE_URL + '/rest/v1/rpc/submit_round';
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: authedHeaders(),
+      body: JSON.stringify({ payload: roundData })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      console.warn('[submitRound] RPC failed with status ' + resp.status + ':', err);
+      cachePendingRound(roundData);
+      return { success: false, error: err };
+    }
+
+    const data = await resp.json().catch(() => null);
+    clearPendingRound(roundData.session.id);
+    // Flush any older queued rounds since connectivity is confirmed
+    flushPendingRounds().catch(() => {});
+    return { success: true, sessionId: data };
+  } catch (err) {
+    console.warn('[submitRound] Network error during submission, caching:', err);
+    cachePendingRound(roundData);
+    return { success: false, error: err };
+  }
+}
+
+async function flushPendingRounds() {
+  const pending = getPendingRounds();
+  if (!pending.length || !navigator.onLine || !isSupabaseConfigured()) return;
+
+  for (const round of pending) {
+    try {
+      const url = SUPABASE_URL + '/rest/v1/rpc/submit_round';
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: authedHeaders(),
+        body: JSON.stringify({ payload: round })
+      });
+      if (resp.ok) {
+        clearPendingRound(round.session.id);
+      } else {
+        console.warn('[flushPendingRounds] Round retry returned ' + resp.status + ', halting flush');
+        break;
+      }
+    } catch (e) {
+      console.warn('[flushPendingRounds] Round retry failed network check, halting flush');
+      break;
+    }
+  }
+}
+
 if (typeof window !== 'undefined') {
+  window.syncStore = syncStore;
+  window.mapolisUUID = mapolisUUID;
   window.mergeProfiles = mergeProfiles;
+  window.submitRound = submitRound;
+  window.flushPendingRounds = flushPendingRounds;
+  window.getPendingRounds = getPendingRounds;
+  window.ensureAuthSession = ensureAuthSession;
+  window.isSupabaseConfigured = isSupabaseConfigured;
+  window.authedHeaders = authedHeaders;
+  window.signInAnonymous = signInAnonymous;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { mergeProfiles };
+  module.exports = { syncStore, mapolisUUID, mergeProfiles, submitRound, flushPendingRounds, getPendingRounds, ensureAuthSession };
 }

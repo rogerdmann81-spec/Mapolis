@@ -1084,6 +1084,44 @@ function go(id) {
 
 }
 
+function triggerScreenRefresh(screenId) {
+  if (!screenId) return;
+  if (screenId !== 's-title' && typeof updateAvatarBars === 'function') {
+    updateAvatarBars();
+  }
+  if (screenId === 's-profile' && typeof renderProfile === 'function') {
+    renderProfile();
+  } else if (screenId === 's-profiles' && typeof renderProfileGrid === 'function') {
+    renderProfileGrid();
+  } else if (screenId === 's-setup') {
+    if (typeof initSetupScreen === 'function') initSetupScreen();
+    if (typeof updateTopBarRankBadge === 'function') updateTopBarRankBadge();
+  } else if (screenId === 's-results' && typeof renderResults === 'function') {
+    renderResults();
+  } else if (screenId === 's-store' && typeof renderStore === 'function') {
+    renderStore();
+  } else if (screenId === 's-badges' && typeof renderBadges === 'function') {
+    renderBadges();
+  } else if (screenId === 's-edu-dash' && typeof renderEduDashboard === 'function') {
+    renderEduDashboard();
+  } else if (screenId === 's-edu-students' && typeof renderEduStudents === 'function') {
+    renderEduStudents();
+  } else if (screenId === 's-edu-competitions' && typeof renderEduCompetitions === 'function') {
+    renderEduCompetitions();
+  } else if (screenId === 's-edu-tests' && typeof renderEduTests === 'function') {
+    renderEduTests();
+  } else if (screenId === 's-edu-cards' && typeof renderEduCards === 'function') {
+    renderEduCards();
+  } else if (screenId === 's-edu-messages' && typeof renderEduMessages === 'function') {
+    renderEduMessages();
+  } else if (screenId === 's-edu-search' && typeof renderEduSearch === 'function') {
+    renderEduSearch();
+  } else if (screenId === 's-admin' && typeof renderAdmin === 'function') {
+    _adminViewProfile = null;
+    setTimeout(renderAdmin, 50);
+  }
+}
+
 function goBack() {
 
   if (screenHistory.length === 0) return;
@@ -1121,23 +1159,39 @@ function goBack() {
 
   if (el) el.scrollTop = 0;
 
+  triggerScreenRefresh(prev);
+
 }
 
 function updateAvatarBars() {
 
-  const avatarSlots = document.querySelectorAll('.setup-ava-btn, .setup-hero-ava, #fb-ava');
+  const prof = window.activeProfile;
 
-  const ava = activeProfile?.avatar?.svg || '🧑';
+  const ava = (prof && prof.avatar && (prof.avatar.svg || prof.avatar.face)) || '🧑';
+
+  const isImage = typeof ava === 'string' && (ava.startsWith('data:') || ava.startsWith('http') || ava.startsWith('<svg'));
+
+  const avatarSlots = document.querySelectorAll('.setup-ava-btn, #setup-ava, .setup-hero-ava, #setup-hero-ava, #edu-dash-hero-ava, .gp-ava, #gp-ava, .fb-ava, #fb-ava');
 
   avatarSlots.forEach(slot => {
 
-    if (ava.startsWith('data:') || ava.startsWith('<svg')) {
+    if (isImage) {
 
-      slot.innerHTML = `<img src="${ava}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`;
+      slot.innerHTML = `<img src="${ava}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block">`;
+
+      slot.style.padding = '0';
+
+      slot.style.overflow = 'hidden';
 
     } else {
 
+      slot.innerHTML = '';
+
       slot.textContent = ava;
+
+      slot.style.padding = '';
+
+      slot.style.overflow = '';
 
     }
 
@@ -1318,7 +1372,8 @@ function initApp() {
       loadProfiles();
       let changed = false;
       if (typeof syncStore !== 'undefined' && syncStore.fetchProfiles) {
-        const remoteProfiles = await syncStore.fetchProfiles(authUid);
+        const ids = allProfiles.map(p => p.id).filter(Boolean);
+        const remoteProfiles = await syncStore.fetchProfiles(authUid, ids);
         if (remoteProfiles && remoteProfiles.length > 0) {
           remoteProfiles.forEach(rp => {
             const idx = allProfiles.findIndex(p => p.id === rp.id);
@@ -1534,6 +1589,10 @@ function loadProfiles() {
 }
 
 function saveProfiles() {
+
+  if (activeProfile && !activeProfile.updatedAt) {
+    activeProfile.updatedAt = new Date().toISOString();
+  }
 
   try {
 
@@ -1808,6 +1867,7 @@ function openRestoreProfileModal() {
   // ── Handle + Password restore ──
   document.getElementById('restore-pw-submit').addEventListener('click', async function(e) {
     if (e) e.preventDefault();
+    var btn = document.getElementById('restore-pw-submit');
     var handle = (document.getElementById('restore-handle-input').value || '').trim();
     var pw = document.getElementById('restore-pw-input').value || '';
     if (!handle) { showToast('Enter your handle'); return; }
@@ -1817,72 +1877,98 @@ function openRestoreProfileModal() {
     try { hash = await hashPassword(pw); }
     catch (e) { showToast('Could not process password — try again'); return; }
 
+    var origBtnText = btn ? btn.textContent : 'Restore';
+    if (btn) { btn.disabled = true; btn.textContent = 'Restoring...'; }
+
     var match = null;
-    if (isSupabaseConfigured()) {
-      try {
-        const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/restore_profile', {
-          method: 'POST',
-          headers: authedHeaders(),
-          body: JSON.stringify({ p_handle: handle, p_password_hash: hash })
-        });
-        if (!resp.ok) {
-          const errText = await resp.text();
-          console.error('[restore_profile] backend error:', errText, resp.status);
-          if (errText.includes('Invalid handle')) {
-            showToast('Handle or password not recognised');
-          } else if (errText.includes('frozen')) {
-            showToast('That profile has been frozen by an administrator');
-          } else {
-            showToast('Error connecting to backend: ' + errText);
+    try {
+      if (isSupabaseConfigured()) {
+        try {
+          if (typeof ensureAuthSession === 'function') {
+            await ensureAuthSession();
+          } else if (typeof signInAnonymous === 'function') {
+            const curSess = typeof _getSession === 'function' ? _getSession() : null;
+            if (!curSess || !curSess.access_token) {
+              await signInAnonymous().catch(function(e) { console.warn('[restore_profile] signInAnonymous fallback:', e); });
+            }
           }
+          const baseUrl = (typeof SUPABASE_URL === 'string' ? SUPABASE_URL : '').replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+          const resp = await fetch(baseUrl + '/rest/v1/rpc/restore_profile', {
+            method: 'POST',
+            headers: authedHeaders(),
+            body: JSON.stringify({ p_handle: handle, p_password_hash: hash })
+          });
+          if (!resp.ok) {
+            const errText = await resp.text();
+            console.error('[restore_profile] backend error:', errText, resp.status);
+            let userMsg = 'Handle or password not recognised';
+            try {
+              const parsed = JSON.parse(errText);
+              const msg = (parsed && (parsed.message || parsed.error || parsed.hint || '')) || '';
+              if (msg.toLowerCase().includes('frozen')) {
+                userMsg = 'That profile has been frozen by an administrator';
+              } else if (msg.toLowerCase().includes('not authenticated')) {
+                userMsg = 'Authentication error — please refresh the page and try again';
+              } else if (msg.toLowerCase().includes('invalid handle') || msg.toLowerCase().includes('password')) {
+                userMsg = 'Handle or password not recognised';
+              } else if (resp.status >= 500) {
+                userMsg = 'Server error during restore — please try again in a moment';
+              }
+            } catch (parseErr) {
+              if (errText.includes('frozen')) userMsg = 'That profile has been frozen by an administrator';
+            }
+            showToast(userMsg);
+            return;
+          }
+          const data = await resp.json();
+          if (data) {
+            var rowData = Array.isArray(data) ? data[0] : data;
+            if (typeof rowData === 'string') {
+              try { rowData = JSON.parse(rowData); } catch(e) {}
+            }
+            var sess = typeof _getSession === 'function' ? _getSession() : null;
+            if (!rowData) { showToast('Profile data missing'); return; }
+            var currUid = sess && sess.user ? sess.user.id : rowData.auth_uid;
+            match = syncStore._mapRowToProfile(rowData, currUid);
+            // Overwrite our local list/cache so we don't have dupes
+            const existingIdx = allProfiles.findIndex(p => p.id === match.id);
+            if (existingIdx >= 0) allProfiles[existingIdx] = match;
+            else allProfiles.push(match);
+            saveProfiles();
+          }
+        } catch (err) {
+          console.error("[restore_profile] Fetch error:", err);
+          showToast('Network error while restoring profile — check your connection');
           return;
         }
-        const data = await resp.json();
-        if (data) {
-          var rowData = Array.isArray(data) ? data[0] : data;
-          if (typeof rowData === 'string') {
-            try { rowData = JSON.parse(rowData); } catch(e) {}
+      } else {
+        for (var i = 0; i < allProfiles.length; i++) {
+          if (allProfiles[i].handle &&
+              allProfiles[i].handle.toLowerCase() === handle.toLowerCase() &&
+              allProfiles[i].passwordHash && allProfiles[i].passwordHash === hash) {
+            match = allProfiles[i]; break;
           }
-          var sess = typeof _getSession === 'function' ? _getSession() : null;
-          if (!rowData) { showToast('Profile data missing'); return; }
-          var currUid = sess && sess.user ? sess.user.id : rowData.auth_uid;
-          match = syncStore._mapRowToProfile(rowData, currUid);
-          // Overwrite our local list/cache so we don't have dupes
-          const existingIdx = allProfiles.findIndex(p => p.id === match.id);
-          if (existingIdx >= 0) allProfiles[existingIdx] = match;
-          else allProfiles.push(match);
-          saveProfiles();
         }
-      } catch (err) {
-        console.error("[restore_profile] Fetch error:", err);
-        showToast('Network error while restoring profile');
-        return;
-      }
-    } else {
-      for (var i = 0; i < allProfiles.length; i++) {
-        if (allProfiles[i].handle &&
-            allProfiles[i].handle.toLowerCase() === handle.toLowerCase() &&
-            allProfiles[i].passwordHash && allProfiles[i].passwordHash === hash) {
-          match = allProfiles[i]; break;
+        if (!match) {
+          showToast('Handle or password not recognised');
+          return;
+        }
+        if (match.frozen) {
+          showToast('That profile has been frozen by an administrator');
+          return;
         }
       }
-      if (!match) {
-        showToast('Handle or password not recognised');
-        return;
-      }
-      if (match.frozen) {
-        showToast('That profile has been frozen by an administrator');
-        return;
-      }
-    }
 
-    if (!match) { showToast('Profile not found.'); return; }
-    activeProfile = match;
-    try { localStorage.setItem(ACTIVE_KEY, activeProfile.id); } catch (e) {}
-    updateAvatarBars();
-    close();
-    showToast('Welcome back, ' + match.handle + '!');
-    go('s-setup');
+      if (!match) { showToast('Profile not found.'); return; }
+      activeProfile = match;
+      try { localStorage.setItem(ACTIVE_KEY, activeProfile.id); } catch (e) {}
+      updateAvatarBars();
+      close();
+      showToast('Welcome back, ' + match.handle + '!');
+      go('s-setup');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = origBtnText; }
+    }
   });
 
   // ── Parent email restore ──
@@ -1891,89 +1977,140 @@ function openRestoreProfileModal() {
   // backend we just match against the stored parent_email field.
   document.getElementById('restore-email-submit').addEventListener('click', async function(e) {
     if (e) e.preventDefault();
+    var btn = document.getElementById('restore-email-submit');
     var raw = document.getElementById('restore-email-input').value;
     if (!isValidEmailShape(raw)) {
       showToast("That doesn't look like a valid email");
       return;
     }
     var norm = normalizeEmail(raw);
-    var match = null;
+    var origBtnText = btn ? btn.textContent : 'Restore';
+    if (btn) { btn.disabled = true; btn.textContent = 'Restoring...'; }
 
-    if (isSupabaseConfigured()) {
-      try {
-        const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/restore_profile_by_email', {
-          method: 'POST',
-          headers: authedHeaders(),
-          body: JSON.stringify({ p_parent_email: norm })
-        });
-        if (!resp.ok) {
-          const errText = await resp.text();
-          console.error('[restore_profile_by_email] backend error:', errText, resp.status);
-          if (errText.includes('Email not found')) {
-            showToast('No profile matches that parent email');
-          } else if (errText.includes('frozen')) {
-            showToast('That profile has been frozen by an administrator');
-          } else {
-            showToast('Error connecting to backend: ' + errText);
+    var match = null;
+    try {
+      if (isSupabaseConfigured()) {
+        try {
+          if (typeof ensureAuthSession === 'function') {
+            await ensureAuthSession();
+          } else if (typeof signInAnonymous === 'function') {
+            const curSess = typeof _getSession === 'function' ? _getSession() : null;
+            if (!curSess || !curSess.access_token) {
+              await signInAnonymous().catch(function(e) { console.warn('[restore_profile_by_email] signInAnonymous fallback:', e); });
+            }
           }
+          const baseUrl = (typeof SUPABASE_URL === 'string' ? SUPABASE_URL : '').replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+          const resp = await fetch(baseUrl + '/rest/v1/rpc/restore_profile_by_email', {
+            method: 'POST',
+            headers: authedHeaders(),
+            body: JSON.stringify({ p_parent_email: norm })
+          });
+          if (!resp.ok) {
+            const errText = await resp.text();
+            console.error('[restore_profile_by_email] backend error:', errText, resp.status);
+            let userMsg = 'No profile matches that parent email';
+            try {
+              const parsed = JSON.parse(errText);
+              const msg = (parsed && (parsed.message || parsed.error || parsed.hint || '')) || '';
+              if (msg.toLowerCase().includes('frozen')) {
+                userMsg = 'That profile has been frozen by an administrator';
+              } else if (msg.toLowerCase().includes('not authenticated')) {
+                userMsg = 'Authentication error — please refresh the page and try again';
+              } else if (msg.toLowerCase().includes('email not found') || msg.toLowerCase().includes('not found')) {
+                userMsg = 'No profile matches that parent email';
+              } else if (resp.status >= 500) {
+                userMsg = 'Server error during restore — please try again in a moment';
+              }
+            } catch (parseErr) {
+              if (errText.includes('frozen')) userMsg = 'That profile has been frozen by an administrator';
+            }
+            showToast(userMsg);
+            return;
+          }
+          const data = await resp.json();
+          if (data) {
+            var rowData = Array.isArray(data) ? data[0] : data;
+            if (typeof rowData === 'string') {
+              try { rowData = JSON.parse(rowData); } catch(e) {}
+            }
+            var sessEmail = typeof _getSession === 'function' ? _getSession() : null;
+            if (!rowData) { showToast('Profile data missing'); return; }
+            var currUidEmail = sessEmail && sessEmail.user ? sessEmail.user.id : rowData.auth_uid;
+            match = syncStore._mapRowToProfile(rowData, currUidEmail);
+            var existingIdx = allProfiles.findIndex(p => p.id === match.id);
+            if (existingIdx >= 0) allProfiles[existingIdx] = match;
+            else allProfiles.push(match);
+            saveProfiles();
+          }
+        } catch (err) {
+          console.error("[restore_profile_by_email] Fetch error:", err);
+          showToast('Network error while restoring profile — check your connection');
           return;
         }
-        const data = await resp.json();
-        if (data) {
-          var rowData = Array.isArray(data) ? data[0] : data;
-          if (typeof rowData === 'string') {
-            try { rowData = JSON.parse(rowData); } catch(e) {}
+      } else {
+        for (var i = 0; i < allProfiles.length; i++) {
+          if (allProfiles[i].parentEmail && normalizeEmail(allProfiles[i].parentEmail) === norm) {
+            match = allProfiles[i]; break;
           }
-          var sessEmail = typeof _getSession === 'function' ? _getSession() : null;
-          if (!rowData) { showToast('Profile data missing'); return; }
-          var currUidEmail = sessEmail && sessEmail.user ? sessEmail.user.id : rowData.auth_uid;
-          match = syncStore._mapRowToProfile(rowData, currUidEmail);
-          var existingIdx = allProfiles.findIndex(p => p.id === match.id);
-          if (existingIdx >= 0) allProfiles[existingIdx] = match;
-          else allProfiles.push(match);
-          saveProfiles();
         }
-      } catch (err) {
-        console.error("[restore_profile_by_email] Fetch error:", err);
-        showToast('Network error while restoring profile');
-        return;
-      }
-    } else {
-      for (var i = 0; i < allProfiles.length; i++) {
-        if (allProfiles[i].parentEmail && normalizeEmail(allProfiles[i].parentEmail) === norm) {
-          match = allProfiles[i]; break;
+        if (!match) {
+          showToast('No profile matches that parent email on this device');
+          return;
+        }
+        if (match.frozen) {
+          showToast('That profile has been frozen by an administrator');
+          return;
         }
       }
-      if (!match) {
-        showToast('No profile matches that parent email on this device');
-        return;
-      }
-      if (match.frozen) {
-        showToast('That profile has been frozen by an administrator');
-        return;
-      }
-    }
 
-    if (!match) { showToast('Profile not found.'); return; }
-    activeProfile = match;
-    try { localStorage.setItem(ACTIVE_KEY, activeProfile.id); } catch (e) {}
-    updateAvatarBars();
-    close();
-    showToast('Welcome back, ' + match.handle + '!');
-    go('s-setup');
+      if (!match) { showToast('Profile not found.'); return; }
+      activeProfile = match;
+      try { localStorage.setItem(ACTIVE_KEY, activeProfile.id); } catch (e) {}
+      updateAvatarBars();
+      close();
+      showToast('Welcome back, ' + match.handle + '!');
+      go('s-setup');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = origBtnText; }
+    }
   });
 }
 
-function selectProfile(index) {
+async function selectProfile(index) {
 
   const p = allProfiles[index];
 
-  if (p && p.frozen) {
+  if (!p) return;
+
+  if (p.frozen) {
     showToast('This profile has been frozen by an administrator.');
     return;
   }
 
-  activeProfile = p;
+  // Check Supabase for current profile info before loading the profile
+  if (navigator.onLine && typeof syncStore !== 'undefined' && syncStore.fetchProfileById && p.id) {
+    try {
+      const fetchPromise = syncStore.fetchProfileById(p.id);
+      const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 2500));
+      const remote = await Promise.race([fetchPromise, timeoutPromise]);
+      if (remote) {
+        if (remote.frozen) {
+          p.frozen = true;
+          saveProfiles();
+          showToast('This profile has been frozen by an administrator.');
+          renderProfileGrid();
+          return;
+        }
+        const merged = (typeof mergeProfiles === 'function') ? mergeProfiles(allProfiles[index], remote) : { ...allProfiles[index], ...remote };
+        allProfiles[index] = merged;
+        saveProfiles();
+      }
+    } catch (err) {
+      console.warn('[selectProfile] Supabase check failed, continuing with local cache:', err);
+    }
+  }
+
+  activeProfile = allProfiles[index] || p;
 
   localStorage.setItem(ACTIVE_KEY, activeProfile.id);
 
@@ -2316,6 +2453,7 @@ async function finalizeProfile(goToAvatar) {
     : (crypto && crypto.randomUUID ? crypto.randomUUID() : ('p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)));
 
   newProfile.createdAt = new Date().toISOString();
+  newProfile.updatedAt = newProfile.createdAt;
 
   // Step 5.2.1 — persist to Supabase via create_profile RPC.
   // Wait for it so we can catch uniqueness errors BEFORE saving locally.
@@ -2372,13 +2510,52 @@ function escHtml(str) {
 
 }
 
+async function refreshProfilesFromCloud() {
+  if (!navigator.onLine || typeof syncStore === 'undefined' || !syncStore.fetchProfiles) return;
+  try {
+    const sess = (typeof _getSession === 'function') ? _getSession() : null;
+    const authUid = sess && sess.user ? sess.user.id : null;
+    const ids = allProfiles.map(p => p.id).filter(Boolean);
+    if (!authUid && ids.length === 0) return;
+    const remoteProfiles = await syncStore.fetchProfiles(authUid, ids);
+    if (remoteProfiles && remoteProfiles.length > 0) {
+      let changed = false;
+      remoteProfiles.forEach(rp => {
+        const idx = allProfiles.findIndex(p => p.id === rp.id);
+        if (idx >= 0) {
+          allProfiles[idx] = (typeof mergeProfiles === 'function') ? mergeProfiles(allProfiles[idx], rp) : { ...allProfiles[idx], ...rp };
+          changed = true;
+        }
+      });
+      if (changed) {
+        saveProfiles();
+        if (currentScreen === 's-profiles') renderProfileGrid();
+        if (activeProfile) {
+          const found = allProfiles.find(p => p.id === activeProfile.id);
+          if (found) {
+            activeProfile = found;
+            if (typeof updateAvatarBars === 'function') updateAvatarBars();
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[refreshProfilesFromCloud] failed:', e);
+  }
+}
+
 const _origGo = go;
 
 go = function(id) {
 
   _origGo(id);
 
-  if (id === 's-profiles') renderProfileGrid();
+  if (id === 's-profiles') {
+    renderProfileGrid();
+    if (typeof refreshProfilesFromCloud === 'function') {
+      refreshProfilesFromCloud();
+    }
+  }
 
 };
 
@@ -2386,7 +2563,12 @@ go = function(id) {
 
   loadProfiles();
 
-  if (currentScreen === 's-profiles') renderProfileGrid();
+  if (currentScreen === 's-profiles') {
+    renderProfileGrid();
+    if (typeof refreshProfilesFromCloud === 'function') {
+      refreshProfilesFromCloud();
+    }
+  }
 
 })();
 
@@ -2731,9 +2913,14 @@ function _avFinishAndSave() {
 
     };
 
+    activeProfile.updatedAt = new Date().toISOString();
+
+    const existingIdx = allProfiles.findIndex(p => p.id === activeProfile.id);
+    if (existingIdx >= 0) allProfiles[existingIdx] = activeProfile;
+
     saveProfiles();
 
-    updateAvatarBars();
+    if (typeof updateAvatarBars === 'function') updateAvatarBars();
 
     if (typeof syncStore !== 'undefined') {
 
@@ -2753,7 +2940,16 @@ function _avFinishAndSave() {
 
   showToast('Avatar saved! ⭐');
 
-  if (_avEditMode) {
+  // Immediately re-render profile & profile grid components so the new avatar displays without any delay
+  if (typeof renderProfile === 'function') renderProfile();
+  if (typeof renderProfileGrid === 'function') renderProfileGrid();
+  if (typeof updateAvatarBars === 'function') updateAvatarBars();
+
+  var shouldGoBack = _avEditMode || window._avatarEditMode || (screenHistory.length > 0 && screenHistory[screenHistory.length - 1] === 's-profile');
+  window._avatarEditMode = false;
+  _avEditMode = false;
+
+  if (shouldGoBack && screenHistory.length > 0) {
 
     goBack();
 
@@ -2761,6 +2957,11 @@ function _avFinishAndSave() {
 
     go('s-setup');
 
+  }
+
+  // Ensure current screen is fresh right after returning
+  if (typeof triggerScreenRefresh === 'function') {
+    triggerScreenRefresh(currentScreen);
   }
 
 }
@@ -2810,7 +3011,7 @@ function initAvatarBuilder(editMode, onFinish) {
 
     if (id === 's-avatar') {
 
-      var isEdit = !!(activeProfile && activeProfile.avatar && activeProfile.avatar.svg);
+      var isEdit = !!(window._avatarEditMode || (activeProfile && activeProfile.avatar && (activeProfile.avatar.svg || activeProfile.avatar.faceKey)));
 
       initAvatarBuilder(isEdit);
 
@@ -6003,6 +6204,11 @@ function initGameScreen() {
   const deck = initDeck(pool, config.mode);
   const { card: firstCard, deck: afterFirst } = drawCard(deck);
 
+  const sessionId = (typeof mapolisUUID === 'function')
+    ? mapolisUUID()
+    : 'ses_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const playerId = (window.activeProfile && window.activeProfile.id) ? window.activeProfile.id : null;
+
   _game = {
     config,
     cd,
@@ -6027,6 +6233,23 @@ function initGameScreen() {
     answerTimes: [],
     _qStart: Date.now(),
     history: [],
+    currentRoundData: {
+      session: {
+        id: sessionId,
+        player_id: playerId,
+        started_at: new Date().toISOString(),
+        ended_at: null,
+        mode: config.mode || 'solo',
+        tier: config.tierCeiling || 1,
+        category: config.continent || 'geo',
+        final_score: 0,
+        cards_answered: 0,
+        cards_correct: 0
+      },
+      card_attempts: [],
+      star_events: [],
+      progress_updates: []
+    }
   };
 
   const mapContainer = document.getElementById('game-map-container');
@@ -6364,6 +6587,7 @@ function handleGameClick(lon, lat, event) {
   const answerMs = Date.now() - (_game._qStart || Date.now());
   _game.answerTimes.push(answerMs);
 
+  let earnedStars = 0;
   if (isCorrect) {
     if (_game.config.mode === 'h2h') {
       _h2h.yourScore += 1;
@@ -6374,10 +6598,12 @@ function handleGameClick(lon, lat, event) {
       // Earn stars in H2H too — accumulates on _game.score and gets banked
       // to profile.stats.cr in finishH2HMatch.
       const h2hStars = _calcStars(q);
+      earnedStars = h2hStars;
       _game.score += h2hStars;
       spawnStarPop(event.clientX || event.pageX || window.innerWidth / 2, event.clientY || event.pageY || window.innerHeight / 2);
     } else {
       const stars = _calcStars(q);
+      earnedStars = stars;
       _game.score += stars;
       _game.correct++;
       _game.streak++;
@@ -6402,6 +6628,22 @@ function handleGameClick(lon, lat, event) {
     _game.wrong++;
     _game.streak = 0;
     _game.mistakes[q.id] = (_game.mistakes[q.id] || 0) + 1;
+  }
+
+  if (_game.currentRoundData) {
+    _game.currentRoundData.card_attempts.push({
+      card_id: q.id || q.targetId || 'unknown',
+      category: q.continent || _game.config.continent || 'geo',
+      correct: !!isCorrect
+    });
+
+    if (earnedStars > 0) {
+      _game.currentRoundData.star_events.push({
+        amount: earnedStars,
+        reason: 'correct_answer',
+        earned_at: new Date().toISOString()
+      });
+    }
   }
 
   _game.deck = updateWeight(_game.deck, q.id, isCorrect);
@@ -6557,7 +6799,8 @@ function endGame() {
     answerTimes: [..._game.answerTimes],
     tierCeiling: _game.config.tierCeiling,
     difficulty: _game.config.difficulty,
-    categories: _game.config.categories || {}
+    categories: _game.config.categories || {},
+    currentRoundData: _game.currentRoundData
   };
 
 
@@ -8319,24 +8562,40 @@ function renderResults() {
     newAccs = checkAccessories(profile);
     saveProfiles();
     if (typeof submitRound === 'function') {
-      const sessionId = 'ses_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
-      submitRound({
-        session: {
-          id: sessionId,
-          player_id: profile.id,
-          started_at: (new Date(Date.now() - ((gr.elapsed || 0) * 1000))).toISOString(),
-          ended_at: new Date().toISOString(),
-          mode: gr.mode || 'solo',
-          tier: gr.tierCeiling || 1,
-          category: gr.continent || 'geo',
-          final_score: gr.score || 0,
-          cards_answered: gr.correct + gr.wrong,
-          cards_correct: gr.correct
-        },
-        card_attempts: [],
-        star_events: [],
-        progress_updates: []
-      });
+      let payload = gr.currentRoundData;
+      if (!payload) {
+        const fallbackSessionId = (typeof mapolisUUID === 'function')
+          ? mapolisUUID()
+          : 'ses_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        payload = {
+          session: {
+            id: fallbackSessionId,
+            player_id: profile.id,
+            started_at: (new Date(Date.now() - ((gr.elapsed || 0) * 1000))).toISOString(),
+            ended_at: new Date().toISOString(),
+            mode: gr.mode || 'solo',
+            tier: gr.tierCeiling || 1,
+            category: gr.continent || 'geo',
+            final_score: gr.score || 0,
+            cards_answered: gr.correct + gr.wrong,
+            cards_correct: gr.correct
+          },
+          card_attempts: [],
+          star_events: [],
+          progress_updates: []
+        };
+      } else {
+        // Finalize end-of-round totals in session object
+        payload.session.ended_at = new Date().toISOString();
+        payload.session.player_id = profile.id;
+        payload.session.final_score = gr.score || 0;
+        payload.session.cards_answered = gr.correct + gr.wrong;
+        payload.session.cards_correct = gr.correct;
+        payload.session.tier = gr.tierCeiling || 1;
+        payload.session.category = gr.continent || 'geo';
+        payload.session.mode = gr.mode || 'solo';
+      }
+      submitRound(payload);
     }
   }
 

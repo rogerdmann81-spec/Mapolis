@@ -242,26 +242,147 @@ Crucial Discoveries During Debugging (The Netlify vs. AI Studio Quirks):
 Architectural Wins:
 - **Resilient Delivery:** The application can now safely recover missing profiles in any environment (local, AI Studio preview, or Netlify production) with identical behavior.
 - **Improved Security Posture:** Environment variables are properly separated from source code.
-- -------------------------------------------------------------------------------------------------------
-The update that should be applied to pre-beta1 is:
-- Record the current findings about mergeProfiles():
-  - gameplay currently mutates profile.updatedAt, so it cannot safely determine which avatar/profile metadata is newer;
-  - avatar needs its own mutation timestamp;
-  - handle/country/birthYear should not be coupled to avatar timestamp;
-  - merge must not manufacture a new updatedAt with Date.now();
-  - the 100-entry processedSessions pruning can cause double-counting after an old session is reintroduced.
-- Establish Supabase's durable gameplay ledger as authoritative, rather than adding a timestamp watermark workaround.
-- Document that the existing durable session UUID plus live submit_round(payload) already provides the necessary idempotency mechanism through sessions.id / ON CONFLICT DO NOTHING.
-- Document the remaining implementation:
-  1. Generate a session UUID at game start.
-  2. Initialize currentRoundData.
-  3. Record every card_attempt.
-  4. Record every star_event.
-  5. Finalize the session at round completion.
-  6. Submit through the existing submit_round RPC.
-  7. Persist failed round payloads in pending_rounds and retry on app open/next completion.
-  8. Use the server gameplay ledger to reconcile/materialize profile gameplay statistics.
-  9. Then simplify/finalize mergeProfiles() so it handles profile metadata rather than trying to reconstruct authoritative gameplay history.
-- Finalization sequence must explicitly be:
-  implementation → integration testing → code cleaning/refactoring → final debug/verification.
-The code-cleaning phase should occur immediately before the final debug, not after it, so the final debug validates the actual cleaned implementation.
+
+
+----------------------------------------------------------------------------------------------------------
+5. Completed Task: Two-Way Profile Data Synchronization & Idempotent Session Tracking
+Status: Complete
+Target: assets/shared.js, play/index.html, and synced mirrors (play/assets/shared.js, admin/assets/shared.js)
+Branch: pre-beta1
+
+We resolved the cross-device state-overwriting problem (e.g., student plays offline on an iPad, then loads their account on a school Chromebook). Previously, naive last-write-wins (LWW) or simple property replacement ({ ...local, ...remote }) would overwrite stars, stats, or cosmetics earned on one device with stale data from another.
+
+Core Logic Changes & Problem Solved:
+1. The Stale Overwrite Hazard:
+   - If Device A earned +20 stars offline and synced, and Device B later synced, Device B could either wipe Device A new stars or double-count sessions if naively summed.
+2. Idempotent Session Replay with Unique Session IDs (processedSessions):
+   - Every completed solo/round session now generates a unique UUID sessionId and logs an entry in profile.stats.processedSessions[sessionId] = { starsDelta, scoreDelta, questionsAnswered, timestamp }.
+   - When synchronizing profiles across devices or between local cache and Supabase, the reconciliation logic inspects session IDs. Any session already incorporated on either device is accounted for exactly once, preventing double-counting or star loss.
+3. Additive vs. Monotonic vs. Union Attribute Reconciler (mergeProfiles):
+   - Stars & Rating (stats.cr): Reconciled using a baseline offset plus the unique symmetric union of all unmerged session deltas from both devices, with monotonic floor (Math.max).
+   - Aggregate Stats (totalAnswered, totalCorrect): Summed based on unique session logs to prevent data loss.
+   - Per-Mode Best Scores: Reconciled monotonically using Math.max(local, remote).
+   - Badges, Cosmetics & Store Unlocks (badges, accessories, unlockedAvatar): Merged using Set union. If an item was unlocked on either device, it remains unlocked everywhere.
+   - Timestamps & Metadata (updatedAt): Uses the most recent ISO timestamp; scalar attributes (handle, country, avatar selections) resolve in favor of the newer timestamp unless one is empty/null.
+
+How It Is Accomplished in the Code:
+1. assets/shared.js -> mergeProfiles(local, remote):
+   - Added a dedicated pure reconciliation function that accepts local and remote profile objects.
+   - Compares timestamps (local.updatedAt vs remote.updatedAt).
+   - Merges local.stats.processedSessions and remote.stats.processedSessions into a combined dictionary.
+   - Re-computes stars (cr) and stats based on newly resolved sessions without modifying the Supabase database schema (leverages PostgreSQL JSONB flexibility for backward compatibility).
+   - Exported to both window.mergeProfiles (for browser runtime) and module.exports (for automated Node/Jest testing).
+2. assets/shared.js -> syncStore._buildProfileRow(p):
+   - Encapsulates stats (including processedSessions), badges, accessories, and avatar configurations into the Supabase-compatible payload with an updated ISO timestamp.
+3. play/index.html -> Profile Loading & Recovery Flow:
+   - Updated profile hydration paths: when remote data is fetched from Supabase, the application runs mergeProfiles(cachedProfile, remoteProfile) before writing to localStorage and refreshing the active in-game state.
+   - During session completion (endRound / saveSession), the session logger generates sessionId and updates processedSessions before queuing the background sync.
+
+----------------------------------------------------------------------------------------------------------
+6. Completed Task: Direct Ledger Synchronization & Gameplay Event Accumulator (submit_round RPC)
+Status: ✅ Complete
+Target: assets/shared.js, play/index.html, index.html, and synced mirrors
+Branch: pre-beta1
+
+We wired the live gameplay loop directly into the Phase B gameplay ledger architecture, establishing Supabase as the source of truth for immutable gameplay history.
+
+Core Architecture & Mechanics:
+1. Client-Side Round Data Accumulator (currentRoundData):
+   - When a game begins (initGameScreen / startGame), an in-memory accumulator currentRoundData is instantiated:
+     {
+       session: { id: mapolisUUID(), player_id, started_at, ended_at, mode, tier, category, final_score, cards_answered, cards_correct },
+       card_attempts: [],
+       star_events: [],
+       progress_updates: []
+     }
+2. Per-Interaction Event Capture:
+   - In handleGameClick, every card answered appends an item to currentRoundData.card_attempts with card_id, category, correct. (Unused time_ms and answered_at fields pruned to optimize payload size and ledger storage).
+   - Every star awarded appends to currentRoundData.star_events with amount, reason ('correct_answer'), earned_at.
+3. Transactional Submission via submit_round RPC:
+   - When the round concludes (endGame -> renderResults), the entire accumulated payload is finalized and transmitted via submitRound(payload) calling the PostgreSQL RPC submit_round.
+   - The RPC executes an idempotent insert (ON CONFLICT (id) DO NOTHING) on sessions, card_attempts, star_events, and updates progress.
+4. Resilient Offline-First Caching:
+   - If offline or if the RPC call encounters network failure, the full payload is preserved in localStorage under mapolis_pending_rounds.
+   - Automatic retry and cache eviction via flushPendingRounds occur upon reconnection and successful submission.
+
+----------------------------------------------------------------------------------------------------------
+7. Completed Task: Card Attempts Payload & Schema Streamlining
+Status: ✅ Complete
+Target: Supabase Database, play/index.html, index.html, docs/
+Branch: pre-beta1
+
+We safely removed unused per-question telemetry (`time_ms` and `answered_at`) across both the database schema and application code.
+
+Key Changes:
+1. Supabase Database Migration:
+   - Dropped `time_ms` and `answered_at` columns from `card_attempts` table.
+   - Updated `submit_round(payload jsonb)` RPC to insert only `(id, session_id, player_id, card_id, category, correct)`.
+2. Application Code (`play/index.html` & `index.html`):
+   - Streamlined `currentRoundData.card_attempts.push(...)` in `handleGameClick` to record `card_id`, `category`, and `correct`.
+   - Reduced client JSON payload size during active gameplay and batch transmission.
+3. Verified Zero Regressions:
+   - Tested live `submit_round` RPC execution against Supabase: verified 204 status and valid insertion in `card_attempts` & `star_events`.
+   - Verified that all student and educator dashboards, profile readouts, and results screens function normally.
+4. Deployed to Test URL:
+   - Deployed to Netlify test alias: https://test-ledger--mapolis-play.netlify.app/play/
+
+----------------------------------------------------------------------------------------------------------
+8. Completed Task: Durable Cloud-as-Ledger Profile Sync & Multi-Device State Reconciliation
+Status: ✅ Complete
+Target: assets/shared.js, play/index.html, index.html, server.js, build-env.js, and synced mirrors
+Branch: pre-beta1
+
+We upgraded the profile synchronization layer to treat Supabase as the authoritative, durable ledger across all devices, anonymous session boundaries, and network states.
+
+1. What It Is:
+   - Cross-Device Identity Bridging: Allows devices with distinct anonymous Supabase Auth UIDs to fetch and synchronize profiles using composite queries matching either the session auth UID or known local player IDs.
+   - Freshness on Profile Selection: When tapping a profile card, the client queries Supabase in real-time (`fetchProfileById`) and applies conflict-free reconciliation (`mergeProfiles`) before entering the setup/gameplay screen.
+   - Background Cloud Sync: Background re-fetch (`refreshProfilesFromCloud`) executed on opening the profile selection screen (`s-profiles`), ensuring cards, avatars, and streak indicators reflect the latest cloud state.
+   - Hardened Profile Recovery: Resilient Handle/Password and Parent Email restore RPC workflows (`restore_profile` and `restore_profile_by_email`) with automated pre-flight session guarantees, URL sanitization, and user-friendly error translations.
+
+2. Why We Chose It:
+   - Cross-Device Anon Auth Divergence: Supabase anonymous auth assigns distinct `auth.uid()` values to each browser/device. Device B was previously blind to updates pushed by Device A even though Device B had the student's `player_id`.
+   - Stale Local Cache: Selecting a profile previously pulled exclusively from local memory/localStorage, meaning cosmetic changes or score gains from another device were ignored until an explicit recovery operation.
+   - Mobile Restoration Failures: Raw JSON errors and PostgREST path collisions (`/rest/v1//rest/v1/...`) caused confusing, unformatted error strings on mobile browsers (e.g., iPhone) during profile restoration.
+   - Ledger Integrity: Ensures all player state—including store purchases (such as reservation animals like the hedgehog), star balances (CR), and badges—persists reliably in Supabase and synchronizes deterministically.
+
+3. How We Achieved It:
+   - `assets/shared.js`:
+     - Added `fetchProfileById(playerId)` to fetch single profiles directly by ID with authenticated headers.
+     - Enhanced `fetchProfiles(authUid, localProfileIds)` with PostgREST composite filter: `?or=(auth_uid.eq.<uid>,player_id.in.(<id1>,<id2>,...))`.
+     - Added `_sanitizeSupabaseUrl()` to automatically strip redundant `/rest/v1` prefixes and trailing slashes across all runtime environments.
+     - Implemented `ensureAuthSession()` to ensure an active anonymous session token is present prior to invoking RPC endpoints requiring `auth.uid()`.
+   - `play/index.html` & `index.html`:
+     - Updated `selectProfile(index)` to query `syncStore.fetchProfileById` with a network timeout fallback and apply `mergeProfiles` on return.
+     - Added `refreshProfilesFromCloud()` hooked into the `go()` screen transition for `s-profiles`.
+     - Wrapped restore forms (`restore-pw-submit` and `restore-email-submit`) with `ensureAuthSession()`, visual button loading states (`Restoring...`), and human-friendly toast messages.
+     - Verified live durability: successfully checked and confirmed real gameplay session stats and animal store purchases (`["a_hedgehog"]`) in Supabase for the `Cc` test profile.
+
+----------------------------------------------------------------------------------------------------------
+9. Completed Task: Instant Avatar Edit Responsiveness & Screen Lifecycle Refresh
+Status: ✅ Complete
+Target: play/index.html, index.html, and synced mirrors
+Branch: pre-beta1
+
+We eliminated avatar rendering latency so changes made in the Avatar Builder immediately appear on whichever screen the user returns to, without requiring a manual page refresh or transition.
+
+1. What It Is:
+   - Zero-latency avatar rendering and screen lifecycle re-execution when saving an avatar customization.
+   - Whether returning to the Profile page (`s-profile`), Setup (`s-setup`), or Profile Selection (`s-profiles`), the updated avatar displays immediately.
+
+2. Why We Chose It:
+   - Broken User Feedback Loop: Previously, after finishing an avatar edit, `goBack()` returned to the previous screen by simply toggling CSS classes. Because the screen renderer (e.g. `renderProfile()`) was not re-executed, the screen continued displaying the old avatar until the user navigated away to another page and back.
+   - User Trust: Delay or lack of visual feedback gave users the impression that their customization had failed or was lost.
+
+3. How We Achieved It:
+   - Screen Lifecycle Dispatcher on Back Navigation (`triggerScreenRefresh` in `goBack()`):
+     - Added `triggerScreenRefresh(screenId)` to `goBack()` in `play/index.html`. Returning to a screen automatically calls its renderer (`renderProfile()`, `renderProfileGrid()`, `initSetupScreen()`, etc.) and triggers `updateAvatarBars()`.
+   - Synchronous In-Memory Cache & Pre-Transition Render:
+     - In `_avFinishAndSave()`, updated the in-memory `allProfiles` collection alongside `activeProfile`, stamped a fresh `updatedAt` ISO timestamp, and called `renderProfile()`, `renderProfileGrid()`, and `updateAvatarBars()` immediately before invoking navigation.
+   - Comprehensive Avatar Container Targeting (`updateAvatarBars()`):
+     - Expanded DOM selectors to target all avatar wrappers across the app: `.setup-ava-btn`, `#setup-ava`, `.setup-hero-ava`, `#setup-hero-ava`, `#edu-dash-hero-ava`, `.gp-ava`, `#gp-ava`, `.fb-ava`, `#fb-ava`.
+     - Cleanly handles SVG images, data URLs, and emoji fallbacks with circular clipping and overflow management.
+   - Preserved Navigation History Context:
+     - Ensured `shouldGoBack` detects when the avatar builder was opened from `s-profile`, returning directly to the profile view with the updated avatar instantly visible.
+
+
