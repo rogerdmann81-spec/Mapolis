@@ -443,7 +443,10 @@ function renderAdmin() {
 
   var html = '<div class="admin-header">'
     + '<div style="display:flex;justify-content:space-between;align-items:center;">'
-    + '<button onclick="adminExit()" style="background:none;color:var(--dim);font-size:13px;font-weight:700;padding:4px 0;">← Exit Panel</button>'
+    + '<div style="display:flex;align-items:center;gap:12px;">'
+    + '<button onclick="adminSignOut()" style="background:rgba(240,64,96,.15);border:1px solid rgba(240,64,96,.3);border-radius:8px;padding:5px 12px;color:var(--wrong);font-size:12px;font-weight:700;cursor:pointer;">🚪 Sign Out</button>'
+    + '<a href="/play/" target="_blank" style="color:var(--dim);font-size:12px;font-weight:700;text-decoration:none;display:flex;align-items:center;gap:3px;">Open Game ↗</a>'
+    + '</div>'
     + '<button onclick="adminShowChangePw()" style="background:rgba(59,110,248,.15);border:1px solid rgba(91,143,255,.25);border-radius:8px;padding:5px 10px;color:var(--dim);font-size:11px;font-weight:700;font-family:\'Nunito\',sans-serif;">⚙ Password</button>'
     + '</div>'
     + '<div style="font-family:\'Fredoka One\',sans-serif;font-size:20px;color:#fff;margin-top:4px;">🔐 Master Panel</div>'
@@ -491,7 +494,15 @@ function adminSetTab(tab) {
     }).catch(function() {});
   }
 }
-function adminExit() { window.location.href = '/play/'; }
+function adminSignOut() {
+  var modal = document.getElementById('admin-pw-modal');
+  var inp = document.getElementById('admin-pw-input');
+  var root = document.getElementById('admin-root');
+  if (inp) inp.value = '';
+  if (root) root.innerHTML = '';
+  if (modal) modal.style.display = 'flex';
+  if (typeof showToast === 'function') showToast('Signed out of Master Panel');
+}
 
 function adminShowChangePw() {
   alert("Password management is now handled via Supabase Auth.");
