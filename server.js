@@ -5,12 +5,25 @@ const app = express();
 const PORT = 3000;
 
 // Serve static files from the root directory
-app.use(express.static(__dirname));
+
 
 // Redirect root to /play
+
+// Specific app routes
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'admin', 'index.html'));
+});
+
+app.get('/play', (req, res) => {
+  res.sendFile(path.join(__dirname, 'play', 'index.html'));
+});
+
 app.get('/', (req, res) => {
   res.redirect('/play/');
 });
+
+app.use(express.static(__dirname));
+
 
 // Expose environment variables to the client
 function cleanSupabaseUrl(url) {

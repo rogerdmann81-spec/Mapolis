@@ -268,6 +268,26 @@ async function getCurrentUser() {
 
 const syncStore = {
 
+  async fetchAllProfiles() {
+    if (!isSupabaseConfigured() || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+      return (typeof allProfiles !== 'undefined') ? allProfiles : [];
+    }
+    try {
+      const url = SUPABASE_URL + '/rest/v1/profiles?select=*&order=created_at.desc';
+      const resp = await fetch(url, {
+        method: 'GET',
+        headers: authedHeaders()
+      });
+      if (!resp.ok) throw new Error('fetchAllProfiles status ' + resp.status);
+      const rows = await resp.json();
+      return rows.map(r => this._mapRowToProfile(r, r.auth_uid));
+    } catch (e) {
+      console.warn('[syncStore.fetchAllProfiles] Error:', e);
+      return (typeof allProfiles !== 'undefined') ? allProfiles : [];
+    }
+  },
+
+
   save(key, data) {
     try {
       localStorage.setItem('nsg_' + key, JSON.stringify(data));

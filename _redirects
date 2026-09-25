@@ -1,0 +1,5 @@
+/admin    /admin/index.html   200
+/admin/*  /admin/index.html   200
+/play     /play/index.html    200
+/play/*   /play/index.html    200
+/         /play/              301

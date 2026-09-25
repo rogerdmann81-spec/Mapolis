@@ -214,19 +214,19 @@ body.impersonating .screen { padding-bottom: 54px !important; }
 </div>
 
 <!-- Admin login modal -->
-<div id="admin-pw-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(6,13,46,.92);backdrop-filter:blur(8px);align-items:center;justify-content:center;">
-  <div style="background:#111428;border:1px solid rgba(91,143,255,.25);border-radius:20px;padding:28px 24px;width:min(320px,90vw);text-align:center;">
-    <div style="font-size:28px;margin-bottom:8px;">🔐</div>
-    <div style="font-family:'Fredoka One',sans-serif;font-size:18px;color:#fff;margin-bottom:4px;">Master Access</div>
-    <div style="font-size:11px;color:var(--dim);margin-bottom:18px;">Sign in to continue</div>
-    <input id="admin-email-input" type="email" placeholder="Email Address"
+<div id="admin-pw-modal" style="display:flex;position:fixed;inset:0;z-index:9999;background:rgba(6,13,46,.94);backdrop-filter:blur(10px);align-items:center;justify-content:center;">
+  <div style="background:#111428;border:1px solid rgba(91,143,255,.25);border-radius:20px;padding:28px 24px;width:min(340px,90vw);text-align:center;">
+    <div style="font-size:32px;margin-bottom:8px;">🔐</div>
+    <div style="font-family:'Fredoka One',sans-serif;font-size:20px;color:#fff;margin-bottom:4px;">Mapolis Admin</div>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:18px;">Enter Master Password or Admin Login</div>
+    <input id="admin-pw-input" type="password" placeholder="Master Password"
       style="width:100%;background:#0d0f1a;border:1px solid rgba(91,143,255,.3);border-radius:12px;padding:12px 14px;color:#fff;font-size:14px;font-family:'Nunito',sans-serif;margin-bottom:8px;box-sizing:border-box;">
-    <input id="admin-pw-input" type="password" placeholder="Password"
-      style="width:100%;background:#0d0f1a;border:1px solid rgba(91,143,255,.3);border-radius:12px;padding:12px 14px;color:#fff;font-size:14px;font-family:'Nunito',sans-serif;margin-bottom:8px;box-sizing:border-box;">
-    <div id="admin-pw-error" style="display:none;color:#f04060;font-size:11px;margin-bottom:8px;">Sign in failed</div>
-    <div style="display:flex;gap:8px;">
-      <button onclick="document.getElementById('admin-pw-modal').style.display='none'" style="flex:1;padding:11px;background:transparent;border:1px solid rgba(91,143,255,.2);border-radius:12px;color:var(--dim);font-size:13px;font-weight:700;">Cancel</button>
-      <button id="btn-admin-login" onclick="adminSubmitPw()" style="flex:2;padding:11px;background:#3b6ef8;border:none;border-radius:12px;color:#fff;font-size:13px;font-weight:800;">Sign In</button>
+    <div style="margin:8px 0;font-size:11px;color:var(--dim);">— or sign in with email —</div>
+    <input id="admin-email-input" type="email" placeholder="Admin Email (Optional)"
+      style="width:100%;background:#0d0f1a;border:1px solid rgba(91,143,255,.2);border-radius:12px;padding:10px 14px;color:#fff;font-size:13px;font-family:'Nunito',sans-serif;margin-bottom:8px;box-sizing:border-box;">
+    <div id="admin-pw-error" style="display:none;color:#f04060;font-size:11px;margin-bottom:8px;">Incorrect password</div>
+    <div style="display:flex;gap:8px;margin-top:6px;">
+      <button id="btn-admin-login" onclick="adminSubmitPw()" style="width:100%;padding:12px;background:#3b6ef8;border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:800;cursor:pointer;">Enter Master Panel</button>
     </div>
   </div>
 </div>
@@ -354,6 +354,29 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') { modal.style.display = 'none'; }
 });
 
+
+var _adminCloudLoaded = false;
+async function refreshCloudData() {
+  try {
+    if (window.syncStore && typeof window.syncStore.fetchAllProfiles === 'function') {
+      var cloudProfiles = await window.syncStore.fetchAllProfiles();
+      if (cloudProfiles && cloudProfiles.length > 0) {
+        allProfiles = cloudProfiles;
+      }
+    }
+  } catch (e) {
+    console.warn('[refreshCloudData] Failed to fetch profiles from cloud:', e);
+  }
+  try {
+    if (window.notesStore && typeof window.notesStore.fetchNotes === 'function') {
+      await window.notesStore.fetchNotes();
+    }
+  } catch (e) {
+    console.warn('[refreshCloudData] Failed to fetch notes from cloud:', e);
+  }
+  _adminCloudLoaded = true;
+}
+
 var _adminTab = 'profiles';
 var _adminViewProfile = null;
 
@@ -413,7 +436,7 @@ function adminSetTab(tab) {
     }).catch(function() {});
   }
 }
-function adminExit() { go('s-credits'); }
+function adminExit() { window.location.href = '/play/'; }
 
 function adminShowChangePw() {
   alert("Password management is now handled via Supabase Auth.");
