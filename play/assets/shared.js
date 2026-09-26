@@ -452,6 +452,7 @@ const syncStore = {
       country: p.country || null,
       birth_year: p.birthYear || null,
       stats: p.stats || {},
+      cr: (p.stats && typeof p.stats.cr === 'number') ? p.stats.cr : 0,
       badges: p.badges || [],
       accessories: p.accessories || [],
       avatar_face: p.avatar && p.avatar.face ? p.avatar.face : null,
