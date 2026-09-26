@@ -172,3 +172,38 @@ console.log('🧪 Starting Profile Merge Test Suite...');
 }
 
 console.log('\n🎉 ALL 5 TEST SUITES PASSED! Profile merge logic is verified.');
+
+// ─────────────────────────────────────────────────────────────
+// Test 6: Star Purchase Session Transactions (Ledger Deductions)
+// ─────────────────────────────────────────────────────────────
+{
+  // Remote has base 200 stars at 12:00
+  const remote = {
+    id: 'player-1',
+    updatedAt: '2026-09-21T12:00:00Z',
+    stats: {
+      cr: 200,
+      processedSessions: {}
+    }
+  };
+
+  // Local purchased hedgehog (-150) at 12:30
+  const local = {
+    id: 'player-1',
+    updatedAt: '2026-09-21T12:30:00Z',
+    accessories: ['a_hedgehog'],
+    stats: {
+      cr: 50,
+      processedSessions: {
+        'tx_hedgehog': { crGain: -150, itemType: 'accessory', itemId: 'a_hedgehog', ts: '2026-09-21T12:28:00Z' }
+      }
+    }
+  };
+
+  const merged = mergeProfiles(local, remote);
+  console.log('  Test 6 Result - Merged Stars after purchase:', merged.stats.cr);
+  assert.strictEqual(merged.stats.cr, 50, 'Expected 50 stars remaining after 150 star purchase');
+  assert(merged.accessories.includes('a_hedgehog'), 'Hedgehog must be owned');
+  assert(merged.stats.processedSessions['tx_hedgehog'], 'Purchase transaction must be preserved in ledger');
+  console.log('  ✅ Test 6 Passed: Star purchases deduct cleanly via session transactions.');
+}

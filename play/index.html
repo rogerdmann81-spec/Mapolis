@@ -1571,6 +1571,33 @@ function loadProfiles() {
 
 }
 
+
+function recordStarPurchase(profile, cost, itemType, itemId) {
+  if (!profile) return false;
+  if (!profile.stats) profile.stats = {};
+  if (!profile.stats.processedSessions) profile.stats.processedSessions = {};
+
+  const currentCR = profile.stats.cr || 0;
+  if (currentCR < cost) return false;
+
+  profile.stats.cr = currentCR - cost;
+
+  const txId = 'tx_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+  profile.stats.processedSessions[txId] = {
+    crGain: -cost,
+    itemType: itemType,
+    itemId: itemId,
+    gamesPlayed: 0,
+    answered: 0,
+    correct: 0,
+    ts: new Date().toISOString()
+  };
+
+  profile.updatedAt = new Date().toISOString();
+  saveProfiles();
+  return true;
+}
+
 function saveProfiles() {
 
   if (activeProfile && !activeProfile.updatedAt) {
@@ -2616,12 +2643,15 @@ function purchaseAvatarType(profile, typeKey) {
   if (!isAvatarTypeLocked(typeKey)) return { ok:false, msg:'Already free' };
   ensureUnlockedAvatar(profile);
   if (profile.unlockedAvatar.types[typeKey]) return { ok:false, msg:'Already unlocked' };
-  if (!profile.stats) profile.stats = {};
   var cost = getAvatarTypeCost(typeKey);
-  if ((profile.stats.cr || 0) < cost) return { ok:false, msg:'Not enough Stars!' };
-  profile.stats.cr -= cost;
-  profile.unlockedAvatar.types[typeKey] = true; profile.updatedAt = new Date().toISOString();
-  if (typeof saveProfiles === 'function') saveProfiles();
+  if ((profile.stats?.cr || 0) < cost) return { ok:false, msg:'Not enough Stars!' };
+
+  profile.unlockedAvatar.types[typeKey] = true;
+  const success = recordStarPurchase(profile, cost, 'avatar_type', typeKey);
+  if (!success) {
+    delete profile.unlockedAvatar.types[typeKey];
+    return { ok:false, msg:'Not enough Stars!' };
+  }
   return { ok:true };
 }
 function purchaseAvatarPack(profile, typeKey, catKey) {
@@ -2629,12 +2659,16 @@ function purchaseAvatarPack(profile, typeKey, catKey) {
   if (!isAvatarTypeLocked(typeKey)) return { ok:false, msg:'Already free' };
   ensureUnlockedAvatar(profile);
   if (isAvatarPackUnlocked(profile, typeKey, catKey)) return { ok:false, msg:'Already unlocked' };
-  if (!profile.stats) profile.stats = {};
   var cost = getAvatarPackCost(typeKey);
-  if ((profile.stats.cr || 0) < cost) return { ok:false, msg:'Not enough Stars!' };
-  profile.stats.cr -= cost;
-  profile.unlockedAvatar.packs[typeKey + ':' + catKey] = true; profile.updatedAt = new Date().toISOString();
-  if (typeof saveProfiles === 'function') saveProfiles();
+  if ((profile.stats?.cr || 0) < cost) return { ok:false, msg:'Not enough Stars!' };
+
+  const packKey = typeKey + ':' + catKey;
+  profile.unlockedAvatar.packs[packKey] = true;
+  const success = recordStarPurchase(profile, cost, 'avatar_pack', packKey);
+  if (!success) {
+    delete profile.unlockedAvatar.packs[packKey];
+    return { ok:false, msg:'Not enough Stars!' };
+  }
   return { ok:true };
 }
 
@@ -8513,11 +8547,14 @@ function purchaseAnimal(profile, animalId) {
   if (profile.accessories.includes(animalId)) return { ok:false, msg:'Already adopted!' };
   const animal = ANIMAL_PRESERVE.find(a => a.id === animalId);
   if (!animal) return { ok:false, msg:'Animal not found.' };
-  if ((profile.stats.cr || 0) < animal.cost) return { ok:false, msg:'Not enough Stars!' };
-  profile.stats.cr -= animal.cost;
+  if ((profile.stats?.cr || 0) < animal.cost) return { ok:false, msg:'Not enough Stars!' };
+
   profile.accessories.push(animalId);
-  profile.updatedAt = new Date().toISOString();
-  saveProfiles();
+  const success = recordStarPurchase(profile, animal.cost, 'animal', animalId);
+  if (!success) {
+    profile.accessories.pop();
+    return { ok:false, msg:'Purchase failed.' };
+  }
   return { ok:true, animal:animal };
 }
 
