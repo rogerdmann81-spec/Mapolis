@@ -602,7 +602,7 @@ function mergeProfiles(local, remote) {
   }
 
   // Safety floor: Stars can never drop below the high-water mark of either profile
-  mergedStats.cr = Math.max(baseCR, lStats.cr || 0, rStats.cr || 0);
+  mergedStats.cr = Math.max(0, baseCR);
   mergedStats.totalAnswered = Math.max(baseAnswered, lStats.totalAnswered || 0, rStats.totalAnswered || 0);
   mergedStats.totalCorrect = Math.max(baseCorrect, lStats.totalCorrect || 0, rStats.totalCorrect || 0);
   mergedStats.gamesPlayed = Math.max(baseGames, lStats.gamesPlayed || 0, rStats.gamesPlayed || 0);

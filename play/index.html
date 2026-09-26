@@ -1117,6 +1117,13 @@ function triggerScreenRefresh(screenId) {
     renderEduSearch();
   }
 
+  }
+
+function goBack() {
+  if (screenHistory.length === 0) {
+    go('s-title');
+    return;
+  }
   const prev = screenHistory.pop();
 
   const cur = document.getElementById(currentScreen);
@@ -2613,7 +2620,7 @@ function purchaseAvatarType(profile, typeKey) {
   var cost = getAvatarTypeCost(typeKey);
   if ((profile.stats.cr || 0) < cost) return { ok:false, msg:'Not enough Stars!' };
   profile.stats.cr -= cost;
-  profile.unlockedAvatar.types[typeKey] = true;
+  profile.unlockedAvatar.types[typeKey] = true; profile.updatedAt = new Date().toISOString();
   if (typeof saveProfiles === 'function') saveProfiles();
   return { ok:true };
 }
@@ -2626,7 +2633,7 @@ function purchaseAvatarPack(profile, typeKey, catKey) {
   var cost = getAvatarPackCost(typeKey);
   if ((profile.stats.cr || 0) < cost) return { ok:false, msg:'Not enough Stars!' };
   profile.stats.cr -= cost;
-  profile.unlockedAvatar.packs[typeKey + ':' + catKey] = true;
+  profile.unlockedAvatar.packs[typeKey + ':' + catKey] = true; profile.updatedAt = new Date().toISOString();
   if (typeof saveProfiles === 'function') saveProfiles();
   return { ok:true };
 }
@@ -8509,6 +8516,7 @@ function purchaseAnimal(profile, animalId) {
   if ((profile.stats.cr || 0) < animal.cost) return { ok:false, msg:'Not enough Stars!' };
   profile.stats.cr -= animal.cost;
   profile.accessories.push(animalId);
+  profile.updatedAt = new Date().toISOString();
   saveProfiles();
   return { ok:true, animal:animal };
 }
