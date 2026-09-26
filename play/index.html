@@ -14081,7 +14081,7 @@ function showNotesModal() {
     if (!msg) { textarea.focus(); return; }
 
     const newNote = {
-      id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2),
+      id: crypto.randomUUID ? crypto.randomUUID() : ('00000000-0000-4000-8000-' + Math.random().toString(16).slice(2, 14).padEnd(12, '0')),
       profileId: profile.id,
       handle: profile.handle,
       message: msg,

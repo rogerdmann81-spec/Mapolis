@@ -802,8 +802,12 @@ const notesStore = {
     }
   },
 
+  async saveNote(note) {
+    if (!note) return null;
+    return this.sendNote(note.profileId || note.profile_id, note.handle, note.message);
+  },
   async sendNote(profileId, handle, message) {
-    const tempId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+    const tempId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : ('00000000-0000-4000-8000-' + Math.random().toString(16).slice(2, 14).padEnd(12, '0'));
     const newNote = {
       id: tempId,
       profileId: profileId,

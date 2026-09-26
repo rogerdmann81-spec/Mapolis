@@ -1474,6 +1474,9 @@ function showNotesModal() {
 
 function renderAdminNotes() {
   var notes = getNotes();
+  if ((!notes || !notes.length) && typeof getLocalNotes === 'function') {
+    notes = getLocalNotes();
+  }
   if (!notes.length) {
     return '<div style="text-align:center;padding:30px;color:var(--dim);font-size:12px;">No notes from players yet.</div>';
   }
@@ -1580,6 +1583,9 @@ function showAdminReplyModal(noteId) {
       target.responseAt = new Date().toISOString();
       target.replyRead = false;
       saveNotes(allN);
+      if (window.notesStore && typeof window.notesStore.replyToNote === 'function') {
+        window.notesStore.replyToNote(noteId, msg).catch(function(e) { console.warn('Cloud reply error:', e); });
+      }
     }
 
     closeNsgModal();
