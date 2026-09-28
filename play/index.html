@@ -30,7 +30,7 @@
      inline script block. When the split happens and scripts move to
      external files, tighten script-src to 'self' only. Supabase domain
      pre-added so the RPC wiring in Phase B §6 doesn't need a CSP edit. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <!-- Private beta: keep search engines out until §10 privacy policy ships
@@ -53,9 +53,9 @@
 
 <!-- CDN: D3 v7 + TopoJSON v3 -->
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="/lib/d3.min.js"></script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script src="/lib/topojson.min.js"></script>
 
 
   <script src="/env.js"></script>
