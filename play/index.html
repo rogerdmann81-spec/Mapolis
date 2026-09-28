@@ -212,8 +212,8 @@
   }
   tryLoadLand();
 
-  // Fade globe in once land is ready
-  svgEl.style.opacity = '0';
+  // Show globe sphere immediately; land fades in once ready
+  svgEl.style.opacity = '1';
   svgEl.style.transition = 'opacity 0.8s ease';
 
   var _frameCount = 0;
@@ -1444,19 +1444,32 @@ function initApp() {
   document.addEventListener('click', startMusic);
   document.addEventListener('touchstart', startMusic);
 
+  dismissPageCurtain();
+}
+
+function dismissPageCurtain() {
   var _pc = document.getElementById('page-curtain');
-  if (_pc) {
+  if (_pc && !_pc._dismissing) {
+    _pc._dismissing = true;
     var _bar = document.getElementById('curtain-bar');
     if (_bar) _bar.style.width = '100%';
     setTimeout(function() {
       _pc.style.opacity = '0';
-      setTimeout(function() { _pc.remove(); }, 650);
-    }, 300);
+      setTimeout(function() { if (_pc.parentNode) _pc.remove(); }, 650);
+    }, 200);
   }
-
 }
 
-document.addEventListener('DOMContentLoaded', function() { setTimeout(initApp, 400); });
+// Safety fallback: Ensure page curtain is ALWAYS dismissed even if network/Supabase stalls
+if (typeof window !== 'undefined') {
+  setTimeout(dismissPageCurtain, 1000);
+  window.addEventListener('load', function() { setTimeout(dismissPageCurtain, 300); });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(dismissPageCurtain, 600);
+  setTimeout(initApp, 300);
+});
 
 const PROFILES_KEY = 'nsg_profiles';
 
