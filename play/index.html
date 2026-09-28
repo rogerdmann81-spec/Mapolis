@@ -141,9 +141,13 @@
   }
 
 /* ── Title screen spinning globe ────────────────────────────────────────── */
-(function initTitleGlobe(){
+(function initTitleGlobe() {
   var svgEl = document.getElementById('title-globe');
-  if (!svgEl || typeof d3 === 'undefined' || typeof topojson === 'undefined') return;
+  if (!svgEl) return;
+  if (typeof d3 === 'undefined' || typeof topojson === 'undefined') {
+    setTimeout(initTitleGlobe, 100);
+    return;
+  }
 
   var size = 500;
   var svg = d3.select(svgEl);
@@ -13801,22 +13805,10 @@ function hideLoading(overlay) {
 (function patchWorldLoading() {
   var _origLoad = loadWorldData;
   loadWorldData = async function() {
-    var titleScreen = document.getElementById('s-title');
-    var ov = showLoading(titleScreen, 'Loading map data…');
     try {
       await _origLoad();
-      hideLoading(ov);
-      if (WORLD_ERROR) {
-        hideLoading(ov);
-        showErrorCard(titleScreen, 'Map data failed to load', function() {
-          loadWorldData();
-        });
-      }
     } catch (err) {
-      hideLoading(ov);
-      showErrorCard(titleScreen, 'Map data failed to load', function() {
-        loadWorldData();
-      });
+      console.warn('loadWorldData error:', err);
     }
   };
 })();
