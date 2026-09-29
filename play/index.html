@@ -14025,14 +14025,23 @@ function showBetaWelcome() {
     }
   });
 }
-function showNotesModal() {
+async function showNotesModal() {
   const profile = window.activeProfile;
   if (!profile) return;
-  const notes = getNotes().filter(n => n.profileId === profile.id);
+
+  // 1. Fetch latest notes from Supabase before rendering
+  if (window.notesStore && typeof window.notesStore.fetchNotes === "function") {
+    try {
+      await window.notesStore.fetchNotes(profile.id);
+    } catch (_) {}
+  }
+
+  // Match notes by profile.id OR profile.handle (cross-environment consistency)
+  const notes = getNotes().filter(n => n.profileId === profile.id || (n.handle && profile.handle && n.handle.toLowerCase() === profile.handle.toLowerCase()));
   const allNotes = getNotes();
   let changed = false;
   allNotes.forEach(n => {
-    if (n.profileId === profile.id && n.response && !n.replyRead) {
+    if ((n.profileId === profile.id || (n.handle && profile.handle && n.handle.toLowerCase() === profile.handle.toLowerCase())) && n.response && !n.replyRead) {
       n.replyRead = true;
       changed = true;
     }
@@ -14044,7 +14053,7 @@ function showNotesModal() {
 
   let notesHtml = "";
   if (notes.length > 0) {
-    notesHtml = "<div style=\"margin-bottom:14px;\">";
+    notesHtml = "<div style=\"margin-bottom:14px;max-height:240px;overflow-y:auto;padding-right:4px;\">";
     const sorted = notes.slice().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     for (const note of sorted) {
       const d = new Date(note.timestamp);
@@ -14086,7 +14095,7 @@ function showNotesModal() {
     if (!msg) { textarea.focus(); return; }
 
     const newNote = {
-      id: crypto.randomUUID ? crypto.randomUUID() : ('00000000-0000-4000-8000-' + Math.random().toString(16).slice(2, 14).padEnd(12, '0')),
+      id: crypto.randomUUID ? crypto.randomUUID() : ("00000000-0000-4000-8000-" + Math.random().toString(16).slice(2, 14).padEnd(12, "0")),
       profileId: profile.id,
       handle: profile.handle,
       message: msg,
