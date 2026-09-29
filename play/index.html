@@ -9095,7 +9095,9 @@ function renderProfile() {
     if (window.notesStore && typeof window.notesStore.fetchNotes === 'function') {
         window.notesStore.fetchNotes(profile.id).then(function(liveNotes) {
           if (!Array.isArray(liveNotes)) return;
-          const _mn = liveNotes.filter(n => n.profileId === profile.id || (n.handle && profile.handle && n.handle.toLowerCase() === profile.handle.toLowerCase()));
+          const _pId = profile.id || profile.player_id;
+          const _pHandle = (profile.handle || '').toLowerCase();
+          const _mn = liveNotes.filter(n => (_pId && n.profileId === _pId) || (n.handle && _pHandle && n.handle.toLowerCase() === _pHandle));
           const _ur = _mn.filter(n => n.response && !n.replyRead).length;
           let badge = '';
           if (_ur > 0) badge += '<span class="nsg-unread-dot" style="display:inline-block;width:8px;height:8px;background:var(--wrong);border-radius:50%;margin-left:6px;"></span> <span style="font-size:11px;color:var(--wrong);">' + _ur + ' new repl' + (_ur > 1 ? 'ies' : 'y') + '</span>';
@@ -14051,7 +14053,9 @@ async function showNotesModal() {
       }
     }
 
-    const notes = cloudNotes.filter(n => n.profileId === profile.id || (n.handle && profile.handle && n.handle.toLowerCase() === profile.handle.toLowerCase()));
+    const pId = profile.id || profile.player_id;
+    const pHandle = (profile.handle || '').toLowerCase();
+    const notes = cloudNotes.filter(n => (pId && n.profileId === pId) || (n.handle && pHandle && n.handle.toLowerCase() === pHandle));
 
     if (window.notesStore && typeof window.notesStore.markRepliesRead === "function") {
       window.notesStore.markRepliesRead(profile.id);

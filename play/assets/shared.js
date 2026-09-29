@@ -762,6 +762,14 @@ function _mapRowToNote(r) {
   };
 }
 
+function notesHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'apikey': SUPABASE_KEY,
+    'Authorization': 'Bearer ' + SUPABASE_KEY
+  };
+}
+
 const notesStore = {
   async fetchNotes(profileId) {
     if (!isSupabaseConfigured() || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
@@ -774,7 +782,7 @@ const notesStore = {
       }
       const resp = await fetch(url, {
         method: 'GET',
-        headers: authedHeaders()
+        headers: notesHeaders()
       });
       if (!resp.ok) {
         const errText = await resp.text();
@@ -812,7 +820,7 @@ const notesStore = {
       const url = SUPABASE_URL + '/rest/v1/player_notes';
       const resp = await fetch(url, {
         method: 'POST',
-        headers: authedHeaders(),
+        headers: notesHeaders(),
         body: JSON.stringify({
           id: tempId,
           profile_id: profileId,
@@ -838,7 +846,7 @@ const notesStore = {
         const url = SUPABASE_URL + '/rest/v1/player_notes?profile_id=eq.' + encodeURIComponent(profileId) + '&is_read_by_player=eq.false';
         await fetch(url, {
           method: 'PATCH',
-          headers: authedHeaders(),
+          headers: notesHeaders(),
           body: JSON.stringify({ is_read_by_player: true })
         });
       } catch (_) {}
@@ -851,7 +859,7 @@ const notesStore = {
         const url = SUPABASE_URL + '/rest/v1/player_notes?is_read_by_admin=eq.false';
         await fetch(url, {
           method: 'PATCH',
-          headers: authedHeaders(),
+          headers: notesHeaders(),
           body: JSON.stringify({ is_read_by_admin: true })
         });
       } catch (_) {}
@@ -865,7 +873,7 @@ const notesStore = {
         const url = SUPABASE_URL + '/rest/v1/player_notes?id=eq.' + encodeURIComponent(noteId);
         const resp = await fetch(url, {
           method: 'PATCH',
-          headers: authedHeaders(),
+          headers: notesHeaders(),
           body: JSON.stringify({
             admin_response: responseText,
             admin_response_at: nowIso,
@@ -885,7 +893,7 @@ const notesStore = {
         const url = SUPABASE_URL + '/rest/v1/player_notes?id=eq.' + encodeURIComponent(noteId);
         await fetch(url, {
           method: 'DELETE',
-          headers: authedHeaders()
+          headers: notesHeaders()
         });
       } catch (e) {
         console.warn('[notesStore.deleteNote] Error deleting from cloud:', e);
