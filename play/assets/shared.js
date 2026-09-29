@@ -764,9 +764,8 @@ function _mapRowToNote(r) {
 
 const notesStore = {
   async fetchNotes(profileId) {
-    const local = getLocalNotes();
     if (!isSupabaseConfigured() || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
-      return profileId ? local.filter(n => n.profileId === profileId) : local;
+      return [];
     }
     try {
       let url = SUPABASE_URL + '/rest/v1/player_notes?select=*&order=created_at.desc';
@@ -777,30 +776,15 @@ const notesStore = {
         method: 'GET',
         headers: authedHeaders()
       });
-      if (!resp.ok) throw new Error('fetchNotes returned ' + resp.status);
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error('fetchNotes returned ' + resp.status + ': ' + errText);
+      }
       const rows = await resp.json();
-      const mapped = rows.map(_mapRowToNote);
-      
-      const map = new Map();
-      mapped.forEach(n => map.set(n.id, n));
-      local.forEach(n => {
-        if (!map.has(n.id)) {
-          if (!profileId || n.profileId === profileId) map.set(n.id, n);
-        }
-      });
-      const combined = Array.from(map.values()).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-      
-      try {
-        const fullLocalMap = new Map();
-        local.forEach(n => fullLocalMap.set(n.id, n));
-        mapped.forEach(n => fullLocalMap.set(n.id, n));
-        saveLocalNotes(Array.from(fullLocalMap.values()));
-      } catch (_) {}
-      
-      return combined;
+      return rows.map(_mapRowToNote);
     } catch (e) {
-      console.warn('[notesStore.fetchNotes] Failed to fetch cloud notes, falling back to local:', e);
-      return profileId ? local.filter(n => n.profileId === profileId) : local;
+      console.error('[notesStore.fetchNotes] Error querying Supabase player_notes:', e);
+      return [];
     }
   },
 
@@ -808,67 +792,47 @@ const notesStore = {
     if (!note) return null;
     return this.sendNote(note.profileId || note.profile_id, note.handle, note.message);
   },
+
   async sendNote(profileId, handle, message) {
     const tempId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : ('00000000-0000-4000-8000-' + Math.random().toString(16).slice(2, 14).padEnd(12, '0'));
+    const nowIso = new Date().toISOString();
     const newNote = {
       id: tempId,
       profileId: profileId,
       handle: handle,
       message: message,
-      timestamp: new Date().toISOString(),
+      timestamp: nowIso,
       response: null,
       responseAt: null,
       read: false,
       replyRead: false
     };
 
-    try {
-      const all = getLocalNotes();
-      all.push(newNote);
-      saveLocalNotes(all);
-    } catch (_) {}
-
     if (isSupabaseConfigured() && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
-      try {
-        const url = SUPABASE_URL + '/rest/v1/player_notes';
-        const resp = await fetch(url, {
-          method: 'POST',
-          headers: authedHeaders(),
-          body: JSON.stringify({
-            id: tempId,
-            profile_id: profileId,
-            handle: handle,
-            message: message,
-            created_at: newNote.timestamp,
-            is_read_by_admin: false,
-            is_read_by_player: false
-          })
-        });
-        if (!resp.ok) {
-          const errText = await resp.text();
-          console.error('[notesStore.sendNote] Cloud write failed ' + resp.status, errText);
-          throw new Error('Supabase save failed: ' + resp.status + ' ' + errText);
-        }
-      } catch (err) {
-        console.warn('[notesStore.sendNote] Failed to push note to cloud:', err);
+      const url = SUPABASE_URL + '/rest/v1/player_notes';
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: authedHeaders(),
+        body: JSON.stringify({
+          id: tempId,
+          profile_id: profileId,
+          handle: handle,
+          message: message,
+          created_at: nowIso,
+          is_read_by_admin: false,
+          is_read_by_player: false
+        })
+      });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        console.error('[notesStore.sendNote] Cloud write failed ' + resp.status, errText);
+        throw new Error('Supabase save failed: ' + resp.status + ' ' + errText);
       }
     }
     return newNote;
   },
 
   async markRepliesRead(profileId) {
-    try {
-      const all = getLocalNotes();
-      let changed = false;
-      all.forEach(n => {
-        if (n.profileId === profileId && n.response && !n.replyRead) {
-          n.replyRead = true;
-          changed = true;
-        }
-      });
-      if (changed) saveLocalNotes(all);
-    } catch (_) {}
-
     if (isSupabaseConfigured() && (typeof navigator === 'undefined' || navigator.onLine !== false) && profileId) {
       try {
         const url = SUPABASE_URL + '/rest/v1/player_notes?profile_id=eq.' + encodeURIComponent(profileId) + '&is_read_by_player=eq.false';
@@ -882,15 +846,6 @@ const notesStore = {
   },
 
   async markAdminRead() {
-    try {
-      const all = getLocalNotes();
-      let changed = false;
-      all.forEach(n => {
-        if (!n.read) { n.read = true; changed = true; }
-      });
-      if (changed) saveLocalNotes(all);
-    } catch (_) {}
-
     if (isSupabaseConfigured() && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
       try {
         const url = SUPABASE_URL + '/rest/v1/player_notes?is_read_by_admin=eq.false';
@@ -905,17 +860,6 @@ const notesStore = {
 
   async replyToNote(noteId, responseText) {
     const nowIso = new Date().toISOString();
-    try {
-      const all = getLocalNotes();
-      const target = all.find(n => n.id === noteId);
-      if (target) {
-        target.response = responseText;
-        target.responseAt = nowIso;
-        target.replyRead = false;
-        saveLocalNotes(all);
-      }
-    } catch (_) {}
-
     if (isSupabaseConfigured() && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
       try {
         const url = SUPABASE_URL + '/rest/v1/player_notes?id=eq.' + encodeURIComponent(noteId);
@@ -936,11 +880,6 @@ const notesStore = {
   },
 
   async deleteNote(noteId) {
-    try {
-      const all = getLocalNotes().filter(n => n.id !== noteId);
-      saveLocalNotes(all);
-    } catch (_) {}
-
     if (isSupabaseConfigured() && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
       try {
         const url = SUPABASE_URL + '/rest/v1/player_notes?id=eq.' + encodeURIComponent(noteId);
@@ -948,7 +887,9 @@ const notesStore = {
           method: 'DELETE',
           headers: authedHeaders()
         });
-      } catch (_) {}
+      } catch (e) {
+        console.warn('[notesStore.deleteNote] Error deleting from cloud:', e);
+      }
     }
   }
 };

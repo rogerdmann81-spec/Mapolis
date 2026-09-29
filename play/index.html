@@ -9092,22 +9092,17 @@ function renderProfile() {
     noteBtn.addEventListener('click', () => {
       if (typeof showNotesModal === 'function') showNotesModal();
     });
-    try {
-      if (typeof getNotes === 'function') {
-        const _updateBadge = () => {
-          const _mn = getNotes().filter(n => n.profileId === profile.id);
+    if (window.notesStore && typeof window.notesStore.fetchNotes === 'function') {
+        window.notesStore.fetchNotes(profile.id).then(function(liveNotes) {
+          if (!Array.isArray(liveNotes)) return;
+          const _mn = liveNotes.filter(n => n.profileId === profile.id || (n.handle && profile.handle && n.handle.toLowerCase() === profile.handle.toLowerCase()));
           const _ur = _mn.filter(n => n.response && !n.replyRead).length;
           let badge = '';
           if (_ur > 0) badge += '<span class="nsg-unread-dot" style="display:inline-block;width:8px;height:8px;background:var(--wrong);border-radius:50%;margin-left:6px;"></span> <span style="font-size:11px;color:var(--wrong);">' + _ur + ' new repl' + (_ur > 1 ? 'ies' : 'y') + '</span>';
           if (_mn.length > 0) badge += ' <span style="font-size:11px;color:var(--dim);">(' + _mn.length + ')</span>';
           if (badge) noteBtn.innerHTML = '📝 Notes to Dev Team' + badge;
-        };
-        _updateBadge();
-        if (window.notesStore && typeof window.notesStore.fetchNotes === 'function') {
-          window.notesStore.fetchNotes(profile.id).then(() => _updateBadge()).catch(() => {});
-        }
+        }).catch(function() {});
       }
-    } catch (e) { /* notes module not ready yet */ }
   }
 
   // ── Visit Star Store button ──
@@ -14029,58 +14024,14 @@ async function showNotesModal() {
   const profile = window.activeProfile;
   if (!profile) return;
 
-  // 1. Fetch latest notes from Supabase before rendering
-  if (window.notesStore && typeof window.notesStore.fetchNotes === "function") {
-    try {
-      await window.notesStore.fetchNotes(profile.id);
-    } catch (_) {}
-  }
-
-  // Match notes by profile.id OR profile.handle (cross-environment consistency)
-  const notes = getNotes().filter(n => n.profileId === profile.id || (n.handle && profile.handle && n.handle.toLowerCase() === profile.handle.toLowerCase()));
-  const allNotes = getNotes();
-  let changed = false;
-  allNotes.forEach(n => {
-    if ((n.profileId === profile.id || (n.handle && profile.handle && n.handle.toLowerCase() === profile.handle.toLowerCase())) && n.response && !n.replyRead) {
-      n.replyRead = true;
-      changed = true;
-    }
-  });
-  if (changed) saveNotes(allNotes);
-  if (window.notesStore && typeof window.notesStore.markRepliesRead === "function") {
-    window.notesStore.markRepliesRead(profile.id);
-  }
-
-  let notesHtml = "";
-  if (notes.length > 0) {
-    notesHtml = "<div style=\"margin-bottom:14px;max-height:240px;overflow-y:auto;padding-right:4px;\">";
-    const sorted = notes.slice().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    for (const note of sorted) {
-      const d = new Date(note.timestamp);
-      const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " at " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-      notesHtml += "<div class=\"nsg-note-card\">";
-      notesHtml += "<div class=\"nsg-note-meta\">You · " + dateStr + "</div>";
-      notesHtml += "<div class=\"nsg-note-msg\">" + (typeof escHtml === "function" ? escHtml(note.message) : note.message) + "</div>";
-      if (note.response) {
-        const rd = new Date(note.responseAt);
-        const rDateStr = rd.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " at " + rd.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-        notesHtml += "<div class=\"nsg-note-reply\">";
-        notesHtml += "<div class=\"nsg-reply-label\">Dev Team · " + rDateStr + "</div>";
-        notesHtml += "<div class=\"nsg-reply-text\">" + (typeof escHtml === "function" ? escHtml(note.response) : note.response) + "</div>";
-        notesHtml += "</div>";
-      }
-      notesHtml += "</div>";
-    }
-    notesHtml += "</div>";
-  }
-
   const overlay = document.createElement("div");
   overlay.className = "nsg-modal-overlay";
   overlay.innerHTML = `
     <div class="nsg-modal">
       <h3>📝 Notes to Dev Team</h3>
-      ${notes.length === 0 ? "<p style=\"text-align:center;color:var(--dim);font-size:12px;margin-bottom:14px;\">No notes yet — send your first one below!</p>" : ""}
-      ${notesHtml}
+      <div id="notes-content-container" style="text-align:center;padding:25px;color:var(--blue-lt);font-size:13px;">
+        ⏳ Loading live notes from Supabase cloud...
+      </div>
       <div style="font-size:11px;color:var(--dim);margin-bottom:6px;font-weight:700;">New Note</div>
       <textarea id="note-compose" placeholder="Bug report, suggestion, something that looked wrong, or just say hi..."></textarea>
       <button class="nsg-btn-primary" id="btn-note-send">Send Note 📬</button>
@@ -14089,38 +14040,79 @@ async function showNotesModal() {
   `;
   document.body.appendChild(overlay);
 
-  document.getElementById("btn-note-send").addEventListener("click", async () => {
+  async function loadAndRenderNotesList() {
+    let cloudNotes = [];
+    if (window.notesStore && typeof window.notesStore.fetchNotes === "function") {
+      try {
+        const fetched = await window.notesStore.fetchNotes(profile.id);
+        if (Array.isArray(fetched)) cloudNotes = fetched;
+      } catch (err) {
+        console.warn("[notes] Supabase fetch error:", err);
+      }
+    }
+
+    const notes = cloudNotes.filter(n => n.profileId === profile.id || (n.handle && profile.handle && n.handle.toLowerCase() === profile.handle.toLowerCase()));
+
+    if (window.notesStore && typeof window.notesStore.markRepliesRead === "function") {
+      window.notesStore.markRepliesRead(profile.id);
+    }
+
+    const container = document.getElementById("notes-content-container");
+    if (!container) return;
+
+    if (notes.length === 0) {
+      container.innerHTML = '<p style="text-align:center;color:var(--dim);font-size:12px;margin:12px 0 16px;">No notes yet — send your first one below!</p>';
+      return;
+    }
+
+    const sorted = notes.slice().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    let html = '<div style="margin-bottom:14px;max-height:240px;overflow-y:auto;padding-right:4px;text-align:left;">';
+    for (const note of sorted) {
+      const d = new Date(note.timestamp);
+      const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " at " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+      html += '<div class="nsg-note-card">';
+      html += '<div class="nsg-note-meta">You · ' + dateStr + '</div>';
+      html += '<div class="nsg-note-msg">' + (typeof escHtml === "function" ? escHtml(note.message) : note.message) + '</div>';
+      if (note.response) {
+        const rd = new Date(note.responseAt);
+        const rDateStr = rd.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " at " + rd.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+        html += '<div class="nsg-note-reply">';
+        html += '<div class="nsg-reply-label">Dev Team · ' + rDateStr + '</div>';
+        html += '<div class="nsg-reply-text">' + (typeof escHtml === "function" ? escHtml(note.response) : note.response) + '</div>';
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    container.innerHTML = html;
+  }
+
+  loadAndRenderNotesList();
+
+  const sendBtn = document.getElementById("btn-note-send");
+  sendBtn.addEventListener("click", async () => {
     const textarea = document.getElementById("note-compose");
     const msg = textarea.value.trim();
     if (!msg) { textarea.focus(); return; }
 
-    const newNote = {
-      id: crypto.randomUUID ? crypto.randomUUID() : ("00000000-0000-4000-8000-" + Math.random().toString(16).slice(2, 14).padEnd(12, "0")),
-      profileId: profile.id,
-      handle: profile.handle,
-      message: msg,
-      timestamp: new Date().toISOString(),
-      response: null,
-      responseAt: null,
-      read: false,
-      replyRead: false
-    };
+    sendBtn.disabled = true;
+    sendBtn.textContent = "Sending...";
 
-    const allN = getNotes();
-    allN.push(newNote);
-    saveNotes(allN);
-
-    if (window.notesStore && typeof window.notesStore.saveNote === "function") {
-      try {
-        await window.notesStore.saveNote(newNote);
-      } catch (err) {
-        console.warn("[notes] Failed to save note to Supabase cloud:", err);
+    try {
+      if (window.notesStore && typeof window.notesStore.sendNote === "function") {
+        await window.notesStore.sendNote(profile.id, profile.handle, msg);
       }
+      if (typeof showToast === "function") showToast("Note sent to Supabase! 📬");
+      textarea.value = "";
+      await loadAndRenderNotesList();
+      if (typeof renderProfile === "function") renderProfile();
+    } catch (err) {
+      console.error("[notes] Failed to send note to Supabase:", err);
+      if (typeof showToast === "function") showToast("Error saving note to Supabase cloud");
+    } finally {
+      sendBtn.disabled = false;
+      sendBtn.textContent = "Send Note 📬";
     }
-
-    if (typeof showToast === "function") showToast("Note sent! Thank you 💙");
-    closeNsgModal();
-    if (typeof renderProfile === "function") renderProfile();
   });
 
   document.getElementById("btn-note-close").addEventListener("click", closeNsgModal);
