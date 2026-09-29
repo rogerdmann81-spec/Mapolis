@@ -726,7 +726,7 @@ async function flushPendingRounds() {
 
 
 // ─── Player Notes (Supabase Integration) ──────────────────────────────────
-const NOTES_KEY = 'nsg_notes';
+var NOTES_KEY = (typeof window !== 'undefined' && window.NOTES_KEY) || 'nsg_notes';
 
 function getLocalNotes() {
   try {

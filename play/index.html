@@ -1187,7 +1187,7 @@ function updateAvatarBars() {
 
 }
 
-const WORLD_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json';
+const WORLD_URL = '/data/countries-50m.json';
 
 async function loadWorldData() {
 
@@ -13983,7 +13983,7 @@ document.addEventListener('keydown', function(e) {
 
 
 // ─── PLAYER NOTES & BETA MODAL ──────────────────────────────────────────────
-const NOTES_KEY = "nsg_notes";
+var NOTES_KEY = (typeof window !== "undefined" && window.NOTES_KEY) ? window.NOTES_KEY : "nsg_notes";
 function getNotes() {
   try {
     var raw = localStorage.getItem(NOTES_KEY);
