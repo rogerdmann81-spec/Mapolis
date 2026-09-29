@@ -407,7 +407,7 @@ async function refreshCloudData() {
 
   try {
     if (window.notesStore && typeof window.notesStore.fetchNotes === "function") {
-      await window.notesStore.fetchNotes();
+      await fetchAdminCloudNotes();
       console.log("[refreshCloudData] notesStore.fetchNotes complete");
     }
   } catch (e) {
@@ -485,13 +485,12 @@ function renderAdmin() {
   });
 }
 
-function adminSetTab(tab) {
+async function adminSetTab(tab) {
   _adminTab = tab;
   renderAdmin();
-  if (tab === 'notes' && window.notesStore && typeof window.notesStore.fetchNotes === 'function') {
-    window.notesStore.fetchNotes().then(function() {
-      if (_adminTab === 'notes') renderAdmin();
-    }).catch(function() {});
+  if (tab === 'notes') {
+    await fetchAdminCloudNotes();
+    if (_adminTab === 'notes') renderAdmin();
   }
 }
 function adminSignOut() {
@@ -1472,21 +1471,32 @@ function showNotesModal() {
   overlay.addEventListener('click', (e) => { if (e.target === overlay) closeNsgModal(); });
 }
 
+var _adminCloudNotes = [];
+var _adminNotesLoading = false;
+
+async function fetchAdminCloudNotes() {
+  _adminNotesLoading = true;
+  try {
+    if (window.notesStore && typeof window.notesStore.fetchNotes === 'function') {
+      _adminCloudNotes = await window.notesStore.fetchNotes();
+      console.log('[fetchAdminCloudNotes] Loaded from Supabase:', _adminCloudNotes.length, 'notes');
+    }
+  } catch (err) {
+    console.error('[fetchAdminCloudNotes] error:', err);
+  } finally {
+    _adminNotesLoading = false;
+  }
+}
+
 function renderAdminNotes() {
-  var notes = getNotes();
-  if ((!notes || !notes.length) && typeof getLocalNotes === 'function') {
-    notes = getLocalNotes();
+  if (_adminNotesLoading) {
+    return '<div style="text-align:center;padding:40px;color:var(--blue-lt);font-size:13px;">⏳ Loading live player notes from Supabase cloud...</div>';
   }
-  if (!notes.length) {
-    return '<div style="text-align:center;padding:30px;color:var(--dim);font-size:12px;">No notes from players yet.</div>';
+  var notes = _adminCloudNotes;
+  if (!notes || !notes.length) {
+    return '<div style="text-align:center;padding:40px;color:var(--dim);font-size:13px;">No notes in Supabase cloud yet.</div>';
   }
-
   var sorted = notes.slice().sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp); });
-
-  var changed = false;
-  var allN = getNotes();
-  allN.forEach(function(n) { if (!n.read) { n.read = true; changed = true; } });
-  if (changed) saveNotes(allN);
   if (window.notesStore && typeof window.notesStore.markAdminRead === 'function') {
     window.notesStore.markAdminRead();
   }
@@ -1501,30 +1511,26 @@ function renderAdminNotes() {
     html += '<div class="nsg-note-card" data-note-id="' + note.id + '">';
     html += '<div class="nsg-note-meta" style="display:flex;justify-content:space-between;align-items:center;">';
     html += '<span><strong style="color:var(--blue-lt);">' + (typeof escHtml === 'function' ? escHtml(note.handle) : note.handle) + '</strong> · ' + dateStr + '</span>';
-    html += '<button class="btn-admin-delete-note" data-note-id="' + note.id + '" style="background:none;color:var(--wrong);font-size:10px;font-weight:700;padding:2px 6px;opacity:.6;">✕</button>';
+    html += '<button class="btn-admin-delete-note" data-note-id="' + note.id + '" style="background:none;color:var(--wrong);font-size:10px;font-weight:700;padding:2px 6px;opacity:.6;cursor:pointer;">✕</button>';
     html += '</div>';
-    html += '<div class="nsg-note-msg">' + (typeof escHtml === 'function' ? escHtml(note.message) : note.message) + '</div>';
+    html += '<div class="nsg-note-msg" style="font-size:13px;line-height:1.4;margin:8px 0;">' + (typeof escHtml === 'function' ? escHtml(note.message) : note.message) + '</div>';
 
     if (note.response) {
       var rd = new Date(note.responseAt);
       var rDateStr = rd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
         + ' at ' + rd.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-      html += '<div class="nsg-note-reply">';
+      html += '<div class="nsg-note-reply" style="margin-top:8px;">';
       html += '<div class="nsg-reply-label">Your Reply · ' + rDateStr + '</div>';
-      html += '<div class="nsg-reply-text">' + (typeof escHtml === 'function' ? escHtml(note.response) : note.response) + '</div>';
+      html += '<div class="nsg-reply-text" style="font-size:12px;color:rgba(255,255,255,.9);">' + (typeof escHtml === 'function' ? escHtml(note.response) : note.response) + '</div>';
+      html += '<button class="btn-admin-reply" data-note-id="' + note.id + '" style="margin-top:6px;background:none;border:none;color:var(--blue-lt);font-size:11px;padding:0;font-weight:700;cursor:pointer;">Edit Reply</button>';
+      html += '</div>';
+    } else {
+      html += '<div style="margin-top:8px;">';
+      html += '<button class="btn-admin-reply" data-note-id="' + note.id + '" style="background:rgba(59,110,248,.15);border:1px solid rgba(91,143,255,.3);border-radius:6px;padding:4px 10px;color:var(--blue-lt);font-size:11px;font-weight:700;cursor:pointer;">💬 Reply</button>';
       html += '</div>';
     }
-
-    html += '<div style="margin-top:8px;">';
-    if (note.response) {
-      html += '<button class="btn-admin-re-reply" data-note-id="' + note.id + '" style="background:none;color:var(--blue-lt);font-size:11px;font-weight:700;padding:2px 0;">Edit Reply</button>';
-    } else {
-      html += '<button class="btn-admin-reply" data-note-id="' + note.id + '" style="background:rgba(59,110,248,.15);border:1px solid rgba(91,143,255,.25);border-radius:8px;padding:5px 12px;color:var(--blue-lt);font-size:11px;font-weight:700;font-family:\'Nunito\',sans-serif;">Reply</button>';
-    }
-    html += '</div>';
     html += '</div>';
   }
-
   return html;
 }
 
@@ -1542,7 +1548,7 @@ function wireAdminNotes() {
       var noteId = btn.getAttribute('data-note-id');
       if (confirm('Delete this note?')) {
         var allN = getNotes().filter(function(n) { return n.id !== noteId; });
-        saveNotes(allN);
+        _adminCloudNotes = _adminCloudNotes.filter(function(n) { return n.id !== noteId; });
         if (window.notesStore && typeof window.notesStore.deleteNote === 'function') {
           window.notesStore.deleteNote(noteId);
         }
@@ -1553,8 +1559,7 @@ function wireAdminNotes() {
 }
 
 function showAdminReplyModal(noteId) {
-  var notes = getNotes();
-  var note = notes.find(function(n) { return n.id === noteId; });
+  var note = _adminCloudNotes.find(function(n) { return n.id === noteId; });
   if (!note) return;
 
   var overlay = document.createElement('div');
@@ -1582,7 +1587,6 @@ function showAdminReplyModal(noteId) {
       target.response = msg;
       target.responseAt = new Date().toISOString();
       target.replyRead = false;
-      saveNotes(allN);
       if (window.notesStore && typeof window.notesStore.replyToNote === 'function') {
         window.notesStore.replyToNote(noteId, msg).catch(function(e) { console.warn('Cloud reply error:', e); });
       }

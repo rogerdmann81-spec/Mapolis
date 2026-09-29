@@ -844,7 +844,11 @@ const notesStore = {
             is_read_by_player: false
           })
         });
-        if (!resp.ok) console.warn('[notesStore.sendNote] Cloud write status ' + resp.status);
+        if (!resp.ok) {
+          const errText = await resp.text();
+          console.error('[notesStore.sendNote] Cloud write failed ' + resp.status, errText);
+          throw new Error('Supabase save failed: ' + resp.status + ' ' + errText);
+        }
       } catch (err) {
         console.warn('[notesStore.sendNote] Failed to push note to cloud:', err);
       }
