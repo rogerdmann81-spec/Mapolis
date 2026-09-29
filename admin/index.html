@@ -1339,7 +1339,7 @@ function renderProfileHeatmap(containerId, dayHistory) {
 })();
 
 
-const NOTES_KEY = 'nsg_notes';
+var NOTES_KEY = (typeof window !== 'undefined' && window.NOTES_KEY) || 'nsg_notes';
 
 function getNotes() {
   try {
