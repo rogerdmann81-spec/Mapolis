@@ -496,3 +496,26 @@ We completed the total decoupling and isolation of Master Admin management code 
    - Clean HTML Separation: Extracted all `#s-admin` elements, master notes tables, and system config controls out of `play/index.html` into `admin/index.html`.
    - Preserved Classroom Dashboard: Left the educator classroom hub (`#s-edu-dash`, `renderEduDash()`) intact within `play/index.html` so teacher accounts can run classrooms in-app.
    - Shared Foundation: Common models, avatar generation, Supabase authentication, and `syncStore` / `notesStore` remain centrally maintained in `assets/shared.js`, imported by both bundles.
+
+----------------------------------------------------------------------------------------------------------
+14. Completed Task: Terminology Modernization (Handle/Restore → Username/Sign In)
+Status: ✅ Complete
+Target: play/index.html, index.html
+Branch: pre-beta2
+
+We modernized all user-facing onboarding, profile creation, and account recovery terminology across the application to standard consumer terminology: "Username" and "Sign In".
+
+1. What It Is:
+   - "Restore Profile" → "Sign In":
+     - The profile card option in `#prof-grid` now clearly reads **"Sign In"** (replacing "Restore Profile").
+     - The recovery modal is titled **"Sign In"** with tabs for **"Username + Password"** and **"Parent Email"**.
+     - Primary submission button displays **"Sign In"** (with active state **"Signing in..."**).
+   - "Handle" → "Username":
+     - Profile creation form field label updated to **"Username (Display Name)"**.
+     - Input placeholders and validation errors updated (e.g. "Enter your username", "Username must be at least 2 characters", "That username is taken").
+     - Profile view header icon opens the **"Change Username"** modal.
+     - Recovery helper notes updated to: "🔑 If you clear your browser, your username + password can sign you back into your profile."
+
+2. Why We Chose It:
+   - User Familiarity & Accessibility: For both K-12 students and general users, "Restore" and "Handle" felt technical or ambiguous. "Sign In" and "Username" are universally understood standards.
+   - Internal Data Layer Unchanged: Underlying database columns and internal code models retain `handle` and RPC signatures (`p_handle`, `restore_profile`) to preserve 100% backward compatibility with Supabase schemas, RLS policies, and stored session data.

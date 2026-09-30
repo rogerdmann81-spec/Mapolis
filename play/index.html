@@ -1602,7 +1602,7 @@ function renderProfileGrid() {
   // and rehydrates the profile from the server.
   const restoreCard = document.createElement('div');
   restoreCard.className = 'prof-card new-card';
-  restoreCard.innerHTML = '<div class="new-plus" style="color:var(--blue-lt);">↻</div><h3 style="color:var(--dim)">Restore Profile</h3>';
+  restoreCard.innerHTML = '<div class="new-plus" style="color:var(--blue-lt);">↻</div><h3 style="color:var(--dim)">Sign In</h3>';
   restoreCard.addEventListener('click', openRestoreProfileModal);
   grid.appendChild(restoreCard);
 
@@ -1623,7 +1623,7 @@ function openRenameHandleModal() {
 
   panel.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <h2 style="font-family:'Fredoka One',sans-serif;font-size:20px;color:#fff;margin:0;">Change Handle</h2>
+      <h2 style="font-family:'Fredoka One',sans-serif;font-size:20px;color:#fff;margin:0;">Change Username</h2>
       <button id="rename-close" style="background:none;color:var(--dim);font-size:20px;padding:4px 8px;border:none;cursor:pointer;">×</button>
     </div>
 
@@ -1631,7 +1631,7 @@ function openRenameHandleModal() {
       Current: <strong style="color:#fff;">${escHtml(activeProfile.handle)}</strong>
     </div>
 
-    <div class="field-lbl">New Handle</div>
+    <div class="field-lbl">New Username</div>
     <input class="field-in" type="text" id="rename-input" placeholder="e.g. MapMaster99" maxlength="20" value="${escHtml(activeProfile.handle)}" autocomplete="off" spellcheck="false">
 
     <div style="font-size:10px;color:var(--dim);margin-top:8px;line-height:1.4;">
@@ -1667,7 +1667,7 @@ function openRenameHandleModal() {
 
   document.getElementById('rename-submit').addEventListener('click', function() {
     var raw = (inputEl && inputEl.value) ? inputEl.value.trim() : '';
-    if (!raw) { showToast('Enter a new handle'); return; }
+    if (!raw) { showToast('Enter a new username'); return; }
 
     // No-op: user submitted their current handle unchanged
     if (raw === activeProfile.handle) { close(); return; }
@@ -1686,7 +1686,7 @@ function openRenameHandleModal() {
     // TODO(phase-b-9): swap for async Supabase uniqueness RPC when
     // the backend lands.
     if (isHandleTaken(raw, activeProfile.id)) {
-      showToast('That handle is taken — pick another');
+      showToast('That username is taken — pick another');
       if (inputEl) { inputEl.focus(); inputEl.select && inputEl.select(); }
       return;
     }
@@ -1700,7 +1700,7 @@ function openRenameHandleModal() {
     }
 
     close();
-    showToast('Handle updated: ' + prevHandle + ' → ' + raw);
+    showToast('Username updated: ' + prevHandle + ' → ' + raw);
     if (typeof renderProfile === 'function') renderProfile();
   });
 }
@@ -1719,22 +1719,22 @@ function openRestoreProfileModal() {
 
   panel.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <h2 style="font-family:'Fredoka One',sans-serif;font-size:20px;color:#fff;margin:0;">Restore Profile</h2>
+      <h2 style="font-family:'Fredoka One',sans-serif;font-size:20px;color:#fff;margin:0;">Sign In</h2>
       <button id="restore-close" style="background:none;color:var(--dim);font-size:20px;padding:4px 8px;border:none;cursor:pointer;">×</button>
     </div>
 
     <div style="display:flex;gap:6px;margin-bottom:14px;">
-      <button id="restore-tab-pw" class="restore-tab restore-tab-active" style="flex:1;padding:10px;background:var(--bg-panel);color:#fff;font-weight:700;font-size:12px;border:1px solid var(--blue-lt);border-radius:10px;cursor:pointer;">Handle + Password</button>
+      <button id="restore-tab-pw" class="restore-tab restore-tab-active" style="flex:1;padding:10px;background:var(--bg-panel);color:#fff;font-weight:700;font-size:12px;border:1px solid var(--blue-lt);border-radius:10px;cursor:pointer;">Username + Password</button>
       <button id="restore-tab-email" class="restore-tab" style="flex:1;padding:10px;background:var(--bg-panel);color:var(--dim);font-weight:700;font-size:12px;border:1px solid var(--border);border-radius:10px;cursor:pointer;">Parent Email</button>
     </div>
 
     <div id="restore-panel-pw">
       <div style="font-size:11px;color:var(--dim);margin-bottom:8px;line-height:1.4;">
-        Enter the handle and password you set when creating your profile.
+        Enter the username and password you set when creating your profile.
       </div>
-      <input class="field-in" type="text" id="restore-handle-input" placeholder="Your handle" maxlength="20" autocomplete="off" spellcheck="false" style="margin-bottom:6px;">
+      <input class="field-in" type="text" id="restore-handle-input" placeholder="Your username" maxlength="20" autocomplete="off" spellcheck="false" style="margin-bottom:6px;">
       <input class="field-in" type="password" id="restore-pw-input" placeholder="Your password" autocomplete="current-password">
-      <button type="button" id="restore-pw-submit" class="btn-primary" style="width:100%;margin-top:10px;">Restore</button>
+      <button type="button" id="restore-pw-submit" class="btn-primary" style="width:100%;margin-top:10px;">Sign In</button>
     </div>
 
     <div id="restore-panel-email" style="display:none;">
@@ -1742,14 +1742,14 @@ function openRestoreProfileModal() {
         Enter the parent or guardian email that was used when this profile was created.
       </div>
       <input class="field-in" type="email" id="restore-email-input" placeholder="parent@example.com" maxlength="254" autocomplete="off" spellcheck="false">
-      <button type="button" id="restore-email-submit" class="btn-primary" style="width:100%;margin-top:10px;">Restore</button>
+      <button type="button" id="restore-email-submit" class="btn-primary" style="width:100%;margin-top:10px;">Sign In</button>
       <div style="font-size:10px;color:var(--dim);margin-top:10px;line-height:1.4;">
-        ⚠️ Pre-launch: this looks up profiles on the current device only. Cross-device recovery will be enabled when the backend comes online.
+        ⚠️ Pre-launch: this looks up profiles on the current device only. Cross-device sign-in is enabled when the backend is connected.
       </div>
     </div>
 
     <div style="font-size:10px;color:var(--dim);margin-top:14px;padding-top:12px;border-top:1px solid var(--border);line-height:1.4;">
-      Don't have either? Your profile lives in this browser's storage — if you haven't cleared it, just go back and tap your profile card.
+      Don't have either? Your profile is saved in this browser — if you haven't cleared it, just go back and tap your profile card.
     </div>
   `;
 
@@ -1788,15 +1788,15 @@ function openRestoreProfileModal() {
     var btn = document.getElementById('restore-pw-submit');
     var handle = (document.getElementById('restore-handle-input').value || '').trim();
     var pw = document.getElementById('restore-pw-input').value || '';
-    if (!handle) { showToast('Enter your handle'); return; }
+    if (!handle) { showToast('Enter your username'); return; }
     if (!pw) { showToast('Enter your password'); return; }
 
     var hash;
     try { hash = await hashPassword(pw); }
     catch (e) { showToast('Could not process password — try again'); return; }
 
-    var origBtnText = btn ? btn.textContent : 'Restore';
-    if (btn) { btn.disabled = true; btn.textContent = 'Restoring...'; }
+    var origBtnText = btn ? btn.textContent : 'Sign In';
+    if (btn) { btn.disabled = true; btn.textContent = 'Signing in...'; }
 
     var match = null;
     try {
@@ -1819,7 +1819,7 @@ function openRestoreProfileModal() {
           if (!resp.ok) {
             const errText = await resp.text();
             console.error('[restore_profile] backend error:', errText, resp.status);
-            let userMsg = 'Handle or password not recognised';
+            let userMsg = 'Username or password not recognised';
             try {
               const parsed = JSON.parse(errText);
               const msg = (parsed && (parsed.message || parsed.error || parsed.hint || '')) || '';
@@ -1828,9 +1828,9 @@ function openRestoreProfileModal() {
               } else if (msg.toLowerCase().includes('not authenticated')) {
                 userMsg = 'Authentication error — please refresh the page and try again';
               } else if (msg.toLowerCase().includes('invalid handle') || msg.toLowerCase().includes('password')) {
-                userMsg = 'Handle or password not recognised';
+                userMsg = 'Username or password not recognised';
               } else if (resp.status >= 500) {
-                userMsg = 'Server error during restore — please try again in a moment';
+                userMsg = 'Server error during sign in — please try again in a moment';
               }
             } catch (parseErr) {
               if (errText.includes('frozen')) userMsg = 'That profile has been frozen by an administrator';
@@ -1856,7 +1856,7 @@ function openRestoreProfileModal() {
           }
         } catch (err) {
           console.error("[restore_profile] Fetch error:", err);
-          showToast('Network error while restoring profile — check your connection');
+          showToast('Network error while signing in — check your connection');
           return;
         }
       } else {
@@ -1868,7 +1868,7 @@ function openRestoreProfileModal() {
           }
         }
         if (!match) {
-          showToast('Handle or password not recognised');
+          showToast('Username or password not recognised');
           return;
         }
         if (match.frozen) {
@@ -1902,8 +1902,8 @@ function openRestoreProfileModal() {
       return;
     }
     var norm = normalizeEmail(raw);
-    var origBtnText = btn ? btn.textContent : 'Restore';
-    if (btn) { btn.disabled = true; btn.textContent = 'Restoring...'; }
+    var origBtnText = btn ? btn.textContent : 'Sign In';
+    if (btn) { btn.disabled = true; btn.textContent = 'Signing in...'; }
 
     var match = null;
     try {
@@ -1937,7 +1937,7 @@ function openRestoreProfileModal() {
               } else if (msg.toLowerCase().includes('email not found') || msg.toLowerCase().includes('not found')) {
                 userMsg = 'No profile matches that parent email';
               } else if (resp.status >= 500) {
-                userMsg = 'Server error during restore — please try again in a moment';
+                userMsg = 'Server error during sign in — please try again in a moment';
               }
             } catch (parseErr) {
               if (errText.includes('frozen')) userMsg = 'That profile has been frozen by an administrator';
@@ -1962,7 +1962,7 @@ function openRestoreProfileModal() {
           }
         } catch (err) {
           console.error("[restore_profile_by_email] Fetch error:", err);
-          showToast('Network error while restoring profile — check your connection');
+          showToast('Network error while signing in — check your connection');
           return;
         }
       } else {
@@ -2145,7 +2145,7 @@ function renderCreateStep() {
 
         <div>
 
-          <div class="field-lbl">Handle (Display Name)</div>
+          <div class="field-lbl">Username (Display Name)</div>
 
           <input class="field-in" type="text" id="c-handle"
 
@@ -2240,7 +2240,7 @@ function renderCreateStep() {
           <input class="field-in" type="password" id="c-password" placeholder="Min 8 characters" autocomplete="new-password" style="margin-bottom:6px;">
           <input class="field-in" type="password" id="c-password-confirm" placeholder="Confirm password" autocomplete="new-password">
           <div style="font-size:10px;color:var(--dim);margin-top:6px;line-height:1.4;">
-            🔑 If you clear your browser, your handle + password can restore your profile.
+            🔑 If you clear your browser, your username + password can sign you back into your profile.
           </div>
         `;
       } else {
@@ -2249,7 +2249,7 @@ function renderCreateStep() {
           <div class="field-lbl">Parent or Guardian Email <span style="color:var(--dim);font-weight:400;">(optional)</span></div>
           <input class="field-in" type="email" id="c-parent-email" placeholder="parent@example.com" maxlength="254" autocomplete="off" spellcheck="false">
           <div style="font-size:10px;color:var(--dim);margin-top:6px;line-height:1.4;">
-            👨‍👩‍👧 <strong style="color:var(--blue-lt);">Ask a parent or guardian first.</strong> We'll use this email to help you restore your profile if you clear your browser, and to ask for their permission before any purchases.
+            👨‍👩‍👧 <strong style="color:var(--blue-lt);">Ask a parent or guardian first.</strong> We'll use this email to help you sign back into your profile if you clear your browser, and to ask for their permission before any purchases.
             <br><br>
             If you skip this, you'll still be able to play — but we won't be able to help you recover your profile if you lose it.
           </div>
@@ -2269,7 +2269,7 @@ function renderCreateStep() {
       const y = document.getElementById('c-year').value;
       const co = document.getElementById('c-country').value;
 
-      if (!h) { showToast('Please enter a handle!'); return; }
+      if (!h) { showToast('Please enter a username!'); return; }
 
       const v = validateHandle(h);
       if (!v.ok) {
@@ -2285,7 +2285,7 @@ function renderCreateStep() {
       // device already owns the handle. TODO(phase-b-9): swap for an
       // async Supabase RPC once the backend lands.
       if (isHandleTaken(h, null)) {
-        showToast('That handle is taken — pick another');
+        showToast('That username is taken — pick another');
         const el = document.getElementById('c-handle');
         if (el) { el.focus(); el.select && el.select(); }
         return;
@@ -2352,7 +2352,7 @@ function renderCreateStep() {
       try {
         await finalizeProfile(goToAvatar);
       } catch (err) {
-        showToast('That handle is taken — pick another');
+        showToast('That username is taken — pick another');
         const el = document.getElementById('c-handle');
         if (el) { el.focus(); el.select && el.select(); }
         return;
@@ -4791,8 +4791,8 @@ function generateSafeHandle() {
 // safe alternative the user can accept with one tap.
 function handleRejectToast(reason) {
   switch (reason) {
-    case 'too_short':    return 'Handle must be at least 2 characters';
-    case 'too_long':     return 'Handle must be 20 characters or fewer';
+    case 'too_short':    return 'Username must be at least 2 characters';
+    case 'too_long':     return 'Username must be 20 characters or fewer';
     case 'name_pattern': return "Let's skip real names — try something fun!";
     case 'profanity':    return "Let's pick a different name — try something fun!";
     default:             return "Let's pick a different name — try something fun!";
@@ -8499,7 +8499,7 @@ function renderProfile() {
     <div style="display:inline-block;">${avatarSvg}</div>
     <h2 style="font-family:'Fredoka One',sans-serif;font-size:22px;color:#fff;margin-top:8px;display:inline-flex;align-items:center;gap:8px;">
       <span>${escHtml(profile.handle)}</span>
-      <button id="btn-rename-handle" title="Change handle" style="background:none;border:none;color:var(--dim);font-size:14px;cursor:pointer;padding:2px 6px;border-radius:6px;">✏️</button>
+      <button id="btn-rename-handle" title="Change username" style="background:none;border:none;color:var(--dim);font-size:14px;cursor:pointer;padding:2px 6px;border-radius:6px;">✏️</button>
     </h2>
     <div style="font-size:12px;color:var(--dim);">${escHtml(profile.country || '')} ${profile.birthYear ? '· Born ' + profile.birthYear : ''}</div>
     <div style="margin-top:6px;">
