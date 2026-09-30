@@ -747,16 +747,64 @@ function saveLocalNotes(notes) {
   } catch (e) {}
 }
 
+function _parseThread(rawMsg, rawCreatedAt, handle, rawAdminResp, rawAdminRespAt) {
+  var messages = [];
+  var isClosed = false;
+
+  if (typeof rawMsg === 'string' && rawMsg.trim().startsWith('{')) {
+    try {
+      var parsed = JSON.parse(rawMsg);
+      if (Array.isArray(parsed.messages)) {
+        messages = parsed.messages;
+        isClosed = !!parsed.isClosed;
+      }
+    } catch (_) {}
+  } else if (typeof rawMsg === 'string' && rawMsg.trim().startsWith('[')) {
+    try {
+      var arr = JSON.parse(rawMsg);
+      if (Array.isArray(arr)) {
+        messages = arr;
+      }
+    } catch (_) {}
+  }
+
+  // Fallback to legacy single message + admin_response
+  if (!messages.length) {
+    if (rawMsg) {
+      messages.push({
+        sender: 'player',
+        handle: handle || 'Player',
+        text: rawMsg,
+        at: rawCreatedAt || new Date().toISOString()
+      });
+    }
+    if (rawAdminResp) {
+      messages.push({
+        sender: 'admin',
+        handle: 'Dev Team',
+        text: rawAdminResp,
+        at: rawAdminRespAt || new Date().toISOString()
+      });
+    }
+  }
+
+  return { messages: messages, isClosed: isClosed };
+}
+
 function _mapRowToNote(r) {
   if (!r) return null;
+  var threadInfo = _parseThread(r.message, r.created_at, r.handle, r.admin_response, r.admin_response_at);
+  var lastMsg = threadInfo.messages[threadInfo.messages.length - 1];
   return {
     id: r.id,
     profileId: r.profile_id,
     handle: r.handle,
     message: r.message,
+    thread: threadInfo.messages,
+    isClosed: threadInfo.isClosed,
     timestamp: r.created_at,
-    response: r.admin_response || null,
-    responseAt: r.admin_response_at || null,
+    response: r.admin_response || (lastMsg && lastMsg.sender === 'admin' ? lastMsg.text : null),
+    responseAt: r.admin_response_at || (lastMsg && lastMsg.sender === 'admin' ? lastMsg.at : null),
     read: !!r.is_read_by_admin,
     replyRead: !!r.is_read_by_player
   };
@@ -804,11 +852,21 @@ const notesStore = {
   async sendNote(profileId, handle, message) {
     const tempId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : ('00000000-0000-4000-8000-' + Math.random().toString(16).slice(2, 14).padEnd(12, '0'));
     const nowIso = new Date().toISOString();
+    const threadData = {
+      isClosed: false,
+      messages: [
+        { sender: 'player', handle: handle, text: message, at: nowIso }
+      ]
+    };
+    const threadJson = JSON.stringify(threadData);
+
     const newNote = {
       id: tempId,
       profileId: profileId,
       handle: handle,
-      message: message,
+      message: threadJson,
+      thread: threadData.messages,
+      isClosed: false,
       timestamp: nowIso,
       response: null,
       responseAt: null,
@@ -825,7 +883,7 @@ const notesStore = {
           id: tempId,
           profile_id: profileId,
           handle: handle,
-          message: message,
+          message: threadJson,
           created_at: nowIso,
           is_read_by_admin: false,
           is_read_by_player: false
@@ -838,6 +896,53 @@ const notesStore = {
       }
     }
     return newNote;
+  },
+
+  async appendPlayerReply(noteId, handle, replyText) {
+    const nowIso = new Date().toISOString();
+    if (isSupabaseConfigured() && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
+      try {
+        const getUrl = SUPABASE_URL + '/rest/v1/player_notes?id=eq.' + encodeURIComponent(noteId);
+        const getResp = await fetch(getUrl, { headers: notesHeaders() });
+        if (!getResp.ok) throw new Error('Fetch note failed ' + getResp.status);
+        const rows = await getResp.json();
+        if (!rows || !rows.length) throw new Error('Note not found');
+        const row = rows[0];
+
+        const threadInfo = _parseThread(row.message, row.created_at, row.handle, row.admin_response, row.admin_response_at);
+        if (threadInfo.isClosed) {
+          throw new Error('This conversation has been closed by admin.');
+        }
+
+        threadInfo.messages.push({
+          sender: 'player',
+          handle: handle || row.handle,
+          text: replyText,
+          at: nowIso
+        });
+
+        const threadJson = JSON.stringify({
+          isClosed: false,
+          messages: threadInfo.messages
+        });
+
+        const patchUrl = SUPABASE_URL + '/rest/v1/player_notes?id=eq.' + encodeURIComponent(noteId);
+        const patchResp = await fetch(patchUrl, {
+          method: 'PATCH',
+          headers: notesHeaders(),
+          body: JSON.stringify({
+            message: threadJson,
+            is_read_by_admin: false,
+            is_read_by_player: true
+          })
+        });
+        if (!patchResp.ok) console.warn('[notesStore.appendPlayerReply] Cloud update status:', patchResp.status);
+        return threadInfo.messages;
+      } catch (e) {
+        console.error('[notesStore.appendPlayerReply] Error:', e);
+        throw e;
+      }
+    }
   },
 
   async markRepliesRead(profileId) {
@@ -870,19 +975,79 @@ const notesStore = {
     const nowIso = new Date().toISOString();
     if (isSupabaseConfigured() && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
       try {
+        const getUrl = SUPABASE_URL + '/rest/v1/player_notes?id=eq.' + encodeURIComponent(noteId);
+        const getResp = await fetch(getUrl, { headers: notesHeaders() });
+        let threadJson = null;
+        if (getResp.ok) {
+          const rows = await getResp.json();
+          if (rows && rows.length) {
+            const row = rows[0];
+            const threadInfo = _parseThread(row.message, row.created_at, row.handle, row.admin_response, row.admin_response_at);
+            threadInfo.messages.push({
+              sender: 'admin',
+              handle: 'Dev Team',
+              text: responseText,
+              at: nowIso
+            });
+            threadJson = JSON.stringify({
+              isClosed: threadInfo.isClosed,
+              messages: threadInfo.messages
+            });
+          }
+        }
+
         const url = SUPABASE_URL + '/rest/v1/player_notes?id=eq.' + encodeURIComponent(noteId);
+        const patchBody = {
+          admin_response: responseText,
+          admin_response_at: nowIso,
+          is_read_by_player: false
+        };
+        if (threadJson) {
+          patchBody.message = threadJson;
+        }
+
         const resp = await fetch(url, {
           method: 'PATCH',
           headers: notesHeaders(),
-          body: JSON.stringify({
-            admin_response: responseText,
-            admin_response_at: nowIso,
-            is_read_by_player: false
-          })
+          body: JSON.stringify(patchBody)
         });
         if (!resp.ok) console.warn('[notesStore.replyToNote] Cloud update status: ' + resp.status);
       } catch (e) {
         console.warn('[notesStore.replyToNote] Error writing reply to cloud:', e);
+      }
+    }
+  },
+
+  async toggleCloseConversation(noteId, shouldClose) {
+    const nowIso = new Date().toISOString();
+    if (isSupabaseConfigured() && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
+      try {
+        const getUrl = SUPABASE_URL + '/rest/v1/player_notes?id=eq.' + encodeURIComponent(noteId);
+        const getResp = await fetch(getUrl, { headers: notesHeaders() });
+        if (!getResp.ok) return;
+        const rows = await getResp.json();
+        if (!rows || !rows.length) return;
+        const row = rows[0];
+
+        const threadInfo = _parseThread(row.message, row.created_at, row.handle, row.admin_response, row.admin_response_at);
+        threadInfo.isClosed = !!shouldClose;
+
+        const threadJson = JSON.stringify({
+          isClosed: threadInfo.isClosed,
+          messages: threadInfo.messages
+        });
+
+        const patchUrl = SUPABASE_URL + '/rest/v1/player_notes?id=eq.' + encodeURIComponent(noteId);
+        await fetch(patchUrl, {
+          method: 'PATCH',
+          headers: notesHeaders(),
+          body: JSON.stringify({
+            message: threadJson
+          })
+        });
+        return threadInfo.isClosed;
+      } catch (e) {
+        console.error('[notesStore.toggleCloseConversation] Error:', e);
       }
     }
   },
@@ -901,7 +1066,6 @@ const notesStore = {
     }
   }
 };
-
 if (typeof window !== 'undefined') {
   window.syncStore = syncStore;
   window.mapolisUUID = mapolisUUID;
