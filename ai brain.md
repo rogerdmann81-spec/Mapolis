@@ -470,24 +470,29 @@ Status: ✅ Complete
 Target: play/index.html, admin/index.html, netlify.toml
 Branch: pre-beta2
 
-We completed the total decoupling and isolation of administrative and classroom management code from the client player bundle (play/index.html), removing all admin screens, admin styles, and privileged DOM elements from student gameplay builds.
+We completed the total decoupling and isolation of Master Admin management code from the client gameplay bundle (play/index.html), purging 1,287 lines of privileged admin screens, styles, and control scripts.
 
 1. What It Is:
-   - Dedicated Admin Entry Point (/admin/):
-     - All administrative UI, including Master Admin (`#s-admin`), educator classroom dashboards (`#s-edu-dash`), curriculum management, player note responses, and bulk account administration, lives exclusively in `admin/index.html`.
+   - Dedicated Master Admin Entry Point (/admin/):
+     - Reserved strictly for system administrators, engineers, and facilitators with independent auth verification.
+     - Contains the Master Admin suite (`#s-admin`), system settings, player note management & replies inbox, curriculum controls, and developer maintenance tools in `admin/index.html`.
+     - Educators do NOT get access to the Master Admin portal (/admin/).
+   - In-Game Educator Dashboard Retained in Gameplay Bundle (/play/):
+     - The Educator Classroom Dashboard (`#s-edu-dash`) remains natively embedded inside `play/index.html`.
+     - Teachers, homeschool parents, and classroom leaders manage student rosters, monitor active classroom sessions, view student progress, and assign curriculum directly from within the game interface using teacher role verification.
    - Stripped & Hardened Player Bundle (/play/):
-     - `play/index.html` contains zero admin DOM structures (`#s-admin`, `#admin-tabs`, `#admin-notes-list` are completely removed).
-     - No admin JS functions (`renderAdmin()`, `wireAdminNotes()`, etc.) are exposed or shipped to student devices.
-     - Protects against student tampering, inspecting dev controls, or triggering admin routes from console.
-   - Path-Based Routing & Access Boundaries:
-     - `/play/` is strictly for students and players.
-     - `/admin/` is reserved for teachers, facilitators, and system administrators with independent auth verification.
+     - `play/index.html` contains zero Master Admin DOM structures (`#s-admin`, `#admin-tabs`, `#admin-notes-list` are completely purged).
+     - No administrative JS functions (`renderAdmin()`, `wireAdminNotes()`, etc.) or easter-egg hotkeys are exposed or shipped to student devices.
+     - Protects against student tampering, inspecting developer controls, or triggering admin routes from the browser console.
+   - Exact Codebase Savings:
+     - **1,287 lines of code purged** directly from `play/index.html` in the decoupling refactor (diffstat: -1,287 lines in play/index.html, +63 lines scaffolding).
 
 2. Why We Chose It:
-   - FERPA / COPPA Boundary Isolation: Shipping teacher administrative logic, bulk student tables, or debug controls inside student client bundles violates strict security hygiene. Decoupling ensures that even a malicious user inspecting source code on a Chromebook has zero access to admin templates or scripts.
-   - Performance & Bundle Sizing: Stripping hundreds of lines of administrative table markup, charts, and management workflows reduces `play/index.html` parse time and DOM footprint on low-powered school hardware.
+   - FERPA / COPPA Privilege Separation: Master admin tools (database inspectors, global player notes, system config) should never ship in client bundles downloaded to student devices. Purging it guarantees zero client-side attack surface for master tools.
+   - Educator Accessibility: Retaining the Educator Dashboard (`#s-edu-dash`) inside `play/index.html` allows teachers to seamlessly run student activities and review live student progress from their own classroom laptops without having to navigate to an external backend administrative site.
+   - Performance & Bundle Sizing: Removing 1,287 lines of administrative HTML and logic significantly accelerates parse, compile, and render time on low-powered school Chromebooks and tablets.
 
 3. How We Achieved It:
-   - Clean HTML Separation: Extracted all `#s-admin` elements, teacher notes tables, curriculum controls, and classroom management panels out of `play/index.html` into `admin/index.html`.
-   - Shared Foundation: Common models, avatar generation, Supabase authentication, and `syncStore` / `notesStore` remain centrally maintained in `assets/shared.js`, which is imported by both `play/index.html` and `admin/index.html`.
-   - Clean Redirection: Verified routing in `netlify.toml` and server proxies so requests to `/admin` route to the dedicated admin suite, while game sessions live under `/play/`.
+   - Clean HTML Separation: Extracted all `#s-admin` elements, master notes tables, and system config controls out of `play/index.html` into `admin/index.html`.
+   - Preserved Classroom Dashboard: Left the educator classroom hub (`#s-edu-dash`, `renderEduDash()`) intact within `play/index.html` so teacher accounts can run classrooms in-app.
+   - Shared Foundation: Common models, avatar generation, Supabase authentication, and `syncStore` / `notesStore` remain centrally maintained in `assets/shared.js`, imported by both bundles.
