@@ -415,3 +415,44 @@ We wired the "Notes to Dev Team" feature on the player profile to Supabase and c
      - Updated btn-note-send handler in showNotesModal() to invoke notesStore.sendNote() with a responsive "Sending..." button state and toast confirmation.
      - Added background cloud polling to renderProfile() so unread reply badges update automatically.
      - Updated Master Admin panel (renderAdminNotes and wireAdminNotes) to sync reply creations and deletions with Supabase.
+
+----------------------------------------------------------------------------------------------------------
+12. Completed Task: Mobile Load Screen Responsive Fix & Unified Globe Component (MapolisGlobe)
+Status: ✅ Complete
+Target: play/styles.css, styles.css, play/index.html, index.html, assets/mapolis-globe.js
+Branch: pre-beta2
+
+We resolved the mobile phone layout overflow on the initial load screen and consolidated three redundant spinning globe implementations into a single, high-performance, battery-friendly singleton.
+
+1. What It Is:
+   - Responsive Mobile Load/Title Screen: Fixed viewport sizing issues where hardcoded 500px dimensions on .globe-wrap and 108px top padding caused horizontal scrolling, misaligned text, and pushed the "Let's Go!" button below the fold on mobile devices.
+   - Inline Action Flow: Repositioned "Credits" and "Privacy & Safety" from absolute viewport corner pinning to an inline cluster directly beneath the "Let's Go!" button with comfortable mobile touch targets.
+   - Unified MapolisGlobe Singleton (assets/mapolis-globe.js): Replaced 3 independent spinning globe SVG implementations (#title-globe, #gp-globe, #h2h-queue-globe) with a single, shared D3 orthographic projection, graticule mesh, land features, and animated metro ping renderer.
+
+2. Why We Chose It:
+   - Mobile Usability: On iPhones and smaller mobile screens, fixed desktop widths clipped elements and pushed primary game actions off-screen.
+   - Resource & Battery Efficiency: Running 3 separate requestAnimationFrame loops meant up to ~180 projection frame calculations per second competing for the browser UI thread on mobile devices. Consolidating into 1 coordinated loop that completely suspends during active gameplay eliminates idle CPU/GPU drain.
+   - Strict Compliance: Maintained 100% self-hosted local D3/TopoJSON rendering with zero third-party CDN dependencies, telemetry, or cookies, preserving COPPA and FERPA compliance.
+
+3. How We Achieved It:
+   - Responsive CSS Architecture:
+     - Applied fluid container dimensions: `width: min(90vw, 440px, 50vh); height: min(90vw, 440px, 50vh); aspect-ratio: 1 / 1;` on .globe-wrap.
+     - Scaled wordmark with `clamp(38px, 12.5vw, 76px)` and tagline with `clamp(9px, 2.6vw, 11px)`.
+     - Replaced 108px top padding with vertical flex centering (`justify-content: center`) and fluid padding (`clamp(20px, 4vh, 60px) 20px clamp(48px, 8vh, 72px)`).
+     - Added `.title-footer-links` under `#btn-letsgo` with subtle link styling.
+   - Unified MapolisGlobe Module (assets/mapolis-globe.js):
+     - Single DOM SVG (`#mapolis-unified-globe`) dynamically mounted into `#title-globe-mount`, `#gp-globe-wrap`, or `#h2h-globe-mount`.
+     - Modes:
+       - `title`: Hero scale, ambient auto-spin (0.012 speed), pulsing metro city pings.
+       - `picker`: Interactive drag-to-spin with momentum, touch coordinates normalization, and spherical nearest-continent tap detection (`nearestContinent(lon, lat)`).
+       - `queue`: Matchmaking radar spin with surrounding pulsing rings.
+       - `stop()`: Fully pauses the animation loop (`cancelAnimationFrame`) during gameplay screens to preserve battery.
+   - Lifecycle Integration:
+     - Hooked into `go(screenId)` so navigation automatically mounts the globe into the target screen slot and suspends when leaving globe screens.
+     - Hooked `loadWorldData()` completion with `MapolisGlobe.onWorldLoaded()` to smoothly fade in continental land polygons as soon as `/data/countries-50m.json` finishes loading.
+
+4. Key Lessons Learned:
+   - Viewport Height Query Blindspot: Media queries based strictly on `max-height` (e.g. `@media (max-height: 720px)`) fail to trigger on modern tall mobile devices (e.g. iPhone 15 Pro Max at 430x932px), leaving them with desktop fixed widths unless bounded by `max-width` queries or `min(vw, vh)` CSS constraints.
+   - DOM Reparenting for Singletons: Moving an active SVG element between DOM mount points (`container.appendChild(svgEl)`) preserves D3 data bindings, paths, and rotation matrix without needing to re-parse TopoJSON or rebuild geometries.
+   - Mobile Touch Target Placement: Placing secondary regulatory links (Credits, Privacy & Safety) directly beneath primary action buttons creates a cohesive vertical reading order and prevents interference with OS home indicator gestures on modern mobile devices.
+
