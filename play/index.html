@@ -14022,7 +14022,32 @@ function showBetaWelcome() {
     }
   });
 }
-async function showNotesModal() {
+async function _ensureThread(note) {
+  if (note.thread && Array.isArray(note.thread) && note.thread.length > 0) {
+    return note.thread;
+  }
+  var raw = note.message;
+  if (typeof raw === 'string' && (raw.trim().startsWith('{') || raw.trim().startsWith('['))) {
+    try {
+      var p = JSON.parse(raw);
+      if (Array.isArray(p.messages)) {
+        note.thread = p.messages;
+        note.isClosed = !!p.isClosed;
+        return p.messages;
+      } else if (Array.isArray(p)) {
+        note.thread = p;
+        return p;
+      }
+    } catch (_) {}
+  }
+  var list = [];
+  if (raw) list.push({ sender: 'player', handle: note.handle || 'You', text: raw, at: note.timestamp });
+  if (note.response) list.push({ sender: 'admin', handle: 'Dev Team', text: note.response, at: note.responseAt || note.timestamp });
+  note.thread = list;
+  return list;
+}
+
+function showNotesModal() {
   const profile = window.activeProfile;
   if (!profile) return;
   const overlay = document.createElement("div");
@@ -14073,9 +14098,7 @@ async function showNotesModal() {
     for (const note of sorted) {
       html += "<div class=\"nsg-note-card\" style=\"border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);border-radius:10px;padding:10px;\">";
       
-      const thread = (note.thread && note.thread.length) ? note.thread : [
-        { sender: "player", handle: note.handle || "You", text: note.message, at: note.timestamp }
-      ];
+      const thread = _ensureThread(note);
 
       for (const m of thread) {
         const md = new Date(m.at || note.timestamp);
