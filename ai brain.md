@@ -519,3 +519,18 @@ We modernized all user-facing onboarding, profile creation, and account recovery
 2. Why We Chose It:
    - User Familiarity & Accessibility: For both K-12 students and general users, "Restore" and "Handle" felt technical or ambiguous. "Sign In" and "Username" are universally understood standards.
    - Internal Data Layer Unchanged: Underlying database columns and internal code models retain `handle` and RPC signatures (`p_handle`, `restore_profile`) to preserve 100% backward compatibility with Supabase schemas, RLS policies, and stored session data.
+
+----------------------------------------------------------------------------------------------------------
+15. Completed Task: Removal of Legacy Pre-Launch Disclaimers & Sign-In UI Polish
+Status: ✅ Complete
+Target: play/index.html, index.html
+Branch: prebeta3
+
+We purged the legacy developer warning ("⚠️ Pre-launch: this looks up profiles on the current device only...") from the Sign In modal's Parent Email tab.
+
+1. What It Is:
+   - Purged Outdated Disclaimers:
+     - The "Parent Email" tab within the "Sign In" overlay previously included placeholder text indicating cloud lookup was local-only.
+     - With Supabase `restore_profile` and `restore_profile_by_email` RPCs fully live in production, this legacy note has been removed to prevent user confusion and clean up regulatory audit trails.
+   - Clean Modal Footers:
+     - The sign-in overlay now cleanly presents only active inputs, submit triggers, and local fallback recovery pointers.
