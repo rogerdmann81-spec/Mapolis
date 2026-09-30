@@ -1488,6 +1488,31 @@ async function fetchAdminCloudNotes() {
   }
 }
 
+function _ensureThread(note) {
+  if (note.thread && Array.isArray(note.thread) && note.thread.length > 0) {
+    return note.thread;
+  }
+  var raw = note.message;
+  if (typeof raw === 'string' && (raw.trim().startsWith('{') || raw.trim().startsWith('['))) {
+    try {
+      var p = JSON.parse(raw);
+      if (Array.isArray(p.messages)) {
+        note.thread = p.messages;
+        note.isClosed = !!p.isClosed;
+        return p.messages;
+      } else if (Array.isArray(p)) {
+        note.thread = p;
+        return p;
+      }
+    } catch (_) {}
+  }
+  var list = [];
+  if (raw) list.push({ sender: 'player', handle: note.handle || 'Player', text: raw, at: note.timestamp });
+  if (note.response) list.push({ sender: 'admin', handle: 'Dev Team', text: note.response, at: note.responseAt || note.timestamp });
+  note.thread = list;
+  return list;
+}
+
 function renderAdminNotes() {
   if (_adminNotesLoading) {
     return "<div style=\"text-align:center;padding:40px;color:var(--blue-lt);font-size:13px;\">⏳ Loading live player notes from Supabase cloud...</div>";
@@ -1524,9 +1549,7 @@ function renderAdminNotes() {
     html += "</div>";
 
     // Multi-turn thread render
-    var thread = (note.thread && note.thread.length) ? note.thread : [
-      { sender: "player", handle: note.handle || "Player", text: note.message, at: note.timestamp }
-    ];
+    var thread = _ensureThread(note);
 
     html += "<div style=\"display:flex;flex-direction:column;gap:8px;margin:8px 0;\">";
     for (var mIdx = 0; mIdx < thread.length; mIdx++) {
@@ -1611,9 +1634,7 @@ function showAdminReplyModal(noteId) {
   var note = _adminCloudNotes.find(function(n) { return n.id === noteId; });
   if (!note) return;
 
-  var thread = (note.thread && note.thread.length) ? note.thread : [
-    { sender: "player", handle: note.handle || "Player", text: note.message, at: note.timestamp }
-  ];
+  var thread = _ensureThread(note);
 
   var threadPreviewHtml = "<div style=\"max-height:180px;overflow-y:auto;padding-right:4px;display:flex;flex-direction:column;gap:6px;margin-bottom:12px;\">";
   for (var i = 0; i < thread.length; i++) {
