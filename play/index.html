@@ -14022,7 +14022,7 @@ function showBetaWelcome() {
     }
   });
 }
-async function _ensureThread(note) {
+function _ensureThread(note) {
   if (note.thread && Array.isArray(note.thread) && note.thread.length > 0) {
     return note.thread;
   }
