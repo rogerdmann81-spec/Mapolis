@@ -255,7 +255,10 @@ We resolved the cross-device state-overwriting problem (e.g., student plays offl
 Core Logic Changes & Problem Solved:
 1. The Stale Overwrite Hazard:
    - If Device A earned +20 stars offline and synced, and Device B later synced, Device B could either wipe Device A new stars or double-count sessions if naively summed.
-2. Idempotent Session Replay with Unique Session IDs (processedSessions):
+2. Spendable Accumulators vs. Session IDs vs. Timestamps (Reconciliation Architecture):
+   - Spendable Stars & Rating (stats.cr): Tied to idempotent session IDs (processedSessions). Every gameplay round generates a unique UUID sessionId so that stars and score deltas are accumulated exactly once across devices without double-counting.
+   - Cosmetics & Unlocks (accessories, unlockedAvatar, badges): Evaluated using symmetric Set unions plus timestamp evaluation (updatedAt) so any cosmetic earned or equipped on any device persists.
+   - Notes & Messaging: Synchronized via chronological UTC ISO timestamps (created_at, admin_response_at) with local read-pointer tracking.
    - Every completed solo/round session now generates a unique UUID sessionId and logs an entry in profile.stats.processedSessions[sessionId] = { starsDelta, scoreDelta, questionsAnswered, timestamp }.
    - When synchronizing profiles across devices or between local cache and Supabase, the reconciliation logic inspects session IDs. Any session already incorporated on either device is accounted for exactly once, preventing double-counting or star loss.
 3. Additive vs. Monotonic vs. Union Attribute Reconciler (mergeProfiles):
@@ -388,22 +391,27 @@ We eliminated avatar rendering latency so changes made in the Avatar Builder imm
 
 
 ----------------------------------------------------------------------------------------------------------
-11. Completed Task: Cloud-Backed Player Notes to Dev Team & Master Admin Inbox
+11. Completed Task: Cloud-Backed Player Notes to Dev Team & Master Admin Inbox (Timestamp & Thread Logic)
 Status: ✅ Complete
 Target: Supabase Database, assets/shared.js, play/index.html, index.html, admin/index.html
 Branch: pre-beta2
 
-We wired the "Notes to Dev Team" feature on the player profile to Supabase and connected it seamlessly to the Master Admin Panel notes inbox.
+We wired the "Notes to Dev Team" feature on the player profile to Supabase and connected it seamlessly to the Master Admin Panel notes inbox using timestamp-driven synchronization.
 
 1. What It Is:
    - Supabase Persistence (player_notes): Notes submitted by players in the "Notes to Dev Team" modal are saved to a durable Supabase table with Row-Level Security (RLS) policies allowing anon inserts, reads, updates (replies/read statuses), and deletes.
    - Dual-Layer Sync Architecture (notesStore in assets/shared.js): Transparently handles online/offline states, writes immediately to local storage cache for instant UI feedback, and pushes to Supabase.
-   - Live Master Admin Inbox (s-admin): The 📝 Notes tab in the Master Panel pulls live notes from all players directly from Supabase, marks notes read, allows replying, and syncs responses back to Supabase.
+   - Timestamp-Based Read Tracking & Thread Continuity:
+     - Each note tracks `created_at` and `admin_response_at` ISO timestamps.
+     - Unread badge counters compare `admin_response_at` against the player's last-read timestamp.
+     - Replies maintain thread continuity by appending to `admin_response` with timestamps so players see a clean, chronological conversation.
+   - Live Master Admin Inbox (s-admin in admin/index.html): The 📝 Notes tab in the standalone Master Admin Panel pulls live notes from all players directly from Supabase, marks notes read, allows replying, and syncs responses back to Supabase.
    - In-Game Reply Notification: When a player views their profile, notesStore.fetchNotes(profile.id) queries Supabase in the background and surfaces an unread badge ("X new replies") on the "Notes to Dev Team" button. When the modal opens, the player sees the dev team's reply and replies are marked read.
 
 2. Why We Chose It:
    - Previous Local-Storage Isolation: Previously, player notes were stored strictly in the user's browser local storage, meaning dev team members could never see notes sent by players on different devices.
    - Ledger Completeness: Establishes a permanent, two-way feedback channel between players and administrators directly within the app without requiring third-party helpdesk widgets.
+   - Timestamp Synchronization: Using deterministic UTC ISO timestamps prevents clock-drift issues between client devices and admin dashboards.
 
 3. How We Achieved It:
    - Supabase Migration:
@@ -456,3 +464,30 @@ We resolved the mobile phone layout overflow on the initial load screen and cons
    - DOM Reparenting for Singletons: Moving an active SVG element between DOM mount points (`container.appendChild(svgEl)`) preserves D3 data bindings, paths, and rotation matrix without needing to re-parse TopoJSON or rebuild geometries.
    - Mobile Touch Target Placement: Placing secondary regulatory links (Credits, Privacy & Safety) directly beneath primary action buttons creates a cohesive vertical reading order and prevents interference with OS home indicator gestures on modern mobile devices.
 
+----------------------------------------------------------------------------------------------------------
+13. Completed Task: Complete Physical Separation of Master Admin Panel Code from play/index.html
+Status: ✅ Complete
+Target: play/index.html, admin/index.html, netlify.toml
+Branch: pre-beta2
+
+We completed the total decoupling and isolation of administrative and classroom management code from the client player bundle (play/index.html), removing all admin screens, admin styles, and privileged DOM elements from student gameplay builds.
+
+1. What It Is:
+   - Dedicated Admin Entry Point (/admin/):
+     - All administrative UI, including Master Admin (`#s-admin`), educator classroom dashboards (`#s-edu-dash`), curriculum management, player note responses, and bulk account administration, lives exclusively in `admin/index.html`.
+   - Stripped & Hardened Player Bundle (/play/):
+     - `play/index.html` contains zero admin DOM structures (`#s-admin`, `#admin-tabs`, `#admin-notes-list` are completely removed).
+     - No admin JS functions (`renderAdmin()`, `wireAdminNotes()`, etc.) are exposed or shipped to student devices.
+     - Protects against student tampering, inspecting dev controls, or triggering admin routes from console.
+   - Path-Based Routing & Access Boundaries:
+     - `/play/` is strictly for students and players.
+     - `/admin/` is reserved for teachers, facilitators, and system administrators with independent auth verification.
+
+2. Why We Chose It:
+   - FERPA / COPPA Boundary Isolation: Shipping teacher administrative logic, bulk student tables, or debug controls inside student client bundles violates strict security hygiene. Decoupling ensures that even a malicious user inspecting source code on a Chromebook has zero access to admin templates or scripts.
+   - Performance & Bundle Sizing: Stripping hundreds of lines of administrative table markup, charts, and management workflows reduces `play/index.html` parse time and DOM footprint on low-powered school hardware.
+
+3. How We Achieved It:
+   - Clean HTML Separation: Extracted all `#s-admin` elements, teacher notes tables, curriculum controls, and classroom management panels out of `play/index.html` into `admin/index.html`.
+   - Shared Foundation: Common models, avatar generation, Supabase authentication, and `syncStore` / `notesStore` remain centrally maintained in `assets/shared.js`, which is imported by both `play/index.html` and `admin/index.html`.
+   - Clean Redirection: Verified routing in `netlify.toml` and server proxies so requests to `/admin` route to the dedicated admin suite, while game sessions live under `/play/`.
