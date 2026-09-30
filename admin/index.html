@@ -1490,66 +1490,116 @@ async function fetchAdminCloudNotes() {
 
 function renderAdminNotes() {
   if (_adminNotesLoading) {
-    return '<div style="text-align:center;padding:40px;color:var(--blue-lt);font-size:13px;">⏳ Loading live player notes from Supabase cloud...</div>';
+    return "<div style=\"text-align:center;padding:40px;color:var(--blue-lt);font-size:13px;\">⏳ Loading live player notes from Supabase cloud...</div>";
   }
   var notes = _adminCloudNotes;
   if (!notes || !notes.length) {
-    return '<div style="text-align:center;padding:40px;color:var(--dim);font-size:13px;">No notes in Supabase cloud yet.</div>';
+    return "<div style=\"text-align:center;padding:40px;color:var(--dim);font-size:13px;\">No notes in Supabase cloud yet.</div>";
   }
   var sorted = notes.slice().sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp); });
-  if (window.notesStore && typeof window.notesStore.markAdminRead === 'function') {
+  if (window.notesStore && typeof window.notesStore.markAdminRead === "function") {
     window.notesStore.markAdminRead();
   }
-
-  var html = '';
+  var html = "";
   for (var i = 0; i < sorted.length; i++) {
     var note = sorted[i];
     var d = new Date(note.timestamp);
-    var dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-      + ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    var dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      + " at " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-    html += '<div class="nsg-note-card" data-note-id="' + note.id + '">';
-    html += '<div class="nsg-note-meta" style="display:flex;justify-content:space-between;align-items:center;">';
-    html += '<span><strong style="color:var(--blue-lt);">' + (typeof escHtml === 'function' ? escHtml(note.handle) : note.handle) + '</strong> · ' + dateStr + '</span>';
-    html += '<button class="btn-admin-delete-note" data-note-id="' + note.id + '" style="background:none;color:var(--wrong);font-size:10px;font-weight:700;padding:2px 6px;opacity:.6;cursor:pointer;">✕</button>';
-    html += '</div>';
-    html += '<div class="nsg-note-msg" style="font-size:13px;line-height:1.4;margin:8px 0;">' + (typeof escHtml === 'function' ? escHtml(note.message) : note.message) + '</div>';
-
-    if (note.response) {
-      var rd = new Date(note.responseAt);
-      var rDateStr = rd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-        + ' at ' + rd.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-      html += '<div class="nsg-note-reply" style="margin-top:8px;">';
-      html += '<div class="nsg-reply-label">Your Reply · ' + rDateStr + '</div>';
-      html += '<div class="nsg-reply-text" style="font-size:12px;color:rgba(255,255,255,.9);">' + (typeof escHtml === 'function' ? escHtml(note.response) : note.response) + '</div>';
-      html += '<button class="btn-admin-reply" data-note-id="' + note.id + '" style="margin-top:6px;background:none;border:none;color:var(--blue-lt);font-size:11px;padding:0;font-weight:700;cursor:pointer;">Edit Reply</button>';
-      html += '</div>';
+    html += "<div class=\"nsg-note-card\" data-note-id=\"" + note.id + "\" style=\"border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);border-radius:10px;padding:12px;margin-bottom:12px;\">";
+    html += "<div class=\"nsg-note-meta\" style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;\">";
+    html += "<span><strong style=\"color:var(--blue-lt);font-size:13px;\">" + (typeof escHtml === "function" ? escHtml(note.handle) : note.handle) + "</strong> <span style=\"font-size:11px;color:var(--dim);\">· " + dateStr + "</span></span>";
+    html += "<div style=\"display:flex;align-items:center;gap:8px;\">";
+    
+    // Close / Reopen Conversation Button
+    if (note.isClosed) {
+      html += "<button class=\"btn-admin-toggle-close\" data-note-id=\"" + note.id + "\" data-action=\"reopen\" style=\"background:rgba(240,64,96,.15);color:var(--wrong);border:1px solid rgba(240,64,96,.3);border-radius:5px;font-size:10px;font-weight:700;padding:2px 8px;cursor:pointer;\">🔒 Closed (Click to Reopen)</button>";
     } else {
-      html += '<div style="margin-top:8px;">';
-      html += '<button class="btn-admin-reply" data-note-id="' + note.id + '" style="background:rgba(59,110,248,.15);border:1px solid rgba(91,143,255,.3);border-radius:6px;padding:4px 10px;color:var(--blue-lt);font-size:11px;font-weight:700;cursor:pointer;">💬 Reply</button>';
-      html += '</div>';
+      html += "<button class=\"btn-admin-toggle-close\" data-note-id=\"" + note.id + "\" data-action=\"close\" style=\"background:rgba(255,255,255,.06);color:var(--dim);border:1px solid rgba(255,255,255,.15);border-radius:5px;font-size:10px;font-weight:700;padding:2px 8px;cursor:pointer;\">🔓 Open (Close Conversation)</button>";
     }
-    html += '</div>';
+
+    html += "<button class=\"btn-admin-delete-note\" data-note-id=\"" + note.id + "\" style=\"background:none;color:var(--wrong);font-size:12px;font-weight:700;padding:2px 6px;opacity:.6;cursor:pointer;\">✕</button>";
+    html += "</div>";
+    html += "</div>";
+
+    // Multi-turn thread render
+    var thread = (note.thread && note.thread.length) ? note.thread : [
+      { sender: "player", handle: note.handle || "Player", text: note.message, at: note.timestamp }
+    ];
+
+    html += "<div style=\"display:flex;flex-direction:column;gap:8px;margin:8px 0;\">";
+    for (var mIdx = 0; mIdx < thread.length; mIdx++) {
+      var msgObj = thread[mIdx];
+      var md = new Date(msgObj.at || note.timestamp);
+      var mDateStr = md.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " at " + md.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+      var isAdmin = msgObj.sender === "admin";
+
+      if (isAdmin) {
+        html += "<div style=\"background:rgba(59,110,248,.12);border-left:3px solid var(--blue-lt);padding:6px 10px;border-radius:6px;margin-left:14px;\">";
+        html += "<div style=\"font-size:10px;color:var(--blue-lt);font-weight:700;margin-bottom:2px;\">🛡️ Your Reply · " + mDateStr + "</div>";
+        html += "<div style=\"font-size:12px;color:#fff;line-height:1.4;\">" + (typeof escHtml === "function" ? escHtml(msgObj.text) : msgObj.text) + "</div>";
+        html += "</div>";
+      } else {
+        html += "<div style=\"background:rgba(255,255,255,.04);border-left:3px solid rgba(255,255,255,.2);padding:6px 10px;border-radius:6px;\">";
+        html += "<div style=\"font-size:10px;color:var(--dim);margin-bottom:2px;\">" + (typeof escHtml === "function" ? escHtml(msgObj.handle || note.handle) : (msgObj.handle || note.handle)) + " · " + mDateStr + "</div>";
+        html += "<div style=\"font-size:12px;color:rgba(255,255,255,.9);line-height:1.4;\">" + (typeof escHtml === "function" ? escHtml(msgObj.text) : msgObj.text) + "</div>";
+        html += "</div>";
+      }
+    }
+    html += "</div>";
+
+    // Reply action button
+    html += "<div style=\"margin-top:10px;display:flex;justify-content:flex-end;\">";
+    html += "<button class=\"btn-admin-reply\" data-note-id=\"" + note.id + "\" style=\"background:rgba(59,110,248,.2);border:1px solid rgba(91,143,255,.35);border-radius:6px;padding:5px 12px;color:var(--blue-lt);font-size:11px;font-weight:700;cursor:pointer;\">💬 Reply in Thread</button>";
+    html += "</div>";
+
+    html += "</div>";
   }
   return html;
 }
 
 function wireAdminNotes() {
-  document.querySelectorAll('.btn-admin-reply, .btn-admin-re-reply').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      var noteId = btn.getAttribute('data-note-id');
+  document.querySelectorAll(".btn-admin-reply").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      var noteId = btn.getAttribute("data-note-id");
       showAdminReplyModal(noteId);
     });
   });
 
-  document.querySelectorAll('.btn-admin-delete-note').forEach(function(btn) {
-    btn.addEventListener('click', function(e) {
+  document.querySelectorAll(".btn-admin-toggle-close").forEach(function(btn) {
+    btn.addEventListener("click", async function() {
+      var noteId = btn.getAttribute("data-note-id");
+      var action = btn.getAttribute("data-action");
+      var shouldClose = (action === "close");
+      
+      btn.disabled = true;
+      btn.textContent = shouldClose ? "Closing..." : "Reopening...";
+
+      var target = _adminCloudNotes.find(function(n) { return n.id === noteId; });
+      if (target) {
+        target.isClosed = shouldClose;
+      }
+
+      if (window.notesStore && typeof window.notesStore.toggleCloseConversation === "function") {
+        await window.notesStore.toggleCloseConversation(noteId, shouldClose);
+      }
+
+      if (typeof showToast === "function") {
+        showToast(shouldClose ? "Conversation closed 🔒" : "Conversation reopened 🔓");
+      }
+      renderAdmin();
+    });
+  });
+
+  document.querySelectorAll(".btn-admin-delete-note").forEach(function(btn) {
+    btn.addEventListener("click", function(e) {
       e.stopPropagation();
-      var noteId = btn.getAttribute('data-note-id');
-      if (confirm('Delete this note?')) {
+      var noteId = btn.getAttribute("data-note-id");
+      if (confirm("Delete this entire conversation?")) {
         var allN = getNotes().filter(function(n) { return n.id !== noteId; });
         _adminCloudNotes = _adminCloudNotes.filter(function(n) { return n.id !== noteId; });
-        if (window.notesStore && typeof window.notesStore.deleteNote === 'function') {
+        if (window.notesStore && typeof window.notesStore.deleteNote === "function") {
           window.notesStore.deleteNote(noteId);
         }
         renderAdmin();
@@ -1557,45 +1607,70 @@ function wireAdminNotes() {
     });
   });
 }
-
 function showAdminReplyModal(noteId) {
   var note = _adminCloudNotes.find(function(n) { return n.id === noteId; });
   if (!note) return;
-  var overlay = document.createElement('div');
-  overlay.className = 'nsg-modal-overlay';
-  overlay.innerHTML = '<div class="nsg-modal">'
-    + '<h3>Reply to ' + (typeof escHtml === 'function' ? escHtml(note.handle) : note.handle) + '</h3>'
-    + '<div class="nsg-note-card" style="margin-bottom:14px;">'
-    + '<div class="nsg-note-msg">' + (typeof escHtml === 'function' ? escHtml(note.message) : note.message) + '</div>'
-    + '</div>'
-    + '<div style="font-size:11px;color:var(--dim);margin-bottom:6px;font-weight:700;">Your Response</div>'
-    + '<textarea id="admin-reply-text" placeholder="Write your response...">' + (note.response ? (typeof escHtml === 'function' ? escHtml(note.response) : note.response) : '') + '</textarea>'
-    + '<button class="nsg-btn-primary" id="btn-admin-reply-send">Send Reply</button>'
-    + '<button class="nsg-btn-secondary" id="btn-admin-reply-cancel">Cancel</button>'
-    + '</div>';
+
+  var thread = (note.thread && note.thread.length) ? note.thread : [
+    { sender: "player", handle: note.handle || "Player", text: note.message, at: note.timestamp }
+  ];
+
+  var threadPreviewHtml = "<div style=\"max-height:180px;overflow-y:auto;padding-right:4px;display:flex;flex-direction:column;gap:6px;margin-bottom:12px;\">";
+  for (var i = 0; i < thread.length; i++) {
+    var m = thread[i];
+    var isAdmin = m.sender === "admin";
+    threadPreviewHtml += "<div style=\"padding:6px 10px;border-radius:6px;font-size:11px;line-height:1.4;"
+      + (isAdmin ? "background:rgba(59,110,248,.15);border-left:3px solid var(--blue-lt);margin-left:12px;" : "background:rgba(255,255,255,.05);border-left:3px solid rgba(255,255,255,.3);")
+      + "\">";
+    threadPreviewHtml += "<div style=\"font-size:10px;font-weight:700;color:" + (isAdmin ? "var(--blue-lt)" : "var(--dim)") + ";margin-bottom:2px;\">"
+      + (isAdmin ? "🛡️ Dev Team" : (typeof escHtml === "function" ? escHtml(m.handle || note.handle) : (m.handle || note.handle)))
+      + "</div>";
+    threadPreviewHtml += "<div style=\"color:#fff;\">" + (typeof escHtml === "function" ? escHtml(m.text) : m.text) + "</div>";
+    threadPreviewHtml += "</div>";
+  }
+  threadPreviewHtml += "</div>";
+
+  var overlay = document.createElement("div");
+  overlay.className = "nsg-modal-overlay";
+  overlay.innerHTML = "<div class=\"nsg-modal\" style=\"max-width:440px;\">"
+    + "<h3>Reply to " + (typeof escHtml === "function" ? escHtml(note.handle) : note.handle) + "</h3>"
+    + threadPreviewHtml
+    + "<div style=\"font-size:11px;color:var(--dim);margin-bottom:6px;font-weight:700;\">Your Reply to Player</div>"
+    + "<textarea id=\"admin-reply-text\" placeholder=\"Write your reply...\"></textarea>"
+    + "<button class=\"nsg-btn-primary\" id=\"btn-admin-reply-send\">Send Reply 💬</button>"
+    + "<button class=\"nsg-btn-secondary\" id=\"btn-admin-reply-cancel\">Cancel</button>"
+    + "</div>";
   document.body.appendChild(overlay);
 
-  var sendBtn = document.getElementById('btn-admin-reply-send');
-  sendBtn.addEventListener('click', async function() {
-    var textarea = document.getElementById('admin-reply-text');
+  var sendBtn = document.getElementById("btn-admin-reply-send");
+  sendBtn.addEventListener("click", async function() {
+    var textarea = document.getElementById("admin-reply-text");
     var msg = textarea.value.trim();
     if (!msg) { textarea.focus(); return; }
 
     sendBtn.disabled = true;
-    sendBtn.textContent = 'Saving...';
+    sendBtn.textContent = "Sending...";
 
+    var nowIso = new Date().toISOString();
     var cloudTarget = _adminCloudNotes.find(function(n) { return n.id === noteId; });
     if (cloudTarget) {
+      if (!cloudTarget.thread) cloudTarget.thread = [];
+      cloudTarget.thread.push({
+        sender: "admin",
+        handle: "Dev Team",
+        text: msg,
+        at: nowIso
+      });
       cloudTarget.response = msg;
-      cloudTarget.responseAt = new Date().toISOString();
+      cloudTarget.responseAt = nowIso;
       cloudTarget.replyRead = false;
     }
 
-    if (window.notesStore && typeof window.notesStore.replyToNote === 'function') {
+    if (window.notesStore && typeof window.notesStore.replyToNote === "function") {
       try {
         await window.notesStore.replyToNote(noteId, msg);
       } catch (e) {
-        console.warn('Cloud reply error:', e);
+        console.warn("Cloud reply error:", e);
       }
     }
 
@@ -1604,14 +1679,14 @@ function showAdminReplyModal(noteId) {
       var target = allN.find(function(n) { return n.id === noteId; });
       if (target) {
         target.response = msg;
-        target.responseAt = new Date().toISOString();
+        target.responseAt = nowIso;
         target.replyRead = false;
         saveNotes(allN);
       }
     } catch (_) {}
 
     closeNsgModal();
-    if (typeof showToast === 'function') showToast('Reply saved ✓');
+    if (typeof showToast === "function") showToast("Reply saved ✓");
     renderAdmin();
   });
   document.getElementById('btn-admin-reply-cancel').addEventListener('click', closeNsgModal);
