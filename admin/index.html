@@ -1561,7 +1561,6 @@ function wireAdminNotes() {
 function showAdminReplyModal(noteId) {
   var note = _adminCloudNotes.find(function(n) { return n.id === noteId; });
   if (!note) return;
-
   var overlay = document.createElement('div');
   overlay.className = 'nsg-modal-overlay';
   overlay.innerHTML = '<div class="nsg-modal">'
@@ -1576,27 +1575,45 @@ function showAdminReplyModal(noteId) {
     + '</div>';
   document.body.appendChild(overlay);
 
-  document.getElementById('btn-admin-reply-send').addEventListener('click', function() {
+  var sendBtn = document.getElementById('btn-admin-reply-send');
+  sendBtn.addEventListener('click', async function() {
     var textarea = document.getElementById('admin-reply-text');
     var msg = textarea.value.trim();
     if (!msg) { textarea.focus(); return; }
 
-    var allN = getNotes();
-    var target = allN.find(function(n) { return n.id === noteId; });
-    if (target) {
-      target.response = msg;
-      target.responseAt = new Date().toISOString();
-      target.replyRead = false;
-      if (window.notesStore && typeof window.notesStore.replyToNote === 'function') {
-        window.notesStore.replyToNote(noteId, msg).catch(function(e) { console.warn('Cloud reply error:', e); });
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Saving...';
+
+    var cloudTarget = _adminCloudNotes.find(function(n) { return n.id === noteId; });
+    if (cloudTarget) {
+      cloudTarget.response = msg;
+      cloudTarget.responseAt = new Date().toISOString();
+      cloudTarget.replyRead = false;
+    }
+
+    if (window.notesStore && typeof window.notesStore.replyToNote === 'function') {
+      try {
+        await window.notesStore.replyToNote(noteId, msg);
+      } catch (e) {
+        console.warn('Cloud reply error:', e);
       }
     }
+
+    try {
+      var allN = getNotes();
+      var target = allN.find(function(n) { return n.id === noteId; });
+      if (target) {
+        target.response = msg;
+        target.responseAt = new Date().toISOString();
+        target.replyRead = false;
+        saveNotes(allN);
+      }
+    } catch (_) {}
 
     closeNsgModal();
     if (typeof showToast === 'function') showToast('Reply saved ✓');
     renderAdmin();
   });
-
   document.getElementById('btn-admin-reply-cancel').addEventListener('click', closeNsgModal);
   overlay.addEventListener('click', function(e) { if (e.target === overlay) closeNsgModal(); });
 }
