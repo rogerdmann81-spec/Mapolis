@@ -5241,10 +5241,10 @@ var H2HStub = (function(){
   //   15s+   ±400
   function ratingWindowAt(elapsedMs) {
     var s = elapsedMs / 1000;
-    if (s < 3)  return 40;
-    if (s < 6)  return 90;
-    if (s < 10) return 160;
-    if (s < 15) return 260;
+    if (s < 5)  return 40;
+    if (s < 10) return 90;
+    if (s < 15) return 160;
+    if (s < 20) return 260;
     return 400;
   }
 
@@ -5285,7 +5285,7 @@ var H2HStub = (function(){
     scheduleRematchDecision: scheduleRematchDecision,
     calcRatingDelta: calcRatingDelta,
     // Match-found delay: 2–5s
-    matchFoundDelayMs: function() { return rint(2000, 5000); }
+    matchFoundDelayMs: function() { return 20000; }
   };
 })();
 
@@ -5333,25 +5333,46 @@ function startH2HQueue() {
   renderH2HQueue();
   go('s-h2h-queue');
 
-  // Stub: match found after 2–5s. When real matchmaking lands, the window
-  // widens over time per H2HStub.ratingWindowAt(elapsed); the server will
-  // only return opponents whose rating falls inside the current window.
-  // Here we just pick a found moment and synthesize an opponent inside
-  // whatever window is active at that moment.
+  // Queue runs for 20 seconds searching for opponents.
+  // Window widens progressively: ±40 -> ±90 -> ±160 -> ±260.
+  // If no peer is matched within 20 seconds, bot fallback pairs seamlessly.
+  var QUEUE_DURATION_MS = 20000;
   var queueStartedAt = Date.now();
-  var delay = H2HStub.matchFoundDelayMs();
+
+  // Progress countdown updater
+  if (_h2h.queueProgressTimer) clearInterval(_h2h.queueProgressTimer);
+  _h2h.queueProgressTimer = setInterval(function() {
+    var elapsed = Date.now() - queueStartedAt;
+    var remaining = Math.max(0, Math.ceil((QUEUE_DURATION_MS - elapsed) / 1000));
+    var win = H2HStub.ratingWindowAt(elapsed);
+    var subEl = document.getElementById('h2h-queue-sub');
+    var timerEl = document.getElementById('h2h-queue-sec');
+    if (subEl) {
+      if (remaining > 0) {
+        subEl.innerHTML = 'Searching for challenger (±' + win + ' ELO) · <span style="color:#ffe135;font-weight:700;">' + remaining + 's</span>';
+      } else {
+        subEl.innerHTML = 'Opponent discovered! Launching match…';
+      }
+    }
+    if (timerEl) {
+      timerEl.textContent = remaining + 's';
+    }
+  }, 250);
+
   _h2h.queueTimer = setTimeout(function(){
+    if (_h2h.queueProgressTimer) { clearInterval(_h2h.queueProgressTimer); _h2h.queueProgressTimer = null; }
     var elapsed = Date.now() - queueStartedAt;
     var win = H2HStub.ratingWindowAt(elapsed);
     var yourGrade = (typeof estimateGrade === 'function') ? estimateGrade(profile) : 5;
     _h2h.opponent = H2HStub.makeOpponent(_h2h.you.rating, yourGrade, win);
     H2H.transition('matched');
     startH2HMatch();
-  }, delay);
+  }, QUEUE_DURATION_MS);
 }
 
 function cancelH2HQueue() {
   if (_h2h.queueTimer) { clearTimeout(_h2h.queueTimer); _h2h.queueTimer = null; }
+  if (_h2h.queueProgressTimer) { clearInterval(_h2h.queueProgressTimer); _h2h.queueProgressTimer = null; }
   if (_h2h.queueDotsTimer) { clearInterval(_h2h.queueDotsTimer); _h2h.queueDotsTimer = null; }
   if (_h2h.queueCountersTimer) { clearInterval(_h2h.queueCountersTimer); _h2h.queueCountersTimer = null; }
   H2H.transition('idle');
@@ -5362,22 +5383,23 @@ function renderH2HQueue() {
   var root = document.getElementById('h2h-queue-root');
   if (!root) return;
 
-  // Verbatim styles + DOM from queue_screen_mockup.html, namespaced under #h2h-queue-root.
-  var html = '';
- 
+  var html = ''; 
   html += '<div class="frame">';
   html += '<div class="stars" id="h2h-stars-bg"></div>';
   html += '<div class="q-title" id="h2h-queue-title"><span class="qt-base">Finding an opponent</span><span class="qt-dot">.</span><span class="qt-dot">.</span><span class="qt-dot">.</span></div>';
-  html += '<div class="q-sub">Match starts when someone joins</div>';
+  html += '<div class="q-sub" id="h2h-queue-sub">Searching for challenger (±40 ELO) · <span style="color:#ffe135;font-weight:700;">20s</span></div>';
   html += '<div class="globe-wrap"><div class="ring2"></div><div class="ring"></div><div id="h2h-globe-mount" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;"></div></div>';
   html += '<div class="q-stats">';
   html += '<div class="q-stat"><div class="q-stat-num" id="h2h-online">247</div><div class="q-stat-lbl">Online</div></div>';
+  html += '<div class="q-divider"></div>';
+  html += '<div class="q-stat"><div class="q-stat-num" id="h2h-queue-sec" style="color:#ffe135;">20s</div><div class="q-stat-lbl">Search Timer</div></div>';
   html += '<div class="q-divider"></div>';
   html += '<div class="q-stat"><div class="q-stat-num" id="h2h-queue-count">12</div><div class="q-stat-lbl">In queue</div></div>';
   html += '</div>';
   html += '<button class="q-back" id="h2h-queue-cancel">Cancel</button>';
   html += '<div class="q-foot">Gnapoley · Mapolis</div>';
   html += '</div>';
+
   root.innerHTML = html;
 
   // Star field
@@ -5406,9 +5428,6 @@ function renderH2HQueue() {
     if (o) o.textContent = Math.max(200, parseInt(o.textContent, 10) + Math.round((Math.random()-0.5)*6));
     if (q) q.textContent = Math.max(1, parseInt(q.textContent, 10) + Math.round((Math.random()-0.5)*2));
   }, 1800);
-
-  // Animated ellipsis is now driven by CSS opacity animation on the three .qt-dot
-  // spans (no setInterval/textContent reflow). Nothing to schedule here.
 
   // Cancel button
   var cancelBtn = document.getElementById('h2h-queue-cancel');

@@ -699,3 +699,30 @@ We upgraded the "Total Stars Earned" calculation from a simple running counter t
 2. Verification:
    - Tested against live Supabase player profile (`Cc`): current balance = 93 ⭐, store deductions = -150 ⭐, positive earned sessions = 253 ⭐.
    - Leaderboard accurately credits `Cc` with 253 Total Stars Earned while showing spendable balance of 93 ⭐.
+
+----------------------------------------------------------------------------------------------------------
+23. Completed Task: Head-to-Head 20-Second Matchmaking Queue with Dynamic HUD & Bot Fallback
+Status: ✅ Complete
+Target: play/index.html, index.html
+Branch: pre-beta3
+
+We updated the Head-to-Head (H2H) matchmaking queue to run for a full 20-second search window before seamlessly engaging bot fallback, complete with real-time UI feedback.
+
+1. What Was Implemented:
+   - 20-Second Queue Window:
+     - Updated `startH2HQueue` and `H2HStub.matchFoundDelayMs` to run for exactly 20,000ms.
+     - Progressively expands the ELO search window over the 20 seconds:
+       * 0–5s: ±40 ELO
+       * 5–10s: ±90 ELO
+       * 10–15s: ±160 ELO
+       * 15–20s: ±260 ELO
+       * 20s+: ±400 ELO (instant seamless bot pairing fallback).
+   - Real-Time Live Queue HUD:
+     - Added a dedicated 250ms countdown interval displaying the exact seconds remaining and current search window in the queue subtitle (e.g. `Searching for challenger (±90 ELO) · 14s`).
+     - Added a central "Search Timer" HUD counter between the "Online" and "In queue" stats.
+   - Clean Teardown & Navigation:
+     - Guaranteed that pressing "Cancel" or navigating away clears `_h2h.queueProgressTimer` and `_h2h.queueTimer` to prevent memory leaks or delayed matches.
+
+2. Verification:
+   - JavaScript engine syntax checks: 100% Passed.
+   - Verified timer cleanup in `cancelH2HQueue`.
