@@ -749,3 +749,31 @@ We eliminated fabricated random counters on the Head-to-Head queue screen and co
 2. Verification:
    - Validated script syntax with Node.js checker (100% Passed).
    - Clean interval cancellation in `cancelH2HQueue`.
+
+----------------------------------------------------------------------------------------------------------
+25. Completed Task: Full In-Admin User Profile Inspector (Option B)
+Status: ✅ Complete
+Target: admin/index.html, assets/game-catalog.js, play/assets/game-catalog.js, admin/assets/game-catalog.js
+Branch: pre-beta3
+
+We restored and expanded the Master Administrator's ability to browse and inspect any user's profile directly within the standalone Admin Portal (`admin/index.html`) without requiring redirection or messy external navigation.
+
+1. What Was Implemented:
+   - Shared Game Catalog Data (`assets/game-catalog.js`):
+     - Created `assets/game-catalog.js` (and synced mirrors in `/play/assets/` and `/admin/assets/`).
+     - Contains all definitions for:
+       * `ANIMAL_PRESERVE`: All 41 unlockable animals and their biomes/continents.
+       * `BADGE_DEFS`: Complete 41-badge collection catalog.
+       * Image/rendering helpers: `animalImgHtml` and `badgeImgHtml` referencing Fluent 3D assets.
+   - Comprehensive Profile Inspector with Sub-Tabs:
+     - Sub-tab 1: 📊 **Overview**: Star bank balance, accuracy, corrections, streak, speed, tier drift, parent email, class link code, and play history heatmap.
+     - Sub-tab 2: 🦁 **Preserve**: All adopted animals displayed with their 3D animal portraits, names, and continents.
+     - Sub-tab 3: 🎖️ **Badges**: Complete 41-badge grid showing unlocked vs locked status, badge icons, names, and descriptions.
+     - Sub-tab 4: ⚔️ **Head-to-Head**: Competitive ELO rating, match history, win rate %, wins 🏆, losses, ties, and win streaks.
+   - Administration Controls:
+     - Freeze/Unfreeze account toggle.
+     - Safe deletion modal with confirmation.
+
+2. Verification:
+   - JavaScript engine syntax checks: 100% Passed.
+   - Catalog data and image fallback tests: 100% Passed.
