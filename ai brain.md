@@ -584,3 +584,25 @@ We performed a complete, zero-exception sweep converting all legacy event handle
    - Remaining HTML `onerror`: **0**
    - Remaining `.onclick` DOM property assignments: **0**
    - JavaScript engine syntax compilation: **100% Passed**.
+
+----------------------------------------------------------------------------------------------------------
+18. Completed Task: Elimination of External DiceBear API (COPPA Zero-Leakage)
+Status: ✅ Complete
+Target: play/index.html, index.html
+Branch: pre-beta3
+
+We eliminated the external HTTP requests made to `api.dicebear.com` during Head-to-Head bot/simulated opponent generation.
+
+1. What Was Changed:
+   - Purged External DiceBear API Dependency:
+     - Previously, `makeAvatarSvg(seed)` made outbound requests to `https://api.dicebear.com/7.x/${style}/svg?seed=...`.
+     - Replaced with a 100% self-contained, deterministic vector avatar builder powered by local `avatar-assets.js`.
+     - Hashes the opponent's seed string to deterministically select avatar types, facial features, accessories, and color palettes from local memory.
+     - Encodes the generated SVG directly into an inline data URI (`data:image/svg+xml;charset=utf-8,...`).
+   - Zero Outbound IP Leakage:
+     - COPPA and strict school district firewall compliance require zero network requests to third-party endpoints.
+     - Bot generation now runs completely offline without sending student IPs or user agents to any third party.
+
+2. Verification:
+   - Remaining occurrences of `api.dicebear.com`: **0**
+   - JavaScript engine syntax checks: **100% Passed across all 9 script blocks**.
