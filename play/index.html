@@ -5885,6 +5885,7 @@ function finishH2HMatch() {
     // Bank the stars earned during the match
     if (h2hStarsEarned > 0) {
       profile.stats.cr = (profile.stats.cr || 0) + h2hStarsEarned;
+      profile.stats.lifetimeStars = (profile.stats.lifetimeStars || 0) + h2hStarsEarned;
       profile._lastCRDelta = h2hStarsEarned;
     }
     const h2hSessId = 'h2h_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
@@ -7471,19 +7472,28 @@ function getBracketForAge(age) {
 let _lbData = [];
 let _lbCached = false;
 let _lbTimestamp = null;
-let _lbTab = 'global';
+let _lbTab = 'global'; // 'global' | 'age'
+let _lbMetric = 'stars'; // 'stars' (total stars earned) | 'h2h' (head-to-head rating)
 let _lbLoading = false;
+let _lbBracketOverride = null;
 
 function getLocalProfiles() {
   const profiles = [];
   try {
+    if (typeof allProfiles !== 'undefined' && Array.isArray(allProfiles) && allProfiles.length > 0) {
+      return allProfiles.filter(p => p && p.handle);
+    }
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key.startsWith('nsg_profile_')) {
+      if (key && (key.startsWith('nsg_profile_') || key === 'nsg_profiles')) {
         const raw = localStorage.getItem(key);
         if (raw) {
-          const p = JSON.parse(raw);
-          if (p && p.handle && p.stats) profiles.push(p);
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(p => { if (p && p.handle) profiles.push(p); });
+          } else if (parsed && parsed.handle) {
+            profiles.push(parsed);
+          }
         }
       }
     }
@@ -7493,65 +7503,101 @@ function getLocalProfiles() {
   return profiles;
 }
 
+function normalizeLeaderboardRow(r) {
+  const stats = (r && r.stats) || {};
+  const h2h = stats.h2h || {};
+  const currentCR = (typeof r.cr === 'number') ? r.cr : (stats.cr || 0);
+  const lifetime = (typeof stats.lifetimeStars === 'number') ? stats.lifetimeStars : currentCR;
+  const h2hRating = (typeof h2h.rating === 'number') ? h2h.rating : 1200;
+  const h2hMatches = (typeof h2h.matches === 'number') ? h2h.matches : 0;
+  const h2hWins = (typeof h2h.wins === 'number') ? h2h.wins : 0;
+
+  return {
+    id: r.player_id || r.id || r.handle,
+    handle: r.handle || 'Explorer',
+    country: r.country || '',
+    birth_year: r.birth_year || r.birthYear || null,
+    avatar_face: r.avatar_face || (r.avatar && r.avatar.face) || '🧑',
+    avatar_svg: r.avatar_svg || (r.avatar && r.avatar.svg) || null,
+    cr: currentCR,
+    totalStars: Math.max(currentCR, lifetime),
+    h2hRating: h2hRating,
+    h2hMatches: h2hMatches,
+    h2hWins: h2hWins,
+    accuracy: (stats.totalAnswered > 0) ? Math.round(stats.totalCorrect / stats.totalAnswered * 100) : 0,
+    tier_avg: stats.tierAvg || 0
+  };
+}
+
 function mergeLocalIntoLeaderboard(remoteRows) {
+  const rawRemote = Array.isArray(remoteRows) ? remoteRows : (remoteRows && remoteRows.data ? remoteRows.data : []);
+  const normalized = rawRemote.map(normalizeLeaderboardRow);
   const localProfiles = getLocalProfiles();
-  const merged = [...remoteRows];
-  const remoteIds = new Set(remoteRows.map(r => r.id || r.handle));
+  const remoteHandles = new Set(normalized.map(r => (r.handle || '').toLowerCase()));
 
   for (const p of localProfiles) {
-    const id = p.id || p.handle;
-    if (!remoteIds.has(id)) {
-      merged.push({
-        id: id,
+    const handleKey = (p.handle || '').toLowerCase();
+    if (!remoteHandles.has(handleKey)) {
+      normalized.push(normalizeLeaderboardRow({
+        id: p.id || p.handle,
         handle: p.handle,
-        cr: p.stats.cr || 0,
-        accuracy: p.stats.totalAnswered > 0
-          ? Math.round(p.stats.totalCorrect / p.stats.totalAnswered * 100)
-          : 0,
-        avatar_svg: p.avatar?.svg || null,
-        avatar_face: p.avatar?.face || null,
-        country: p.country || '',
-        birth_year: p.birthYear || null,
-        tier_avg: p.stats.tierAvg || 0,
-        _local: true
-      });
+        country: p.country,
+        birth_year: p.birthYear,
+        avatar_face: p.avatar?.face,
+        avatar_svg: p.avatar?.svg,
+        cr: p.stats?.cr || 0,
+        stats: p.stats || {}
+      }));
     }
   }
 
-  merged.sort((a, b) => (b.cr || 0) - (a.cr || 0));
-  return merged;
+  sortLeaderboardRows(normalized);
+  return normalized;
+}
+
+function sortLeaderboardRows(rows) {
+  if (_lbMetric === 'h2h') {
+    rows.sort((a, b) => (b.h2hRating - a.h2hRating) || (b.h2hWins - a.h2hWins) || (b.totalStars - a.totalStars));
+  } else {
+    rows.sort((a, b) => (b.totalStars - a.totalStars) || (b.cr - a.cr) || (b.h2hRating - a.h2hRating));
+  }
 }
 
 function isCurrentPlayer(row) {
   if (!window.activeProfile) return false;
   const ap = window.activeProfile;
-  return (row.id && row.id === ap.id)
-      || (row.handle && row.handle === ap.handle);
+  return (row.id && (row.id === ap.id || row.id === ap.player_id))
+      || (row.handle && row.handle.toLowerCase() === (ap.handle || '').toLowerCase());
 }
 
 function renderLbRow(row, index, highlight) {
   const rankNum = index + 1;
   const rankClass = rankNum === 1 ? 'gold' : rankNum === 2 ? 'silver' : rankNum === 3 ? 'bronze' : '';
   const isMe = highlight || isCurrentPlayer(row);
-  const isEdu = window.activeProfile && window.activeProfile.isEducator;
-
   let avaHtml;
   if (row.avatar_svg) {
-    avaHtml = `<img src="${row.avatar_svg}">`;
+    avaHtml = `<img src="${row.avatar_svg}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
   } else {
-    avaHtml = row.avatar_face || '🧑';
+    avaHtml = `<span style="font-size:20px;">${row.avatar_face || '🧑'}</span>`;
   }
 
-  const tierBadge = isEdu && row.tier_avg ? 'T' + Math.round(row.tier_avg) : '';
+  let primaryVal, subText;
+  if (_lbMetric === 'h2h') {
+    primaryVal = `⚔️ ${row.h2hRating}`;
+    subText = `W: ${row.h2hWins} · ⭐ ${row.totalStars.toLocaleString()}`;
+  } else {
+    primaryVal = `⭐ ${row.totalStars.toLocaleString()}`;
+    subText = `Bal: ⭐ ${row.cr.toLocaleString()} · ⚔️ ${row.h2hRating}`;
+  }
 
   return `<div class="lb-row${isMe ? ' lb-me' : ''}">
     <div class="lb-rank ${rankClass}">${rankNum}</div>
     <div class="lb-ava">${avaHtml}</div>
     <div class="lb-info">
-      <div class="lb-handle">${escHtml(row.handle || 'Unknown')} ${row.country ? row.country : ''}</div>
-      <div class="lb-sub" style="color:${STAR_COLOR}">⭐ ${(row.cr || 0).toLocaleString()}${tierBadge ? ' · ' + tierBadge : ''}${row.accuracy !== undefined ? ' · ' + row.accuracy + '%' : ''}</div>
+      <div class="lb-handle">${escHtml(row.handle || 'Unknown')} <span style="font-size:10px;opacity:.7;">${row.country ? escHtml(row.country) : ''}</span></div>
+      <div class="lb-sub" style="font-size:11px;color:var(--dim);">${subText}</div>
     </div>
-    <div class="lb-cr" style="color:${STAR_COLOR}">${(row.cr || 0).toLocaleString()}</div>
+    <div class="lb-cr" style="font-family:'Space Mono',monospace;font-weight:700;color:${_lbMetric === 'h2h' ? '#68d391' : STAR_COLOR};">${primaryVal}</div>
   </div>`;
 }
 
@@ -7565,12 +7611,12 @@ async function renderLeaderboard() {
       <div style="font-size:36px;margin-bottom:12px;">🏆</div>
       <div style="color:var(--dim);font-size:14px;">Loading leaderboard…</div>
     </div>`;
-
     try {
       const result = await syncStore.fetchLeaderboard();
-      _lbData = mergeLocalIntoLeaderboard(result.data || []);
-      _lbCached = result.cached;
-      _lbTimestamp = result.timestamp;
+      const rawRows = (result && result.data) ? result.data : (Array.isArray(result) ? result : []);
+      _lbData = mergeLocalIntoLeaderboard(rawRows);
+      _lbCached = !!(result && result.cached);
+      _lbTimestamp = (result && result.timestamp) || Date.now();
     } catch (e) {
       console.warn('[leaderboard] Fetch error:', e);
       _lbData = mergeLocalIntoLeaderboard([]);
@@ -7585,16 +7631,28 @@ async function renderLeaderboard() {
     _lbCached = true;
   }
 
+  sortLeaderboardRows(_lbData);
+
   let html = '';
-
-  html += `<button id="btn-lb-back" style="background:none;color:var(--dim);font-size:13px;font-weight:700;padding:4px 0;align-self:flex-start;">← Back</button>`;
-
-  html += `<div style="text-align:center;">
+  html += `<button id="btn-lb-back" style="background:none;color:var(--dim);font-size:13px;font-weight:700;padding:4px 0;align-self:flex-start;border:none;cursor:pointer;">← Back</button>`;
+  html += `<div style="text-align:center;margin-bottom:12px;">
     <div style="font-size:32px;">🏆</div>
-    <h2 style="font-family:'Fredoka One',sans-serif;font-size:22px;color:#fff;margin-top:4px;">Leaderboard</h2>
+    <h2 style="font-family:'Fredoka One',sans-serif;font-size:22px;color:#fff;margin:4px 0 2px 0;">Leaderboard</h2>
+    <div style="font-size:11px;color:var(--dim);">Compete globally or within your division</div>
   </div>`;
 
-  html += `<div class="lb-tab-row">
+  // METRIC TOGGLE: Total Stars vs H2H Rating
+  html += `<div style="display:flex;background:rgba(255,255,255,.06);border-radius:12px;padding:3px;margin-bottom:10px;gap:4px;">
+    <button class="lb-metric-toggle${_lbMetric === 'stars' ? ' active' : ''}" data-metric="stars" style="flex:1;padding:8px 6px;border-radius:9px;border:none;font-weight:700;font-size:12px;cursor:pointer;background:${_lbMetric === 'stars' ? 'var(--blue)' : 'transparent'};color:${_lbMetric === 'stars' ? '#fff' : 'var(--dim)'};transition:all .15s;">
+      ⭐ Total Stars Earned
+    </button>
+    <button class="lb-metric-toggle${_lbMetric === 'h2h' ? ' active' : ''}" data-metric="h2h" style="flex:1;padding:8px 6px;border-radius:9px;border:none;font-weight:700;font-size:12px;cursor:pointer;background:${_lbMetric === 'h2h' ? '#22c55e' : 'transparent'};color:${_lbMetric === 'h2h' ? '#fff' : 'var(--dim)'};transition:all .15s;">
+      ⚔️ Head-to-Head Rating
+    </button>
+  </div>`;
+
+  // SCOPE TABS: Global vs Age Group
+  html += `<div class="lb-tab-row" style="margin-bottom:8px;">
     <button class="lb-tab${_lbTab === 'global' ? ' active' : ''}" data-tab="global">🌍 Global</button>
     <button class="lb-tab${_lbTab === 'age' ? ' active' : ''}" data-tab="age">👥 Age Group</button>
   </div>`;
@@ -7613,27 +7671,21 @@ async function renderLeaderboard() {
   if (_lbTab === 'age') {
     const profile = window.activeProfile;
     const playerAge = profile ? getAgeFromBirthYear(profile.birthYear) : null;
-    currentBracket = getBracketForAge(playerAge);
-
+    currentBracket = _lbBracketOverride || getBracketForAge(playerAge) || AGE_BRACKETS[0];
     if (currentBracket) {
       displayData = _lbData.filter(row => {
         const age = getAgeFromBirthYear(row.birth_year);
         if (age === null) return false;
         return age >= currentBracket.minAge && age <= currentBracket.maxAge;
       });
-    } else {
-      html += `<div style="text-align:center;padding:10px;color:var(--dim);font-size:12px;">
-        Set your birth year in your profile to see age group rankings.
-      </div>`;
     }
-
-    html += `<div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;">`;
+    html += `<div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-bottom:10px;">`;
     for (const b of AGE_BRACKETS) {
       const isActive = currentBracket && currentBracket.id === b.id;
       html += `<button class="lb-bracket-btn" data-bracket="${b.id}" style="
         background:${isActive ? 'var(--blue)' : 'var(--bg-panel)'};
         border:1px solid ${isActive ? 'var(--blue)' : 'var(--border)'};
-        border-radius:var(--pill); padding:6px 12px; font-size:11px;
+        border-radius:var(--pill); padding:5px 10px; font-size:11px;
         font-weight:700; color:${isActive ? '#fff' : 'var(--dim)'}; cursor:pointer;
       ">${b.emoji} ${b.label}</button>`;
     }
@@ -7641,19 +7693,17 @@ async function renderLeaderboard() {
   }
 
   const top50 = displayData.slice(0, 50);
-
   const playerIdx = displayData.findIndex(r => isCurrentPlayer(r));
 
   if (top50.length === 0) {
     html += `<div style="text-align:center;padding:30px;color:var(--dim);font-size:13px;">
-      No players found${_lbTab === 'age' && currentBracket ? ' in ' + currentBracket.label : ''}. Play a game to get ranked!
+      No players found${_lbTab === 'age' && currentBracket ? ' in ' + currentBracket.label : ''}. Play games to claim the top spot!
     </div>`;
   } else {
     html += `<div style="display:flex;flex-direction:column;gap:6px;width:100%;">`;
     for (let i = 0; i < top50.length; i++) {
       html += renderLbRow(top50[i], i, false);
     }
-
     if (playerIdx >= 50) {
       html += `<div style="text-align:center;padding:6px;color:var(--dim);font-size:11px;letter-spacing:.1em;">· · ·</div>`;
       html += renderLbRow(displayData[playerIdx], playerIdx, true);
@@ -7661,19 +7711,27 @@ async function renderLeaderboard() {
     html += `</div>`;
   }
 
-  if (window.activeProfile && window.activeProfile.stats) {
+  // Active Player Rank Card
+  if (window.activeProfile) {
     const p = window.activeProfile;
-    const cr = p.stats.cr || 0;
-    const _pTitle = getProfileTitle(p);
-    const _pColor = getProfileTitleColor(p);
+    const normMe = normalizeLeaderboardRow({
+      id: p.id,
+      handle: p.handle,
+      cr: p.stats?.cr || 0,
+      stats: p.stats || {}
+    });
     const globalRank = _lbData.findIndex(r => isCurrentPlayer(r));
     const ageRank = _lbTab === 'age' ? playerIdx : -1;
+    const highlightScore = _lbMetric === 'h2h' ? `⚔️ ${normMe.h2hRating}` : `⭐ ${normMe.totalStars.toLocaleString()} Total Stars`;
 
-    html += `<div style="margin-top:10px;padding:14px;background:var(--bg-panel);border:1px solid var(--blue);border-radius:14px;text-align:center;width:100%;">
+    html += `<div style="margin-top:14px;padding:14px;background:var(--bg-panel);border:1px solid var(--blue);border-radius:14px;text-align:center;width:100%;">
       <div style="font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.12em;margin-bottom:4px;">Your Ranking</div>
-      <div style="font-family:'Space Mono',monospace;font-size:24px;font-weight:700;color:${_pColor};">#${globalRank >= 0 ? globalRank + 1 : '—'}</div>
-      <div style="font-size:12px;color:${_pColor};margin-top:2px;">${_pTitle} · ⭐ ${cr.toLocaleString()}</div>
-      ${_lbTab === 'age' && ageRank >= 0 && currentBracket ? `<div style="font-size:11px;color:var(--dim);margin-top:4px;">#${ageRank + 1} in ${currentBracket.label}</div>` : ''}
+      <div style="font-family:'Space Mono',monospace;font-size:24px;font-weight:700;color:${_lbMetric === 'h2h' ? '#68d391' : STAR_COLOR};">
+        #${globalRank >= 0 ? globalRank + 1 : '—'}
+      </div>
+      <div style="font-size:12px;color:#fff;font-weight:700;margin-top:2px;">${highlightScore}</div>
+      <div style="font-size:11px;color:var(--dim);margin-top:2px;">Current Balance: ⭐ ${normMe.cr.toLocaleString()}</div>
+      ${_lbTab === 'age' && ageRank >= 0 && currentBracket ? `<div style="font-size:11px;color:#68d391;margin-top:4px;">#${ageRank + 1} in ${currentBracket.label}</div>` : ''}
     </div>`;
   }
 
@@ -7681,9 +7739,17 @@ async function renderLeaderboard() {
 
   document.getElementById('btn-lb-back')?.addEventListener('click', () => go('s-setup'));
 
+  root.querySelectorAll('.lb-metric-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _lbMetric = btn.dataset.metric;
+      renderLeaderboard();
+    });
+  });
+
   root.querySelectorAll('.lb-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       _lbTab = tab.dataset.tab;
+      _lbBracketOverride = null;
       renderLeaderboard();
     });
   });
@@ -7694,109 +7760,8 @@ async function renderLeaderboard() {
       const bracket = AGE_BRACKETS.find(b => b.id === bracketId);
       if (bracket) {
         _lbBracketOverride = bracket;
-        renderLeaderboardWithBracket(bracket);
+        renderLeaderboard();
       }
-    });
-  });
-}
-
-let _lbBracketOverride = null;
-
-function renderLeaderboardWithBracket(bracket) {
-  const root = document.getElementById('leaderboard-root');
-  if (!root) return;
-
-  _lbBracketOverride = bracket;
-
-  const displayData = _lbData.filter(row => {
-    const age = getAgeFromBirthYear(row.birth_year);
-    if (age === null) return false;
-    return age >= bracket.minAge && age <= bracket.maxAge;
-  });
-
-  const playerIdx = displayData.findIndex(r => isCurrentPlayer(r));
-  const top50 = displayData.slice(0, 50);
-
-  let html = '';
-
-  html += `<button id="btn-lb-back" style="background:none;color:var(--dim);font-size:13px;font-weight:700;padding:4px 0;align-self:flex-start;">← Back</button>`;
-
-  html += `<div style="text-align:center;">
-    <div style="font-size:32px;">🏆</div>
-    <h2 style="font-family:'Fredoka One',sans-serif;font-size:22px;color:#fff;margin-top:4px;">Leaderboard</h2>
-  </div>`;
-
-  html += `<div class="lb-tab-row">
-    <button class="lb-tab" data-tab="global">🌍 Global</button>
-    <button class="lb-tab active" data-tab="age">👥 Age Group</button>
-  </div>`;
-
-  if (_lbCached && _lbTimestamp) {
-    const ts = new Date(_lbTimestamp);
-    const timeStr = ts.toLocaleDateString() + ' ' + ts.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-    html += `<div class="lb-offline-banner">📡 Showing cached data · Last updated ${timeStr}</div>`;
-  } else if (_lbCached && !_lbTimestamp) {
-    html += `<div class="lb-offline-banner">📡 Showing local profiles only</div>`;
-  }
-
-  html += `<div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;">`;
-  for (const b of AGE_BRACKETS) {
-    const isActive = b.id === bracket.id;
-    html += `<button class="lb-bracket-btn" data-bracket="${b.id}" style="
-      background:${isActive ? 'var(--blue)' : 'var(--bg-panel)'};
-      border:1px solid ${isActive ? 'var(--blue)' : 'var(--border)'};
-      border-radius:var(--pill); padding:6px 12px; font-size:11px;
-      font-weight:700; color:${isActive ? '#fff' : 'var(--dim)'}; cursor:pointer;
-    ">${b.emoji} ${b.label}</button>`;
-  }
-  html += `</div>`;
-
-  if (top50.length === 0) {
-    html += `<div style="text-align:center;padding:30px;color:var(--dim);font-size:13px;">
-      No players found in ${bracket.label}. Play a game to get ranked!
-    </div>`;
-  } else {
-    html += `<div style="display:flex;flex-direction:column;gap:6px;width:100%;">`;
-    for (let i = 0; i < top50.length; i++) {
-      html += renderLbRow(top50[i], i, false);
-    }
-    if (playerIdx >= 50) {
-      html += `<div style="text-align:center;padding:6px;color:var(--dim);font-size:11px;letter-spacing:.1em;">· · ·</div>`;
-      html += renderLbRow(displayData[playerIdx], playerIdx, true);
-    }
-    html += `</div>`;
-  }
-
-  if (window.activeProfile && window.activeProfile.stats) {
-    const p = window.activeProfile;
-    const cr = p.stats.cr || 0;
-    const _pTitle2 = getProfileTitle(p);
-    const _pColor2 = getProfileTitleColor(p);
-    const globalRank = _lbData.findIndex(r => isCurrentPlayer(r));
-
-    html += `<div style="margin-top:10px;padding:14px;background:var(--bg-panel);border:1px solid var(--blue);border-radius:14px;text-align:center;width:100%;">
-      <div style="font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.12em;margin-bottom:4px;">Your Ranking</div>
-      <div style="font-family:'Space Mono',monospace;font-size:24px;font-weight:700;color:${_pColor2};">#${globalRank >= 0 ? globalRank + 1 : '—'}</div>
-      <div style="font-size:12px;color:${_pColor2};margin-top:2px;">${_pTitle2} · ⭐ ${cr.toLocaleString()}</div>
-      ${playerIdx >= 0 ? `<div style="font-size:11px;color:var(--dim);margin-top:4px;">#${playerIdx + 1} in ${bracket.label}</div>` : ''}
-    </div>`;
-  }
-
-  root.innerHTML = html;
-
-  document.getElementById('btn-lb-back')?.addEventListener('click', () => go('s-setup'));
-  root.querySelectorAll('.lb-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      _lbTab = tab.dataset.tab;
-      _lbBracketOverride = null;
-      renderLeaderboard();
-    });
-  });
-  root.querySelectorAll('.lb-bracket-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const bid = btn.dataset.bracket;
-      const b = AGE_BRACKETS.find(x => x.id === bid);
-      if (b) renderLeaderboardWithBracket(b);
     });
   });
 }
@@ -8149,6 +8114,7 @@ function updateProfileStats(profile, gr) {
 
   const crGain = gr.score || 0;
   s.cr = (s.cr || 0) + crGain;
+  if (crGain > 0) { s.lifetimeStars = (s.lifetimeStars || 0) + crGain; }
 
   profile._lastCRDelta = crGain;
   profile._prevCR = prevCR;

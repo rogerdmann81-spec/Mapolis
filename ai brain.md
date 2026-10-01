@@ -650,3 +650,30 @@ We performed a formal intellectual property and legal coverage audit across ever
 2. Verification:
    - `LEGAL_NOTICES.md` committed and verified.
    - Zero proprietary or non-commercial (NC) license restrictions in the codebase.
+
+----------------------------------------------------------------------------------------------------------
+21. Completed Task: Leaderboard Supabase Sync & Dual Parallel Ratings Overhaul
+Status: ✅ Complete
+Target: play/assets/shared.js, assets/shared.js, admin/assets/shared.js, play/index.html, index.html
+Branch: pre-beta3
+
+We diagnosed and resolved the issue preventing the leaderboard from displaying Supabase player profiles, and overhauled the leaderboard with two parallel rating systems alongside global and age-group breakdowns.
+
+1. What Was Fixed & Overhauled:
+   - Supabase Query & Return Contract Alignment:
+     - Previously, `syncStore.fetchLeaderboard()` returned a raw Array while `play/index.html` expected `{ data, cached, timestamp }`.
+     - The REST query only selected `handle, country, stats` without `cr`, `player_id`, or `birth_year`.
+     - Updated `shared.js` to query `player_id, handle, country, stats, cr, birth_year, avatar_face, avatar_svg` ordered by `cr.desc.nullslast` and return the standardized payload contract with caching.
+   - Dual Parallel Rating Systems:
+     - Introduced an intuitive top toggle switching between two distinct leaderboards:
+       1. **⭐ Total Stars Earned**: Ranks players by lifetime stars accumulated (preserving their progress even when spending stars on avatars/animals, with current balance displayed as a sub-metric).
+       2. **⚔️ Head-to-Head Rating**: Ranks players by their competitive ELO rating (default 1200, climbing/dropping based on H2H match wins/losses), displaying wins, ties, and rating tiers.
+   - Lifetime Stars Tracking:
+     - Updated `updateProfileStats` and `finishH2HMatch` to increment `stats.lifetimeStars` on every game/match reward, ensuring spending stars in the store never degrades a player's all-time ranking.
+   - Dual Scope Breakdowns:
+     - Retained full support for **🌍 Global** and **👥 Age Group** (Explorer Cadet <8, Pathfinder 8–10, Cartographer 11–13, Navigator 14–17, Master Voyager 18+) across both rating metrics.
+
+2. Verification:
+   - Supabase REST query tested directly against live database (HTTP 200).
+   - In-memory data normalization and re-sort verified across both `stars` and `h2h` metrics.
+   - JavaScript engine syntax verification: **100% Passed across all script blocks**.

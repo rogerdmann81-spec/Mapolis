@@ -395,13 +395,15 @@ const syncStore = {
     if (navigator.onLine && isSupabaseConfigured()) {
       try {
         const url = SUPABASE_URL
-          + '/rest/v1/profiles?select=handle,country,stats&order=stats->cr.desc.nullslast&limit=100';
+          + '/rest/v1/profiles?select=player_id,handle,country,stats,cr,birth_year,avatar_face,avatar_svg&order=cr.desc.nullslast&limit=100';
         const resp = await fetch(url, { headers: authedHeaders() });
         if (resp.ok) {
           const rows = await resp.json();
+          const ts = Date.now();
+          const payload = { data: rows, cached: false, timestamp: ts };
           localStorage.setItem(LEADERBOARD_CACHE_KEY, JSON.stringify(rows));
-          localStorage.setItem(LEADERBOARD_TS_KEY, Date.now().toString());
-          return rows;
+          localStorage.setItem(LEADERBOARD_TS_KEY, ts.toString());
+          return payload;
         }
       } catch (e) {
         console.warn('[syncStore] Leaderboard fetch failed, using cache:', e);
@@ -409,9 +411,11 @@ const syncStore = {
     }
     try {
       const cached = localStorage.getItem(LEADERBOARD_CACHE_KEY);
-      return cached ? JSON.parse(cached) : [];
+      const ts = localStorage.getItem(LEADERBOARD_TS_KEY);
+      const rows = cached ? JSON.parse(cached) : [];
+      return { data: rows, cached: true, timestamp: ts ? parseInt(ts, 10) : null };
     } catch (e) {
-      return [];
+      return { data: [], cached: true, timestamp: null };
     }
   },
 
