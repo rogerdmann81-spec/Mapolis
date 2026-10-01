@@ -524,7 +524,7 @@ We modernized all user-facing onboarding, profile creation, and account recovery
 15. Completed Task: Removal of Legacy Pre-Launch Disclaimers & Sign-In UI Polish
 Status: ✅ Complete
 Target: play/index.html, index.html
-Branch: prebeta3
+Branch: pre-beta3
 
 We purged the legacy developer warning ("⚠️ Pre-launch: this looks up profiles on the current device only...") from the Sign In modal's Parent Email tab.
 
@@ -539,7 +539,7 @@ We purged the legacy developer warning ("⚠️ Pre-launch: this looks up profil
 16. Completed Task: Compliance Hardening — Removal of Ghost CDN Entries from CSP
 Status: ✅ Complete
 Target: play/index.html, index.html
-Branch: prebeta3
+Branch: pre-beta3
 
 We performed a deep audit of the codebase for `cdnjs.cloudflare.com` and `cdn.jsdelivr.net`. After verifying that 100% of D3.js, TopoJSON, and map data are bundled locally in `/lib/` and `map-data.js` with zero runtime network requests to either domain, we purged both external domains from the Content Security Policy (CSP) meta tag.
 
