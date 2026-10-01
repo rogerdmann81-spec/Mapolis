@@ -7507,7 +7507,23 @@ function normalizeLeaderboardRow(r) {
   const stats = (r && r.stats) || {};
   const h2h = stats.h2h || {};
   const currentCR = (typeof r.cr === 'number') ? r.cr : (stats.cr || 0);
-  const lifetime = (typeof stats.lifetimeStars === 'number') ? stats.lifetimeStars : currentCR;
+  
+  // Authoritative Ledger: Sum all positive crGain events across processedSessions (ignoring negative purchase deductions)
+  let ledgerEarnedStars = 0;
+  const sessions = stats.processedSessions || {};
+  for (const k in sessions) {
+    if (Object.prototype.hasOwnProperty.call(sessions, k)) {
+      const sess = sessions[k];
+      if (sess && typeof sess.crGain === 'number' && sess.crGain > 0) {
+        ledgerEarnedStars += sess.crGain;
+      }
+    }
+  }
+
+  // Fallback to highest recorded between ledger, explicit lifetimeStars, and current balance
+  const explicitLifetime = (typeof stats.lifetimeStars === 'number') ? stats.lifetimeStars : 0;
+  const totalEarned = Math.max(currentCR, ledgerEarnedStars, explicitLifetime);
+
   const h2hRating = (typeof h2h.rating === 'number') ? h2h.rating : 1200;
   const h2hMatches = (typeof h2h.matches === 'number') ? h2h.matches : 0;
   const h2hWins = (typeof h2h.wins === 'number') ? h2h.wins : 0;
@@ -7520,7 +7536,7 @@ function normalizeLeaderboardRow(r) {
     avatar_face: r.avatar_face || (r.avatar && r.avatar.face) || '🧑',
     avatar_svg: r.avatar_svg || (r.avatar && r.avatar.svg) || null,
     cr: currentCR,
-    totalStars: Math.max(currentCR, lifetime),
+    totalStars: totalEarned,
     h2hRating: h2hRating,
     h2hMatches: h2hMatches,
     h2hWins: h2hWins,

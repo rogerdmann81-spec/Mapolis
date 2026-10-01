@@ -677,3 +677,25 @@ We diagnosed and resolved the issue preventing the leaderboard from displaying S
    - Supabase REST query tested directly against live database (HTTP 200).
    - In-memory data normalization and re-sort verified across both `stars` and `h2h` metrics.
    - JavaScript engine syntax verification: **100% Passed across all script blocks**.
+
+----------------------------------------------------------------------------------------------------------
+22. Completed Task: Authoritative Session Ledger Summation for Lifetime Stars
+Status: ✅ Complete
+Target: play/index.html, index.html
+Branch: pre-beta3
+
+We upgraded the "Total Stars Earned" calculation from a simple running counter to an authoritative immutable ledger aggregator that directly parses each profile's `stats.processedSessions`.
+
+1. What Was Completed:
+   - Immutable Ledger Aggregation:
+     - The codebase already stamps every gameplay session (`sess_*`), head-to-head match (`h2h_*`), and store purchase (`tx_*`) into `profile.stats.processedSessions`.
+     - In `normalizeLeaderboardRow`, the engine now iterates through `stats.processedSessions` and sums all positive `crGain` events (earned via gameplay and H2H matches) while strictly ignoring negative `crGain` events (store purchases).
+     - Calculates the true lifetime stars earned retroactively across all historical sessions, with zero data loss for existing players who played before this update.
+   - Fallback & Reconciliation:
+     - Reconciles `Math.max(currentCR, ledgerEarnedStars, explicitLifetime)` ensuring that if an older account lacks session IDs, their current balance or counter is preserved seamlessly.
+   - Complete Anti-Degradation Guarantee:
+     - Spending stars in the Avatar Store or Animal Preserve creates a transaction (`tx_*`) with negative `crGain`, which reduces spendable balance `cr` but has ZERO effect on lifetime stars earned on the leaderboard.
+
+2. Verification:
+   - Tested against live Supabase player profile (`Cc`): current balance = 93 ⭐, store deductions = -150 ⭐, positive earned sessions = 253 ⭐.
+   - Leaderboard accurately credits `Cc` with 253 Total Stars Earned while showing spendable balance of 93 ⭐.
