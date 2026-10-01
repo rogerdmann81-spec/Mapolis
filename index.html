@@ -5379,6 +5379,55 @@ function cancelH2HQueue() {
   go('s-setup');
 }
 
+async function fetchRealH2HQueueStats() {
+  var online = 1;
+  var inQueue = 1; // You are in queue
+
+  if (typeof isSupabaseConfigured === 'function' && isSupabaseConfigured()) {
+    try {
+      var headers = {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + (typeof _getSessionToken === 'function' && _getSessionToken() ? _getSessionToken() : SUPABASE_ANON_KEY),
+        'Range': '0-0',
+        'Prefer': 'count=exact'
+      };
+
+      // 1. Query match_queue for actual active challengers waiting in queue
+      var qRes = await fetch(SUPABASE_URL + '/rest/v1/match_queue?select=*', {
+        method: 'HEAD',
+        headers: headers
+      });
+      if (qRes && qRes.headers) {
+        var cr = qRes.headers.get('content-range');
+        if (cr && cr.includes('/')) {
+          var totalQ = parseInt(cr.split('/')[1], 10);
+          if (!isNaN(totalQ)) inQueue = Math.max(1, totalQ);
+        }
+      }
+
+      // 2. Query registered player population currently on the network
+      var pRes = await fetch(SUPABASE_URL + '/rest/v1/profiles?select=player_id', {
+        method: 'HEAD',
+        headers: headers
+      });
+      if (pRes && pRes.headers) {
+        var crp = pRes.headers.get('content-range');
+        if (crp && crp.includes('/')) {
+          var totalP = parseInt(crp.split('/')[1], 10);
+          if (!isNaN(totalP)) online = Math.max(1, totalP);
+        }
+      }
+    } catch(e) {
+      console.warn('[h2h-stats] failed to fetch real queue stats from Supabase:', e);
+    }
+  }
+
+  var oEl = document.getElementById('h2h-online');
+  var qEl = document.getElementById('h2h-queue-count');
+  if (oEl) oEl.textContent = online;
+  if (qEl) qEl.textContent = inQueue;
+}
+
 function renderH2HQueue() {
   var root = document.getElementById('h2h-queue-root');
   if (!root) return;
@@ -5390,11 +5439,11 @@ function renderH2HQueue() {
   html += '<div class="q-sub" id="h2h-queue-sub">Searching for challenger (±40 ELO) · <span style="color:#ffe135;font-weight:700;">20s</span></div>';
   html += '<div class="globe-wrap"><div class="ring2"></div><div class="ring"></div><div id="h2h-globe-mount" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;"></div></div>';
   html += '<div class="q-stats">';
-  html += '<div class="q-stat"><div class="q-stat-num" id="h2h-online">247</div><div class="q-stat-lbl">Online</div></div>';
+  html += '<div class="q-stat"><div class="q-stat-num" id="h2h-online">1</div><div class="q-stat-lbl">Active Profiles</div></div>';
   html += '<div class="q-divider"></div>';
   html += '<div class="q-stat"><div class="q-stat-num" id="h2h-queue-sec" style="color:#ffe135;">20s</div><div class="q-stat-lbl">Search Timer</div></div>';
   html += '<div class="q-divider"></div>';
-  html += '<div class="q-stat"><div class="q-stat-num" id="h2h-queue-count">12</div><div class="q-stat-lbl">In queue</div></div>';
+  html += '<div class="q-stat"><div class="q-stat-num" id="h2h-queue-count">1</div><div class="q-stat-lbl">In queue</div></div>';
   html += '</div>';
   html += '<button class="q-back" id="h2h-queue-cancel">Cancel</button>';
   html += '<div class="q-foot">Gnapoley · Mapolis</div>';
@@ -5420,14 +5469,14 @@ function renderH2HQueue() {
     window.MapolisGlobe.mount('h2h-globe-mount', 'queue');
   }
 
-  // Live counter ticks
+  // Fetch real accurate stats immediately on mount
+  fetchRealH2HQueueStats();
+
+  // Periodic polling for real queue updates every 4 seconds (no random fuzzing)
   if (_h2h.queueCountersTimer) clearInterval(_h2h.queueCountersTimer);
   _h2h.queueCountersTimer = setInterval(function() {
-    var o = document.getElementById('h2h-online');
-    var q = document.getElementById('h2h-queue-count');
-    if (o) o.textContent = Math.max(200, parseInt(o.textContent, 10) + Math.round((Math.random()-0.5)*6));
-    if (q) q.textContent = Math.max(1, parseInt(q.textContent, 10) + Math.round((Math.random()-0.5)*2));
-  }, 1800);
+    fetchRealH2HQueueStats();
+  }, 4000);
 
   // Cancel button
   var cancelBtn = document.getElementById('h2h-queue-cancel');

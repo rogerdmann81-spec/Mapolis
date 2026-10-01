@@ -726,3 +726,26 @@ We updated the Head-to-Head (H2H) matchmaking queue to run for a full 20-second 
 2. Verification:
    - JavaScript engine syntax checks: 100% Passed.
    - Verified timer cleanup in `cancelH2HQueue`.
+
+----------------------------------------------------------------------------------------------------------
+24. Completed Task: Real Accurate H2H Queue & Active Player Metrics
+Status: ✅ Complete
+Target: play/index.html, index.html
+Branch: pre-beta3
+
+We eliminated fabricated random counters on the Head-to-Head queue screen and connected live accurate counts directly to Supabase.
+
+1. What Was Implemented:
+   - Replaced Mock Random Walk:
+     - Removed the mock `setInterval` that fluctuated numbers randomly with `Math.random()`.
+   - Real-Time Supabase Accurate Query (`fetchRealH2HQueueStats`):
+     - Uses lightweight `HEAD` requests with `Prefer: count=exact` against:
+       1. `match_queue`: Reads the exact number of active challengers in queue (`content-range` header).
+       2. `profiles`: Reads the exact player profile population in the database.
+     - Automatically guarantees a minimum of `1` for "In queue" (accounting for the active local player).
+     - Relabeled the first stat to `Active Profiles` for complete honesty and semantic accuracy.
+     - Refreshes live every 4 seconds without random fuzzing or fake spikes.
+
+2. Verification:
+   - Validated script syntax with Node.js checker (100% Passed).
+   - Clean interval cancellation in `cancelH2HQueue`.
