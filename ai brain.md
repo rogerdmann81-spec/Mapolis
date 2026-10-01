@@ -534,3 +534,25 @@ We purged the legacy developer warning ("⚠️ Pre-launch: this looks up profil
      - With Supabase `restore_profile` and `restore_profile_by_email` RPCs fully live in production, this legacy note has been removed to prevent user confusion and clean up regulatory audit trails.
    - Clean Modal Footers:
      - The sign-in overlay now cleanly presents only active inputs, submit triggers, and local fallback recovery pointers.
+
+----------------------------------------------------------------------------------------------------------
+16. Completed Task: Compliance Hardening — Removal of Ghost CDN Entries from CSP
+Status: ✅ Complete
+Target: play/index.html, index.html
+Branch: prebeta3
+
+We performed a deep audit of the codebase for `cdnjs.cloudflare.com` and `cdn.jsdelivr.net`. After verifying that 100% of D3.js, TopoJSON, and map data are bundled locally in `/lib/` and `map-data.js` with zero runtime network requests to either domain, we purged both external domains from the Content Security Policy (CSP) meta tag.
+
+1. What It Is:
+   - Purged External Domains from CSP:
+     - `script-src`: Removed `https://cdnjs.cloudflare.com`.
+     - `connect-src`: Removed `https://cdn.jsdelivr.net` and `https://cdnjs.cloudflare.com`.
+     - New airtight CSP:
+       `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'`
+   - Zero-Breakage Verification:
+     - Triple-checked every client JavaScript and CSS file across the repository. Zero active functional code made network calls or imported resources from either CDN.
+     - Outdated comment referencing `jsDelivr` in animal badge renderer cleaned up to reflect current architecture.
+
+2. Why We Chose It:
+   - Compliance & Procurement Readiness: K-12 school districts, student privacy alliances (SDPC), and FERPA/COPPA compliance auditors flag external CDN permissions in the CSP as potential supply chain attack vectors and third-party data tracking risks.
+   - Elimination of Over-Permissive Whitelists: Whitelists in the CSP should only grant access to hosts the app genuinely requires. Restricting `connect-src` strictly to `'self'` and `*.supabase.co` closes the surface entirely.

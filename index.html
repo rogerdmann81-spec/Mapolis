@@ -30,7 +30,7 @@
      inline script block. When the split happens and scripts move to
      external files, tighten script-src to 'self' only. Supabase domain
      pre-added so the RPC wiring in Phase B §6 doesn't need a CSP edit. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <!-- Private beta: keep search engines out until §10 privacy policy ships
@@ -8072,7 +8072,7 @@ const ACCESSORY_UNLOCKS = ANIMAL_PRESERVE;
 
 // ── Animal image rendering ──
 // Each animal carries a Fluent Emoji codepoint (`cp`) that maps directly to a
-// Microsoft Fluent Emoji 3D WebP file served via the jsDelivr CDN.
+// Microsoft Fluent Emoji 3D WebP file assets.
 const FLUENT3D_BASE = 'https://unpkg.com/@lobehub/fluent-emoji-3d@1.1.0/assets/';
 function animalImgHtml(animal, sizePx) {
   const safeName = (animal.name || '').replace(/"/g, '&quot;');
