@@ -487,7 +487,7 @@
 
     <!-- ANIMAL ART -->
     <div class="credits-heading">🦊 Animal Art</div>
-    <p class="credits-body">Animal Preserve illustrations from <strong style="color:rgba(255,255,255,.85);">Microsoft Fluent Emoji 3D</strong> via @lobehub/fluent-emoji-3d on unpkg CDN.</p>
+    <p class="credits-body">Animal Preserve &amp; Achievement Badge illustrations from <strong style="color:rgba(255,255,255,.85);">Microsoft Fluent Emoji 3D</strong> via @lobehub/fluent-emoji-3d (self-hosted locally).</p>
     <div class="credits-item"><span><strong>Fluent Emoji 3D</strong> — Microsoft Corporation</span><span class="credits-license">MIT</span></div>
 
     <!-- TYPOGRAPHY -->
@@ -8134,7 +8134,7 @@ const ACCESSORY_UNLOCKS = ANIMAL_PRESERVE;
 // ── Animal image rendering ──
 // Each animal carries a Fluent Emoji codepoint (`cp`) that maps directly to a
 // Microsoft Fluent Emoji 3D WebP file assets.
-const FLUENT3D_BASE = 'https://unpkg.com/@lobehub/fluent-emoji-3d@1.1.0/assets/';
+const FLUENT3D_BASE = '/assets/badges/';
 function animalImgHtml(animal, sizePx) {
   const safeName = (animal.name || '').replace(/"/g, '&quot;');
   const initials = (animal.name || '?').trim().charAt(0).toUpperCase();
