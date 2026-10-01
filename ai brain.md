@@ -629,3 +629,24 @@ We downloaded and bundled all 93 animal preserve and achievement badge WebP vect
    - Remaining external CDNs (`unpkg`, `dicebear`, `cdnjs`, `jsdelivr`): **0**
    - Local WebP badge assets present: **93 of 93 verified**
    - JavaScript engine syntax checks: **100% Passed**.
+
+----------------------------------------------------------------------------------------------------------
+20. Completed Task: Legal Coverage Register & Open-Source Intellectual Property Audit
+Status: ✅ Complete
+Target: LEGAL_NOTICES.md, ai brain.md
+Branch: pre-beta3
+
+We performed a formal intellectual property and legal coverage audit across every external asset, library, font, and geographic dataset bundled into Mapolis. All licenses were confirmed to be open-source permissive (MIT, CC BY 4.0, CC0, ISC, BSD-3, SIL OFL 1.1) granting explicit legal coverage to copy, bundle, self-host, and commercialize the software without royalty obligations.
+
+1. What Was Completed:
+   - Dedicated Legal Register (`LEGAL_NOTICES.md`):
+     - Created a comprehensive `LEGAL_NOTICES.md` at repository root following commercial software industry standards.
+     - Documented exact statutory license grants for Microsoft Fluent Emoji 3D (MIT), DiceBear & contributing artists (CC BY 4.0 / CC0), Natural Earth (Public Domain), world-atlas / D3.js (ISC / BSD-3), and Typography (SIL OFL 1.1).
+   - In-App Attribution Parity:
+     - Confirmed that in-app `Credits & Acknowledgments` (`s-credits`) satisfies the copyright attribution requirements of CC BY 4.0 Section 3.a.1, MIT, and BSD-3.
+   - Procurement & Regulatory Defensibility:
+     - Establishes full paper-trail and legal defensibility for school district procurement officers, student data privacy consortiums (SDPC), and state education departments.
+
+2. Verification:
+   - `LEGAL_NOTICES.md` committed and verified.
+   - Zero proprietary or non-commercial (NC) license restrictions in the codebase.
