@@ -2700,8 +2700,8 @@ function rgrid(){
               if(res.msg&&typeof showToast==='function')showToast(res.msg);
               _avRenderAll();
             }
-          };
-        };
+          });
+        });
       }else{
         wrap.addEventListener('click',function(){cF=fk;ld(fk);cache.clear();cT=gc()[0]?gc()[0].k:"_face";rbt();_avRenderAll();});
       }
@@ -2732,7 +2732,7 @@ function rgrid(){
       var res=purchaseAvatarPack(prof,cF,cat.k);
       if(res.ok){if(typeof showToast==='function')showToast(cat.l+' pack unlocked! 🎨');_avRenderAll();}
       else if(res.msg&&typeof showToast==='function')showToast(res.msg);
-    };
+    });
   }
 
   if(cat.p==="_skin"){
@@ -2804,8 +2804,8 @@ function rgrid(){
             if(res.msg&&typeof showToast==='function')showToast(res.msg);
             _avRenderAll();
           }
-        };
-      };
+        });
+      });
     }else{
       cd.appendChild(im);
       cd.addEventListener("click",function(){sel[cat.p]=item;_avRenderAll();});
