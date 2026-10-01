@@ -777,3 +777,19 @@ We restored and expanded the Master Administrator's ability to browse and inspec
 2. Verification:
    - JavaScript engine syntax checks: 100% Passed.
    - Catalog data and image fallback tests: 100% Passed.
+
+----------------------------------------------------------------------------------------------------------
+26. Completed Task: Consolidate Admin Directory & Eliminate Root Redundancy
+Status: ✅ Complete
+Target: admin/ (removed), play/admin/ (canonical), server.js
+Branch: pre-beta3
+
+We eliminated the dead-weight root `admin/` directory so that `play/admin/` is the single authoritative source of truth.
+
+1. What Was Changed:
+   - Removed redundant root `admin/` folder completely.
+   - Updated `server.js` route `/admin` and `/admin/` to serve `play/admin/index.html`.
+   - Now both local dev (`server.js`) and Netlify production (`base: 'play'`) use the exact same directory structure and single working copy in `play/admin/`.
+
+2. Verification:
+   - Syntax checked `server.js` and confirmed clean single-location structure.

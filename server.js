@@ -11,7 +11,10 @@ const PORT = 3000;
 
 // Specific app routes
 app.get('/admin', (req, res) => {
-  res.sendFile(path.join(__dirname, 'admin', 'index.html'));
+  res.sendFile(path.join(__dirname, 'play', 'admin', 'index.html'));
+});
+app.get('/admin/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'play', 'admin', 'index.html'));
 });
 
 app.get('/play', (req, res) => {
