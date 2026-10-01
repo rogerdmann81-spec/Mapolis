@@ -124,9 +124,9 @@
 
         <button class="btn-yellow" id="btn-letsgo">Let's Go!</button>
         <div class="title-footer-links">
-          <button class="title-credits-btn" onclick="go('s-credits')">Credits</button>
+          <button class="title-credits-btn" data-go="s-credits">Credits</button>
           <span class="title-footer-sep">·</span>
-          <button class="title-privacy-btn" onclick="go('s-compliance')">Privacy &amp; Safety</button>
+          <button class="title-privacy-btn" data-go="s-compliance">Privacy &amp; Safety</button>
         </div>
 
       </div>
@@ -440,7 +440,7 @@
      ══════════════════════════════════════════════ -->
 <div id="s-credits" class="screen">
   <div class="credits-scroll">
-    <button class="credits-back" onclick="goBack()">←</button>
+    <button class="credits-back" data-action="goBack">←</button>
 
     <div class="credits-page-title">Credits &amp; Acknowledgments</div>
     <p class="credits-page-sub">Mapolis is built with care using open-source tools, public domain data, and the work of talented artists and educators.</p>
@@ -498,14 +498,14 @@
     <p class="credits-body" style="margin-top:28px; font-size:10px; opacity:.35; text-align:center;">Version 1 · © 2026 Gnapoley · All rights reserved</p>
 
     <p class="credits-body" style="margin-top:10px; font-size:10px; text-align:center;">
-      <button onclick="go('s-compliance')" style="background:none;border:none;cursor:pointer;font-family:'Nunito',sans-serif;font-size:10px;font-weight:800;color:rgba(120,160,255,.4);letter-spacing:.06em;padding:0;transition:color .2s;" onmouseover="this.style.color='rgba(120,160,255,.75)'" onmouseout="this.style.color='rgba(120,160,255,.4)'">Privacy &amp; Safety ↗</button>
+      <button class="credits-compliance-btn" data-go="s-compliance" style="background:none;border:none;cursor:pointer;font-family:'Nunito',sans-serif;font-size:10px;font-weight:800;color:rgba(120,160,255,.4);letter-spacing:.06em;padding:0;transition:color .2s;">Privacy &amp; Safety ↗</button>
     </p>
   </div>
 </div>
 
 <div id="s-compliance" class="screen">
   <div class="credits-scroll">
-    <button class="credits-back" onclick="goBack()">←</button>
+    <button class="credits-back" data-action="goBack">←</button>
 
     <div class="credits-page-title">Privacy &amp; Safety</div>
     <p class="credits-page-sub">No tracking. No targeting. No data to sell. Just geography. · Gnapoley LLC · April 2026</p>
@@ -1291,6 +1291,36 @@ function initApp() {
   const letsGo = document.getElementById('btn-letsgo');
 
   if (letsGo) letsGo.addEventListener('click', () => go('s-profiles'));
+
+  // Delegated listeners for [data-go], [data-action], and image error fallbacks
+  document.addEventListener('click', function(e) {
+    var goTarget = e.target.closest('[data-go]');
+    if (goTarget && goTarget.dataset.go) {
+      e.preventDefault();
+      go(goTarget.dataset.go);
+      return;
+    }
+    var actionTarget = e.target.closest('[data-action]');
+    if (actionTarget) {
+      var act = actionTarget.dataset.action;
+      if (act === 'goBack') {
+        e.preventDefault();
+        goBack();
+      }
+    }
+  });
+
+  document.addEventListener('error', function(e) {
+    var img = e.target;
+    if (img && img.classList && img.classList.contains('badge-fallback-img')) {
+      var initials = img.dataset.initials || '?';
+      var sizePx = img.dataset.size || '32';
+      var span = document.createElement('span');
+      span.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:' + sizePx + 'px;height:' + sizePx + 'px;border-radius:50%;background:var(--bg-deep);border:1px dashed var(--border);font-size:' + Math.round(sizePx * 0.4) + 'px;color:var(--dim);font-weight:700;';
+      span.textContent = initials;
+      img.replaceWith(span);
+    }
+  }, true);
 
   document.querySelectorAll('[data-go]').forEach(btn => {
 
@@ -2600,13 +2630,13 @@ function rnd(){var fks=Object.keys(FS).filter(function(fk){return !isAvatarTypeL
 
 function stars(){for(var i=0;i<80;i++){var s=document.createElement("div");s.className="star";var z=Math.random()*2.5+.5;s.style.width=z+"px";s.style.height=z+"px";s.style.top=Math.random()*100+"vh";s.style.left=Math.random()*100+"vw";s.style.animationDelay=(Math.random()*3).toFixed(1)+"s";s.style.animationDuration=(2+Math.random()*4).toFixed(1)+"s";document.body.appendChild(s);}}
 
-function rbt(){var tb=document.getElementById("tabs");tb.innerHTML="";var ft=document.createElement("div");ft.className="tab"+(cT==="_face"?" on":"");ft.dataset.key="_face";ft.textContent="Type";ft.onclick=function(){cT="_face";_avRenderAll();};tb.appendChild(ft);gc().forEach(function(c){var t=document.createElement("div");t.className="tab"+(cT===c.k?" on":"");t.dataset.key=c.k;t.textContent=c.l;t.onclick=function(){cT=c.k;_avRenderAll();};tb.appendChild(t);});}
+function rbt(){var tb=document.getElementById("tabs");tb.innerHTML="";var ft=document.createElement("div");ft.className="tab"+(cT==="_face"?" on":"");ft.dataset.key="_face";ft.textContent="Type";ft.addEventListener("click",function(){cT="_face";_avRenderAll();});tb.appendChild(ft);gc().forEach(function(c){var t=document.createElement("div");t.className="tab"+(cT===c.k?" on":"");t.dataset.key=c.k;t.textContent=c.l;t.addEventListener("click",function(){cT=c.k;_avRenderAll();});tb.appendChild(t);});}
 
-function _avInitOriginal(){cT="_face";rbt();document.getElementById("br").onclick=rnd;document.getElementById("bf").onclick=_avFinishAndSave;_avRenderAll();}
+function _avInitOriginal(){cT="_face";rbt();var _brEl=document.getElementById("br");if(_brEl)_brEl.addEventListener("click",rnd);var _bfEl=document.getElementById("bf");if(_bfEl)_bfEl.addEventListener("click",_avFinishAndSave);_avRenderAll();}
 
 function rtabs(){document.querySelectorAll(".tab").forEach(function(t){t.classList.toggle("on",t.dataset.key===cT);});}
 
-function rpal(){var p=document.getElementById("pal");p.innerHTML="";if(cT==="_face")return;var cats=gc();var cat=cats.find(function(c){return c.k===cT;});if(!cat||!cat.cp)return;var sh=FS[cF];var info=sh.plk(cat,sel);if(!info)return;var vals=sh.pals[info.pk]||[];vals.forEach(function(hex){var sw=document.createElement("div");sw.className="sw"+(col[info.ck]===hex?" on":"");sw.style.backgroundColor=hex;sw.onclick=function(){col[info.ck]=hex;cache.clear();_avRenderAll();};p.appendChild(sw);});}
+function rpal(){var p=document.getElementById("pal");p.innerHTML="";if(cT==="_face")return;var cats=gc();var cat=cats.find(function(c){return c.k===cT;});if(!cat||!cat.cp)return;var sh=FS[cF];var info=sh.plk(cat,sel);if(!info)return;var vals=sh.pals[info.pk]||[];vals.forEach(function(hex){var sw=document.createElement("div");sw.className="sw"+(col[info.ck]===hex?" on":"");sw.style.backgroundColor=hex;sw.addEventListener("click",function(){col[info.ck]=hex;cache.clear();_avRenderAll();});p.appendChild(sw);});}
 
 function rgrid(){
   var grid=document.getElementById("grid");
@@ -2643,7 +2673,7 @@ function rgrid(){
       lb.textContent=sh.label;
       wrap.appendChild(lb);
       if(locked){
-        wrap.onclick=function(){
+        wrap.addEventListener('click',function(){
           var typeCost=getAvatarTypeCost(fk);
           var bal=(prof&&prof.stats&&prof.stats.cr)||0;
           var canBuy=bal>=typeCost;
@@ -2654,8 +2684,8 @@ function rgrid(){
             '<button class="av-tconfirm-yes" style="font-size:9px;padding:3px 7px;border-radius:6px;background:#22d17a;color:#fff;font-weight:700;border:none;cursor:pointer;">Yes</button>'+
             '<button class="av-tconfirm-no" style="font-size:9px;padding:3px 7px;border-radius:6px;background:rgba(255,255,255,.1);color:#fff;font-weight:700;border:none;cursor:pointer;">No</button>'+
             '</div></div>';
-          cd.querySelector('.av-tconfirm-no').onclick=function(e){e.stopPropagation();_avRenderAll();};
-          cd.querySelector('.av-tconfirm-yes').onclick=function(e){
+          cd.querySelector('.av-tconfirm-no').addEventListener('click',function(e){e.stopPropagation();_avRenderAll();});
+          cd.querySelector('.av-tconfirm-yes').addEventListener('click',function(e){
             e.stopPropagation();
             var res=purchaseAvatarType(prof,fk);
             if(res.ok){
@@ -2673,7 +2703,7 @@ function rgrid(){
           };
         };
       }else{
-        wrap.onclick=function(){cF=fk;ld(fk);cache.clear();cT=gc()[0]?gc()[0].k:"_face";rbt();_avRenderAll();};
+        wrap.addEventListener('click',function(){cF=fk;ld(fk);cache.clear();cT=gc()[0]?gc()[0].k:"_face";rbt();_avRenderAll();});
       }
       grid.appendChild(wrap);
     });
@@ -2698,7 +2728,7 @@ function rgrid(){
       '</div>'+
       '<div style="font-size:9px;color:rgba(255,255,255,.45);text-align:center;margin-top:6px;">Your stars: ⭐'+bal.toLocaleString()+'</div>';
     grid.appendChild(bn);
-    bn.querySelector('.av-buy-pack').onclick=function(){
+    bn.querySelector('.av-buy-pack').addEventListener('click',function(){
       var res=purchaseAvatarPack(prof,cF,cat.k);
       if(res.ok){if(typeof showToast==='function')showToast(cat.l+' pack unlocked! 🎨');_avRenderAll();}
       else if(res.msg&&typeof showToast==='function')showToast(res.msg);
@@ -2714,7 +2744,7 @@ function rgrid(){
       im.alt="Skin "+hex;
       im.src=gs({skinColor:hex});
       cd.appendChild(im);
-      cd.onclick=function(){col.skinColor=hex;cache.clear();_avRenderAll();};
+      cd.addEventListener("click",function(){col.skinColor=hex;cache.clear();_avRenderAll();});
       grid.appendChild(cd);
     });
     return;
@@ -2728,7 +2758,7 @@ function rgrid(){
       im.alt="Graphic "+item;
       im.src=gs({clothing:"graphicShirt",clothingGraphic:item});
       cd.appendChild(im);
-      cd.onclick=function(){sel.clothingGraphic=item;sel.clothing="graphicShirt";_avRenderAll();};
+      cd.addEventListener("click",function(){sel.clothingGraphic=item;sel.clothing="graphicShirt";_avRenderAll();});
       grid.appendChild(cd);
     });
     return;
@@ -2751,7 +2781,7 @@ function rgrid(){
       ov.innerHTML='<div style="background:rgba(0,0,0,.6);color:#ffe135;font-size:18px;line-height:1;padding:6px 8px;border-radius:50%;">🔒</div>';
       cd.appendChild(im);
       cd.appendChild(ov);
-      cd.onclick=function(){
+      cd.addEventListener('click',function(){
         var packCost2=getAvatarPackCost(cF);
         var bal2=(prof&&prof.stats&&prof.stats.cr)||0;
         var canPack2=bal2>=packCost2;
@@ -2762,8 +2792,8 @@ function rgrid(){
           '<button class="av-confirm-yes" style="font-size:9px;padding:3px 7px;border-radius:6px;background:#22d17a;color:#fff;font-weight:700;border:none;cursor:pointer;">Yes</button>'+
           '<button class="av-confirm-no" style="font-size:9px;padding:3px 7px;border-radius:6px;background:rgba(255,255,255,.1);color:#fff;font-weight:700;border:none;cursor:pointer;">No</button>'+
           '</div></div>';
-        cd.querySelector('.av-confirm-no').onclick=function(e){e.stopPropagation();_avRenderAll();};
-        cd.querySelector('.av-confirm-yes').onclick=function(e){
+        cd.querySelector('.av-confirm-no').addEventListener('click',function(e){e.stopPropagation();_avRenderAll();});
+        cd.querySelector('.av-confirm-yes').addEventListener('click',function(e){
           e.stopPropagation();
           var res=purchaseAvatarPack(prof,cF,cat.k);
           if(res.ok){
@@ -2778,7 +2808,7 @@ function rgrid(){
       };
     }else{
       cd.appendChild(im);
-      cd.onclick=function(){sel[cat.p]=item;_avRenderAll();};
+      cd.addEventListener("click",function(){sel[cat.p]=item;_avRenderAll();});
     }
     grid.appendChild(cd);
   });
@@ -5349,7 +5379,7 @@ function renderH2HQueue() {
 
   // Cancel button
   var cancelBtn = document.getElementById('h2h-queue-cancel');
-  if (cancelBtn) cancelBtn.onclick = function() { AudioMgr.bubble(); cancelH2HQueue(); };
+  if (cancelBtn) cancelBtn.addEventListener('click', function() { AudioMgr.bubble(); cancelH2HQueue(); });
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -5990,34 +6020,34 @@ function renderH2HResults() {
 
   // Wire buttons
   var bStats = document.getElementById('h2h-btn-stats');
-  if (bStats) bStats.onclick = function() {
+  if (bStats) bStats.addEventListener('click', function() {
     AudioMgr.bubble();
     go('s-results');
-  };
+  });
 
   var bRematch = document.getElementById('h2h-btn-rematch');
-  if (bRematch) bRematch.onclick = function() {
+  if (bRematch) bRematch.addEventListener('click', function() {
     AudioMgr.bubble();
     _h2h.rematchYou = true;
     updateH2HRematchUi();
     if (_h2h.rematchYou && _h2h.rematchOpp) {
       setTimeout(function(){ startH2HQueue(); }, 400);
     }
-  };
+  });
 
   var bNew = document.getElementById('h2h-btn-newopp');
-  if (bNew) bNew.onclick = function() {
+  if (bNew) bNew.addEventListener('click', function() {
     AudioMgr.bubble();
     startH2HQueue();
-  };
+  });
 
   var bBack = document.getElementById('h2h-btn-back');
-  if (bBack) bBack.onclick = function() {
+  if (bBack) bBack.addEventListener('click', function() {
     AudioMgr.bubble();
     if (_h2h.oppRematchTimer) { clearTimeout(_h2h.oppRematchTimer); _h2h.oppRematchTimer = null; }
     H2H.transition('idle');
     go('s-setup');
-  };
+  });
 
   updateH2HRematchUi();
 }
@@ -6139,14 +6169,13 @@ function initGameScreen() {
 
   const quitBtn = document.getElementById('btn-quit');
   if (quitBtn) {
-    quitBtn.onclick = () => {
+    quitBtn.addEventListener('click', () => {
       endGame();
-    };
+    });
   }
-
   const backBtnEl = document.getElementById('q-back');
   if (backBtnEl) {
-    backBtnEl.onclick = () => { goBackCard(); };
+    backBtnEl.addEventListener('click', () => { goBackCard(); });
   }
 
 
@@ -6339,7 +6368,7 @@ function showFeedback(isCorrect, q) {
   panel.classList.add('show');
 
   if (nextBtn) {
-    nextBtn.onclick = () => advanceToNextCard();
+    nextBtn.addEventListener('click', () => advanceToNextCard());
   }
 }
 
@@ -7051,12 +7080,12 @@ function renderSetupSubPage(viewKey) {
   if (topAva) topAva.style.display = 'none';
   if (topBack) {
     topBack.style.display = '';
-    topBack.onclick = () => {
+    topBack.addEventListener('click', () => {
       AudioMgr.bubble();
       setupState.view = 'globe';
       setupState.mapInstance = null;
       renderGlobePage();
-    };
+    });
   }
 
   mapContainer.innerHTML = '';
@@ -7798,9 +7827,8 @@ const STAR_COLOR = '#ffe135';
 function badgeImgHtml(badge, sizePx) {
   const safeName = (badge.name || '').replace(/"/g, '&quot;');
   const initials = (badge.name || '?').trim().charAt(0).toUpperCase();
-  return '<img src="' + FLUENT3D_BASE + badge.cp + '.webp" alt="' + safeName + '" loading="lazy" '
-       + 'style="width:' + sizePx + 'px;height:' + sizePx + 'px;object-fit:contain;display:inline-block;vertical-align:middle;" '
-       + 'onerror="this.outerHTML=\'<span style=&quot;display:inline-flex;align-items:center;justify-content:center;width:' + sizePx + 'px;height:' + sizePx + 'px;border-radius:50%;background:var(--bg-deep);border:1px dashed var(--border);font-size:' + Math.round(sizePx * 0.4) + 'px;color:var(--dim);font-weight:700;&quot;>' + initials + '</span>\'">';
+  return '<img class="badge-fallback-img" data-initials="' + initials + '" data-size="' + sizePx + '" src="' + FLUENT3D_BASE + badge.cp + '.webp" alt="' + safeName + '" loading="lazy" '
+       + 'style="width:' + sizePx + 'px;height:' + sizePx + 'px;object-fit:contain;display:inline-block;vertical-align:middle;">';
 }
 
 // ── Card universe (lazy build, cached) — for completion badges ──
@@ -8077,9 +8105,8 @@ const FLUENT3D_BASE = 'https://unpkg.com/@lobehub/fluent-emoji-3d@1.1.0/assets/'
 function animalImgHtml(animal, sizePx) {
   const safeName = (animal.name || '').replace(/"/g, '&quot;');
   const initials = (animal.name || '?').trim().charAt(0).toUpperCase();
-  return '<img src="' + FLUENT3D_BASE + animal.cp + '.webp" alt="' + safeName + '" loading="lazy" '
-       + 'style="width:' + sizePx + 'px;height:' + sizePx + 'px;object-fit:contain;display:inline-block;vertical-align:middle;" '
-       + 'onerror="this.outerHTML=\'<span style=&quot;display:inline-flex;align-items:center;justify-content:center;width:' + sizePx + 'px;height:' + sizePx + 'px;border-radius:50%;background:var(--bg-deep);border:1px dashed var(--border);font-size:' + Math.round(sizePx * 0.4) + 'px;color:var(--dim);font-weight:700;&quot;>' + initials + '</span>\'">';
+  return '<img class="badge-fallback-img" data-initials="' + initials + '" data-size="' + sizePx + '" src="' + FLUENT3D_BASE + animal.cp + '.webp" alt="' + safeName + '" loading="lazy" '
+       + 'style="width:' + sizePx + 'px;height:' + sizePx + 'px;object-fit:contain;display:inline-block;vertical-align:middle;">';
 }
 
 function updateProfileStats(profile, gr) {
@@ -8679,7 +8706,7 @@ function renderProfile() {
     </button>
   </div>`;
 
-  html += `<button class="title-credits-btn" style="position:relative;bottom:auto;left:auto;display:block;margin:12px 0 0;opacity:.45;" onclick="go('s-credits')">Credits</button>`;
+  html += `<button class="title-credits-btn" style="position:relative;bottom:auto;left:auto;display:block;margin:12px 0 0;opacity:.45;" data-go="s-credits">Credits</button>`;
   html += `<div style="height:20px;"></div>`;
 
   root.innerHTML = html;
@@ -11929,7 +11956,7 @@ function launchTestGame(test) {
 
       var quitBtn = document.getElementById('btn-quit');
       if (quitBtn) {
-        quitBtn.onclick = function() { endGame(); };
+        quitBtn.addEventListener('click', function() { endGame(); });
       }
 
       return;

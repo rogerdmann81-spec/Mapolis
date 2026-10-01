@@ -556,3 +556,31 @@ We performed a deep audit of the codebase for `cdnjs.cloudflare.com` and `cdn.js
 2. Why We Chose It:
    - Compliance & Procurement Readiness: K-12 school districts, student privacy alliances (SDPC), and FERPA/COPPA compliance auditors flag external CDN permissions in the CSP as potential supply chain attack vectors and third-party data tracking risks.
    - Elimination of Over-Permissive Whitelists: Whitelists in the CSP should only grant access to hosts the app genuinely requires. Restricting `connect-src` strictly to `'self'` and `*.supabase.co` closes the surface entirely.
+
+----------------------------------------------------------------------------------------------------------
+17. Completed Task: Full Sweep Event Modernization (Zero Legacy Handlers)
+Status: ✅ Complete
+Target: play/index.html, index.html
+Branch: pre-beta3
+
+We performed a complete, zero-exception sweep converting all legacy event handlers across `play/index.html` to modern DOM standards (`addEventListener` and declarative event delegation).
+
+1. What Was Converted:
+   - Tier 1: HTML Tag Inline Attributes (8 converted):
+     - `<button class="title-credits-btn" onclick="go('s-credits')">` → `data-go="s-credits"`
+     - `<button class="title-privacy-btn" onclick="go('s-compliance')">` → `data-go="s-compliance"`
+     - `<button class="credits-back" onclick="goBack()">` → `data-action="goBack"`
+     - Dynamic credits button templates → `data-go="s-credits"`
+     - Inline mouseover/mouseout style mutations replaced with CSS transition classes.
+   - Tier 2: DOM Property Assignments (25 converted):
+     - Converted all `.onclick = function` and `.onclick = () =>` assignments across the Avatar Builder, Head-to-Head queue, match summary, and game HUD to `.addEventListener('click', ...)`.
+   - Tier 3: Inline Image Error Handlers (2 converted):
+     - `badgeImgHtml` and `animalImgHtml` previously emitted inline string `onerror="this.outerHTML=..."` attributes.
+     - Converted to pure declarative elements with a centralized document-level capturing `'error'` event listener (`img.addEventListener('error', ..., true)`).
+
+2. Verification:
+   - Remaining HTML `onclick`: **0**
+   - Remaining HTML `onmouseover` / `onmouseout`: **0**
+   - Remaining HTML `onerror`: **0**
+   - Remaining `.onclick` DOM property assignments: **0**
+   - JavaScript engine syntax compilation: **100% Passed**.
