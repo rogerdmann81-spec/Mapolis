@@ -841,3 +841,12 @@ Resolved the bug that caused rounds in "All Cards" mode to prematurely end after
    - Code syntax check: 100% clean.
    - Static button bindings verified to exist exactly once without accumulation.
 
+----------------------------------------------------------------------------------------------------------
+29. Completed Task: Create Branch pre-beta4 for Head-to-Head Realtime Investigation
+Status: ✅ Complete
+Target: GitHub Remote Repository
+Branch: pre-beta4 (created from HEAD of pre-beta3)
+
+Branched `pre-beta4` cleanly from `pre-beta3` (commit `28711ab`) to investigate multiplayer H2H queue synchronization and presence across devices, leaving `pre-beta3` intact for production deployment at play.mapolis.app.
+
+
