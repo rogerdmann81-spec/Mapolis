@@ -2427,6 +2427,7 @@ async function finalizeProfile(goToAvatar) {
   saveProfiles();
 
   activeProfile = newProfile;
+  window.activeProfile = newProfile;
 
   localStorage.setItem(ACTIVE_KEY, activeProfile.id);
 
@@ -2438,6 +2439,7 @@ async function finalizeProfile(goToAvatar) {
 
   if (goToAvatar) {
 
+    window._avatarEditMode = false;
     go('s-avatar');
 
   } else {

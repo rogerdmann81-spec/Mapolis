@@ -211,6 +211,7 @@ async function createProfile(opts) {
   if (!opts || !opts.playerId || !opts.handle) {
     throw new Error('[createProfile] missing required fields');
   }
+  await ensureAuthSession();
 
   const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/create_profile', {
     method: 'POST',
@@ -274,10 +275,20 @@ const syncStore = {
     }
     try {
       const url = SUPABASE_URL + '/rest/v1/profiles?select=*&order=created_at.desc';
-      const resp = await fetch(url, {
+      // Try authedHeaders() first; if user is not an educator/admin or auth fails, fallback to anon headers
+      let resp = await fetch(url, {
         method: 'GET',
         headers: authedHeaders()
       });
+      if (!resp.ok) {
+        resp = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_KEY
+          }
+        });
+      }
       if (!resp.ok) throw new Error('fetchAllProfiles status ' + resp.status);
       const rows = await resp.json();
       return rows.map(r => this._mapRowToProfile(r, r.auth_uid));

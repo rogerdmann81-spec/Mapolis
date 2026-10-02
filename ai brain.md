@@ -793,3 +793,26 @@ We eliminated the dead-weight root `admin/` directory so that `play/admin/` is t
 
 2. Verification:
    - Syntax checked `server.js` and confirmed clean single-location structure.
+
+----------------------------------------------------------------------------------------------------------
+27. Completed Task: Fix Create Avatar Transition in New Profile Creation Flow
+Status: ✅ Complete
+Target: play/index.html, play/assets/shared.js, assets/shared.js, play/admin/assets/shared.js
+Branch: pre-beta3
+
+Identified and resolved the bug preventing the "Create & Customize Avatar 🎨" button from transitioning to the avatar builder in the new profile flow.
+
+1. Root Cause:
+   - When a new profile was created, `finalizeProfile()` called `createProfile()` via the Supabase RPC `create_profile`.
+   - The RPC required an active anonymous or authenticated session (`auth.uid()`).
+   - If a new player had not yet initialized an auth session, `create_profile` failed with `[createProfile] Not authenticated`.
+   - This threw an unhandled error inside `runCreate()`, halting execution before `go('s-avatar')` was reached.
+
+2. What Was Fixed:
+   - Updated `createProfile(opts)` in `shared.js` to automatically call `await ensureAuthSession()` before invoking the RPC, ensuring every user has a valid anonymous session token.
+   - Updated `finalizeProfile()` in `play/index.html` to guarantee `window._avatarEditMode = false` and synchronize `window.activeProfile = newProfile`.
+   - Verified that clicking "Create & Customize Avatar 🎨" immediately creates the profile, saves it, and smoothly routes to the Avatar Builder (`s-avatar`).
+
+3. Verification:
+   - Script syntax checks: 100% Passed.
+   - Direct RPC test with anonymous session establishment: Succeeded.
