@@ -1349,6 +1349,27 @@ function initApp() {
     });
   }
 
+  const quitBtn = document.getElementById('btn-quit');
+  if (quitBtn) {
+    quitBtn.addEventListener('click', () => {
+      endGame();
+    });
+  }
+
+  const backBtnEl = document.getElementById('q-back');
+  if (backBtnEl) {
+    backBtnEl.addEventListener('click', () => {
+      goBackCard();
+    });
+  }
+
+  const fbNextBtn = document.getElementById('fb-next');
+  if (fbNextBtn) {
+    fbNextBtn.addEventListener('click', () => {
+      advanceToNextCard();
+    });
+  }
+
   const _SND_SEL = 'button, [class*="btn"], [class*="chip"], [class*="card"]:not(.q-card):not(.stat-card):not(.nsg-note-card):not(.credits-standards-card):not(.nsg-error-card), [class*="tab"]:not(.subcat-chips), [class*="toggle"], [class*="back"], [class*="-sw"], .start-btn, .fb-next, .q-back, .cw, .cd, .sw';
   document.addEventListener('click', function(e) {
     const t = e.target.closest(_SND_SEL);
@@ -6271,18 +6292,6 @@ function initGameScreen() {
 
   _game.timerId = setInterval(gameTick, 1000);
 
-  const quitBtn = document.getElementById('btn-quit');
-  if (quitBtn) {
-    quitBtn.addEventListener('click', () => {
-      endGame();
-    });
-  }
-  const backBtnEl = document.getElementById('q-back');
-  if (backBtnEl) {
-    backBtnEl.addEventListener('click', () => { goBackCard(); });
-  }
-
-
   // H2H mode: install HUD overlay + start opponent answer schedule
   if (config.mode === 'h2h') {
     setupH2HHud();
@@ -6470,10 +6479,6 @@ function showFeedback(isCorrect, q) {
   }
 
   panel.classList.add('show');
-
-  if (nextBtn) {
-    nextBtn.addEventListener('click', () => advanceToNextCard());
-  }
 }
 
 function hideFeedback() {
@@ -6717,7 +6722,8 @@ function handleGameClick(lon, lat, event) {
 }
 
 function advanceToNextCard() {
-  if (!_game || _game.done) return;
+  if (!_game || _game.done || _game._advancing) return;
+  _game._advancing = true;
 
   if (_game._advanceTimer) {
     clearTimeout(_game._advanceTimer);
@@ -6748,6 +6754,7 @@ function advanceToNextCard() {
     _game.mapInstance.resetZoom();
     _game._didZoom = false;
   }
+  _game._advancing = false;
 }
 
 function goBackCard() {
@@ -12038,11 +12045,6 @@ function launchTestGame(test) {
       }
 
       _game.timerId = setInterval(gameTick, 1000);
-
-      var quitBtn = document.getElementById('btn-quit');
-      if (quitBtn) {
-        quitBtn.addEventListener('click', function() { endGame(); });
-      }
 
       return;
     }

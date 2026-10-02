@@ -816,3 +816,28 @@ Identified and resolved the bug preventing the "Create & Customize Avatar 🎨" 
 3. Verification:
    - Script syntax checks: 100% Passed.
    - Direct RPC test with anonymous session establishment: Succeeded.
+
+----------------------------------------------------------------------------------------------------------
+28. Completed Task: Fix Accumulating Event Listeners on Game Screen Controls
+Status: ✅ Complete
+Target: play/index.html
+Branch: pre-beta3
+
+Resolved the bug that caused rounds in "All Cards" mode to prematurely end after 1–3 cards due to stacked event listeners.
+
+1. Root Cause:
+   - During the event handler modernization sweep (commit `3f02263`), `nextBtn.onclick = ...` in `showFeedback()` was changed to `nextBtn.addEventListener('click', ...)`.
+   - Because `showFeedback()` is called after each question, a new listener was attached on every card. On subsequent cards, a single tap on "Next →" fired 2, 3, or more advance calls simultaneously.
+   - In "All Cards" mode with small decks (e.g., South America Easy = 6 cards), multiple stacked advance calls exhausted `deck.remaining` in 1–2 taps, instantly triggering `endGame()`.
+   - Additionally, `btn-quit` and `q-back` in `initGameScreen()` were attaching new click listeners on every game start.
+
+2. What Was Fixed:
+   - Wired `btn-quit`, `q-back`, and `fb-next` statically once during application startup in `initApp()`.
+   - Removed repeated per-card `addEventListener` calls from `showFeedback()`.
+   - Removed repeated per-game `addEventListener` calls on `btn-quit` and `q-back` from `initGameScreen()` and educator test initialization.
+   - Added an re-entrancy lock (`_game._advancing`) inside `advanceToNextCard()` to prevent any rapid duplicate execution from skipping cards.
+
+3. Verification:
+   - Code syntax check: 100% clean.
+   - Static button bindings verified to exist exactly once without accumulation.
+
