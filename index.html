@@ -1349,6 +1349,27 @@ function initApp() {
     });
   }
 
+  const quitBtn = document.getElementById('btn-quit');
+  if (quitBtn) {
+    quitBtn.addEventListener('click', () => {
+      endGame();
+    });
+  }
+
+  const backBtnEl = document.getElementById('q-back');
+  if (backBtnEl) {
+    backBtnEl.addEventListener('click', () => {
+      goBackCard();
+    });
+  }
+
+  const fbNextBtn = document.getElementById('fb-next');
+  if (fbNextBtn) {
+    fbNextBtn.addEventListener('click', () => {
+      advanceToNextCard();
+    });
+  }
+
   const _SND_SEL = 'button, [class*="btn"], [class*="chip"], [class*="card"]:not(.q-card):not(.stat-card):not(.nsg-note-card):not(.credits-standards-card):not(.nsg-error-card), [class*="tab"]:not(.subcat-chips), [class*="toggle"], [class*="back"], [class*="-sw"], .start-btn, .fb-next, .q-back, .cw, .cd, .sw';
   document.addEventListener('click', function(e) {
     const t = e.target.closest(_SND_SEL);
@@ -2427,6 +2448,7 @@ async function finalizeProfile(goToAvatar) {
   saveProfiles();
 
   activeProfile = newProfile;
+  window.activeProfile = newProfile;
 
   localStorage.setItem(ACTIVE_KEY, activeProfile.id);
 
@@ -2438,6 +2460,7 @@ async function finalizeProfile(goToAvatar) {
 
   if (goToAvatar) {
 
+    window._avatarEditMode = false;
     go('s-avatar');
 
   } else {
@@ -5160,6 +5183,12 @@ var _h2h = {
   queueQueueEl: null,
   queueDotsTimer: null,
   queueCountersTimer: null,
+  queueProgressTimer: null,
+  pollTimer: null,
+  isOnlineMatch: false,
+  matchId: null,
+  sharedDeck: null,
+  _oppDiscAlerted: false
 };
 
 var H2HStub = (function(){
@@ -5289,22 +5318,31 @@ var H2HStub = (function(){
   };
 })();
 
-// State machine wrapper. Single entry point for transitions so future
-// Supabase integration can hook lifecycle events here.
+// State machine wrapper. Single entry point for transitions with real Supabase backend.
 var H2H = {
   transition: function(next) {
     var prev = _h2h.state;
     _h2h.state = next;
     if (next === 'matched') _h2h.matchFoundAt = Date.now();
   },
-  // Disconnect handling stub: in real impl, would notify server + forfeit.
   handleDisconnect: function() {
     if (_h2h.state === 'playing') {
       _h2h.outcome = 'loss';
+      if (_h2h.isOnlineMatch && window.h2hStore && window.activeProfile && _h2h.matchId) {
+        window.h2hStore.forfeitMatch(_h2h.matchId, window.activeProfile.id);
+      }
       H2H.transition('finished');
     }
   }
 };
+
+window.addEventListener('beforeunload', function() {
+  if (typeof _h2h !== 'undefined' && _h2h.state === 'playing' && _h2h.isOnlineMatch && window.activeProfile) {
+    H2H.handleDisconnect();
+  } else if (typeof _h2h !== 'undefined' && _h2h.state === 'waiting' && window.activeProfile) {
+    cancelH2HQueue();
+  }
+});
 
 // ──────────────────────────────────────────────────────────────────
 // H2H QUEUE SCREEN — ports queue_screen_mockup.html verbatim
@@ -5327,13 +5365,68 @@ function startH2HQueue() {
   _h2h.starsEarned = 0;
   _h2h.rematchYou = false;
   _h2h.rematchOpp = false;
+  _h2h.isOnlineMatch = false;
+  _h2h.matchId = null;
+  _h2h.sharedDeck = null;
+  _h2h._oppDiscAlerted = false;
   _h2h.startedAt = Date.now();
 
   H2H.transition('waiting');
   renderH2HQueue();
   go('s-h2h-queue');
 
-  // Queue runs for 20 seconds searching for opponents.
+  // Compute lower grade and pre-composed candidate deck
+  var yourGradeRaw = (profile && typeof estimateGrade === 'function') ? estimateGrade(profile) : 5;
+  var yourGrade = Math.max(1, Math.min(13, Math.floor(yourGradeRaw)));
+  var tierCeiling = getTierCeiling(yourGrade, 'medium');
+  var tentativeConfig = {
+    mode: 'h2h',
+    duration: 60,
+    continent: 'globe',
+    tierCeiling: tierCeiling,
+    difficulty: 'medium',
+    hideBorders: false,
+    categories: { countries: true, capitals: true, flags: true, landforms: true, water: true, cities: true, culture: true },
+    waterSubs:    { rivers: true, lakes: true, seas: true, oceans: true, gulfs: true, straits: true },
+    landformSubs: { mountains: true, peninsulas: true, islands: true, archipelagos: true },
+    citySubs:     { cities: true, heritage: true },
+    cultureSubs:  { languages: true, trivia: true }
+  };
+  var cd = getCombinedContinentData('globe');
+  var candidateDeck = cd ? composeH2HDeck(tentativeConfig, cd) : [];
+
+  function handleMatchSuccess(matchData) {
+    if (_h2h.state !== 'waiting') return;
+    if (_h2h.queueTimer) { clearTimeout(_h2h.queueTimer); _h2h.queueTimer = null; }
+    if (_h2h.queueProgressTimer) { clearInterval(_h2h.queueProgressTimer); _h2h.queueProgressTimer = null; }
+    if (_h2h.pollTimer) { clearInterval(_h2h.pollTimer); _h2h.pollTimer = null; }
+
+    _h2h.isOnlineMatch = true;
+    _h2h.matchId = matchData.match_id;
+    var opp = matchData.opponent || {};
+    _h2h.opponent = {
+      handle: opp.handle || 'Challenger',
+      avatar: opp.avatar || null,
+      rating: (typeof opp.rating === 'number') ? opp.rating : 1200,
+      grade: opp.tier || yourGrade,
+      tier: matchData.tier || 6
+    };
+    if (matchData.card_sequence && Array.isArray(matchData.card_sequence) && matchData.card_sequence.length > 0) {
+      _h2h.sharedDeck = matchData.card_sequence;
+    }
+
+    var subEl = document.getElementById('h2h-queue-sub');
+    if (subEl) {
+      subEl.innerHTML = 'Challenger discovered! (<span style="color:#5bf0a0;font-weight:700;">' + escapeHtml(_h2h.opponent.handle) + '</span>) Launching…';
+    }
+
+    setTimeout(function() {
+      H2H.transition('matched');
+      startH2HMatch();
+    }, 600);
+  }
+
+  // Queue runs for 20 seconds searching for opponents in Supabase.
   // Window widens progressively: ±40 -> ±90 -> ±160 -> ±260.
   // If no peer is matched within 20 seconds, bot fallback pairs seamlessly.
   var QUEUE_DURATION_MS = 20000;
@@ -5359,11 +5452,38 @@ function startH2HQueue() {
     }
   }, 250);
 
+  // Connect to Supabase match queue
+  if (window.h2hStore && profile.id) {
+    window.h2hStore.joinQueue(profile.id, yourGrade, candidateDeck).then(function(res) {
+      if (res && res.status === 'matched') {
+        handleMatchSuccess(res);
+      } else {
+        // Poll for match pairing every 1.5 seconds
+        if (_h2h.pollTimer) clearInterval(_h2h.pollTimer);
+        _h2h.pollTimer = setInterval(async function() {
+          if (_h2h.state !== 'waiting') {
+            if (_h2h.pollTimer) { clearInterval(_h2h.pollTimer); _h2h.pollTimer = null; }
+            return;
+          }
+          var pollRes = await window.h2hStore.pollQueue(profile.id);
+          if (pollRes && pollRes.status === 'matched') {
+            handleMatchSuccess(pollRes);
+          }
+        }, 1500);
+      }
+    });
+  }
+
   _h2h.queueTimer = setTimeout(function(){
     if (_h2h.queueProgressTimer) { clearInterval(_h2h.queueProgressTimer); _h2h.queueProgressTimer = null; }
+    if (_h2h.pollTimer) { clearInterval(_h2h.pollTimer); _h2h.pollTimer = null; }
+    if (window.h2hStore && profile.id) {
+      window.h2hStore.leaveQueue(profile.id);
+    }
+    _h2h.isOnlineMatch = false;
+    _h2h.matchId = null;
     var elapsed = Date.now() - queueStartedAt;
     var win = H2HStub.ratingWindowAt(elapsed);
-    var yourGrade = (typeof estimateGrade === 'function') ? estimateGrade(profile) : 5;
     _h2h.opponent = H2HStub.makeOpponent(_h2h.you.rating, yourGrade, win);
     H2H.transition('matched');
     startH2HMatch();
@@ -5373,8 +5493,12 @@ function startH2HQueue() {
 function cancelH2HQueue() {
   if (_h2h.queueTimer) { clearTimeout(_h2h.queueTimer); _h2h.queueTimer = null; }
   if (_h2h.queueProgressTimer) { clearInterval(_h2h.queueProgressTimer); _h2h.queueProgressTimer = null; }
+  if (_h2h.pollTimer) { clearInterval(_h2h.pollTimer); _h2h.pollTimer = null; }
   if (_h2h.queueDotsTimer) { clearInterval(_h2h.queueDotsTimer); _h2h.queueDotsTimer = null; }
   if (_h2h.queueCountersTimer) { clearInterval(_h2h.queueCountersTimer); _h2h.queueCountersTimer = null; }
+  if (window.h2hStore && window.activeProfile && window.activeProfile.id) {
+    window.h2hStore.leaveQueue(window.activeProfile.id);
+  }
   H2H.transition('idle');
   go('s-setup');
 }
@@ -5735,6 +5859,7 @@ function startH2HMatch() {
   // Stop queue timers
   if (_h2h.queueDotsTimer) { clearInterval(_h2h.queueDotsTimer); _h2h.queueDotsTimer = null; }
   if (_h2h.queueCountersTimer) { clearInterval(_h2h.queueCountersTimer); _h2h.queueCountersTimer = null; }
+  if (_h2h.pollTimer) { clearInterval(_h2h.pollTimer); _h2h.pollTimer = null; }
 
   // Tier cap: take the LOWER of the two players' adjusted tier (estimateGrade,
   // which already folds in gradeAdjust drift), then apply 'medium' difficulty
@@ -5764,20 +5889,28 @@ function startH2HMatch() {
   };
 
   // Pre-build the composed deck now so initGameScreen uses it directly.
-  var cd = getCombinedContinentData(config.continent);
-  if (cd) {
-    var composed = composeH2HDeck(config, cd);
-    if (composed && composed.length > 0) {
-      config.prebuiltPool = composed;
-    } else {
-      console.warn('[h2h] composed deck was empty — initGameScreen will fall back to buildPool');
+  if (_h2h.sharedDeck && _h2h.sharedDeck.length > 0) {
+    config.prebuiltPool = _h2h.sharedDeck;
+  } else {
+    var cd = getCombinedContinentData(config.continent);
+    if (cd) {
+      var composed = composeH2HDeck(config, cd);
+      if (composed && composed.length > 0) {
+        config.prebuiltPool = composed;
+      } else {
+        console.warn('[h2h] composed deck was empty — initGameScreen will fall back to buildPool');
+      }
     }
   }
 
   window._gameConfig = config;
 
-  // Pre-build the opponent's answer schedule
-  _h2h.oppSchedule = H2HStub.makeAnswerSchedule();
+  // Pre-build the opponent's answer schedule only for bot match
+  if (!_h2h.isOnlineMatch) {
+    _h2h.oppSchedule = H2HStub.makeAnswerSchedule();
+  } else {
+    _h2h.oppSchedule = [];
+  }
 
   H2H.transition('playing');
   go('s-game');
@@ -5823,7 +5956,7 @@ function setupH2HHud() {
       // Chips
       '#s-game.h2h-mode .h2h-chip{display:flex;align-items:center;gap:7px;background:rgba(17,20,40,.78);border:1px solid rgba(91,143,255,.40);border-radius:13px;padding:6px 9px;flex-shrink:0;max-width:96px}' +
       '#s-game.h2h-mode .h2h-chip .ava{width:30px;height:30px;border-radius:50%;background:#2a3a6a;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}' +
-      '#s-game.h2h-mode .h2h-chip .ava img{width:100%;height:100%;display:block}' +
+      '#s-game.h2h-mode .h2h-chip .ava img{width:100%;height:100%;display:block;border-radius:50%}' +
       '#s-game.h2h-mode .h2h-chip .col{display:flex;flex-direction:column;align-items:flex-start;min-width:0;line-height:1}' +
       '#s-game.h2h-mode .h2h-chip.opp{flex-direction:row-reverse}' +
       '#s-game.h2h-mode .h2h-chip.opp .col{align-items:flex-end}' +
@@ -5854,18 +5987,29 @@ function setupH2HHud() {
   var oppAva = _h2h.opponent ? _h2h.opponent.avatar : null;
   var oppHandle = _h2h.opponent ? _h2h.opponent.handle : 'Opponent';
 
+  function _formatChipAvatar(ava, defaultFace) {
+    if (!ava) return defaultFace;
+    if (ava.startsWith('data:image') || ava.startsWith('http') || ava.startsWith('/')) {
+      return '<img src="' + ava + '" style="width:100%;height:100%;display:block;border-radius:50%">';
+    }
+    if (ava.startsWith('<svg')) {
+      return ava;
+    }
+    return ava;
+  }
+
   var youChip = document.createElement('div');
   youChip.className = 'h2h-chip you';
   youChip.id = 'h2h-you-chip';
   youChip.innerHTML =
-    '<div class="ava">' + (youSvg ? '<img src="' + youSvg + '">' : youFace) + '</div>' +
+    '<div class="ava">' + _formatChipAvatar(youSvg, youFace) + '</div>' +
     '<div class="col"><span class="num" id="h2h-you-score">0</span><span class="name">' + escapeHtml(youHandle) + '</span></div>';
 
   var oppChip = document.createElement('div');
   oppChip.className = 'h2h-chip opp';
   oppChip.id = 'h2h-opp-chip';
   oppChip.innerHTML =
-    '<div class="ava">' + (oppAva ? '<img src="' + oppAva + '">' : '🤖') + '</div>' +
+    '<div class="ava">' + _formatChipAvatar(oppAva, '🤖') + '</div>' +
     '<div class="col"><span class="num" id="h2h-opp-score">0</span><span class="name">' + escapeHtml(oppHandle) + '</span></div>';
 
   var cardRow = document.createElement('div');
@@ -6002,20 +6146,39 @@ function finishH2HMatch() {
     };
   }
 
+  // Authoritative server finalization for online matches
+  if (_h2h.isOnlineMatch && window.h2hStore && profile && profile.id && _h2h.matchId) {
+    window.h2hStore.finalizeMatch(_h2h.matchId, profile.id, _h2h.yourScore)
+      .then(function(finRes) {
+        if (finRes && finRes.outcome) {
+          _h2h.outcome = finRes.outcome;
+          if (typeof finRes.rating_delta === 'number') _h2h.ratingDelta = finRes.rating_delta;
+          if (typeof finRes.elo_after === 'number') {
+            profile.stats.h2h.rating = finRes.elo_after;
+            try { if (typeof saveProfiles === 'function') saveProfiles(); } catch(e) {}
+          }
+          if (_h2h.state === 'finished') {
+            renderH2HResults();
+          }
+        }
+      });
+  }
+
   H2H.transition('finished');
   renderH2HResults();
   go('s-h2h-results');
 
-  // Stub: opponent rematch decision after a delay
-  if (_h2h.oppRematchTimer) clearTimeout(_h2h.oppRematchTimer);
-  _h2h.oppRematchTimer = H2HStub.scheduleRematchDecision(function(wantsRematch){
-    _h2h.rematchOpp = wantsRematch;
-    updateH2HRematchUi();
-    // If both want rematch → start a new match
-    if (_h2h.rematchYou && _h2h.rematchOpp) {
-      setTimeout(function(){ startH2HQueue(); }, 600);
-    }
-  });
+  // Stub: opponent rematch decision after a delay (bot matches only)
+  if (!_h2h.isOnlineMatch) {
+    if (_h2h.oppRematchTimer) clearTimeout(_h2h.oppRematchTimer);
+    _h2h.oppRematchTimer = H2HStub.scheduleRematchDecision(function(wantsRematch){
+      _h2h.rematchOpp = wantsRematch;
+      updateH2HRematchUi();
+      if (_h2h.rematchYou && _h2h.rematchOpp) {
+        setTimeout(function(){ startH2HQueue(); }, 600);
+      }
+    });
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -6132,7 +6295,11 @@ function renderH2HResults() {
     AudioMgr.bubble();
     _h2h.rematchYou = true;
     updateH2HRematchUi();
-    if (_h2h.rematchYou && _h2h.rematchOpp) {
+    if (_h2h.isOnlineMatch) {
+      setTimeout(function() {
+        startH2HQueue();
+      }, 400);
+    } else if (_h2h.rematchYou && _h2h.rematchOpp) {
       setTimeout(function(){ startH2HQueue(); }, 400);
     }
   });
@@ -6158,6 +6325,15 @@ function updateH2HRematchUi() {
   var btn = document.getElementById('h2h-btn-rematch');
   if (!btn) return;
   btn.classList.remove('rematch-you', 'rematch-opp');
+  if (_h2h.isOnlineMatch) {
+    if (_h2h.rematchYou) {
+      btn.classList.add('rematch-you');
+      btn.textContent = 'Re-queuing…';
+    } else {
+      btn.textContent = 'Rematch';
+    }
+    return;
+  }
   if (_h2h.rematchOpp && !_h2h.rematchYou) {
     btn.classList.add('rematch-opp');
     btn.textContent = 'Rematch?';
@@ -6269,22 +6445,12 @@ function initGameScreen() {
 
   _game.timerId = setInterval(gameTick, 1000);
 
-  const quitBtn = document.getElementById('btn-quit');
-  if (quitBtn) {
-    quitBtn.addEventListener('click', () => {
-      endGame();
-    });
-  }
-  const backBtnEl = document.getElementById('q-back');
-  if (backBtnEl) {
-    backBtnEl.addEventListener('click', () => { goBackCard(); });
-  }
-
-
-  // H2H mode: install HUD overlay + start opponent answer schedule
+  // H2H mode: install HUD overlay + start opponent answer schedule if bot match
   if (config.mode === 'h2h') {
     setupH2HHud();
-    scheduleH2HOpponent();
+    if (!_h2h.isOnlineMatch) {
+      scheduleH2HOpponent();
+    }
   }
 }
 
@@ -6302,6 +6468,26 @@ function gameTick() {
       return;
     }
     updateGameUI();
+    // In online matches, sync gameplay score and get opponent score in real-time
+    if (_h2h.isOnlineMatch && window.h2hStore && window.activeProfile && window.activeProfile.id && _h2h.matchId) {
+      window.h2hStore.syncGameplay(_h2h.matchId, window.activeProfile.id, _h2h.yourScore)
+        .then(function(syncRes) {
+          if (syncRes && typeof syncRes.opp_score === 'number') {
+            if (syncRes.opp_score !== _h2h.oppScore) {
+              _h2h.oppScore = syncRes.opp_score;
+              var oppEl = document.getElementById('h2h-opp-score');
+              if (oppEl) {
+                oppEl.textContent = _formatH2HScore(_h2h.oppScore);
+                oppEl.animate([{transform:'scale(1.0)'},{transform:'scale(1.25)'},{transform:'scale(1.0)'}], {duration:280});
+              }
+            }
+            if (syncRes.opp_disconnected && !_h2h._oppDiscAlerted) {
+              _h2h._oppDiscAlerted = true;
+              showToast('Opponent disconnected! Finishing match…', 2500);
+            }
+          }
+        });
+    }
     return;
   }
 
@@ -6468,10 +6654,6 @@ function showFeedback(isCorrect, q) {
   }
 
   panel.classList.add('show');
-
-  if (nextBtn) {
-    nextBtn.addEventListener('click', () => advanceToNextCard());
-  }
 }
 
 function hideFeedback() {
@@ -6597,6 +6779,25 @@ function handleGameClick(lon, lat, event) {
       earnedStars = h2hStars;
       _game.score += h2hStars;
       spawnStarPop(event.clientX || event.pageX || window.innerWidth / 2, event.clientY || event.pageY || window.innerHeight / 2);
+
+      var youEl = document.getElementById('h2h-you-score');
+      if (youEl) {
+        youEl.textContent = _formatH2HScore(_h2h.yourScore);
+        youEl.animate([{transform:'scale(1.0)'},{transform:'scale(1.25)'},{transform:'scale(1.0)'}], {duration:280});
+      }
+      if (_h2h.isOnlineMatch && window.h2hStore && window.activeProfile && window.activeProfile.id && _h2h.matchId) {
+        window.h2hStore.syncGameplay(_h2h.matchId, window.activeProfile.id, _h2h.yourScore, q.id || q.targetId, true)
+          .then(function(syncRes) {
+            if (syncRes && typeof syncRes.opp_score === 'number') {
+              _h2h.oppScore = syncRes.opp_score;
+              var oppEl = document.getElementById('h2h-opp-score');
+              if (oppEl) {
+                oppEl.textContent = _formatH2HScore(_h2h.oppScore);
+                oppEl.animate([{transform:'scale(1.0)'},{transform:'scale(1.25)'},{transform:'scale(1.0)'}], {duration:280});
+              }
+            }
+          });
+      }
     } else {
       const stars = _calcStars(q);
       earnedStars = stars;
@@ -6620,6 +6821,24 @@ function handleGameClick(lon, lat, event) {
     if (_game.config.mode === 'h2h') {
       _h2h.yourScore -= 0.5;
       _h2h.yourAnswers.push({ at: _game.elapsed, correct: false });
+      var youElWrong = document.getElementById('h2h-you-score');
+      if (youElWrong) {
+        youElWrong.textContent = _formatH2HScore(_h2h.yourScore);
+        youElWrong.animate([{transform:'scale(1.0)'},{transform:'scale(1.25)'},{transform:'scale(1.0)'}], {duration:280});
+      }
+      if (_h2h.isOnlineMatch && window.h2hStore && window.activeProfile && window.activeProfile.id && _h2h.matchId) {
+        window.h2hStore.syncGameplay(_h2h.matchId, window.activeProfile.id, _h2h.yourScore, q.id || q.targetId, false)
+          .then(function(syncRes) {
+            if (syncRes && typeof syncRes.opp_score === 'number') {
+              _h2h.oppScore = syncRes.opp_score;
+              var oppEl = document.getElementById('h2h-opp-score');
+              if (oppEl) {
+                oppEl.textContent = _formatH2HScore(_h2h.oppScore);
+                oppEl.animate([{transform:'scale(1.0)'},{transform:'scale(1.25)'},{transform:'scale(1.0)'}], {duration:280});
+              }
+            }
+          });
+      }
     }
     _game.wrong++;
     _game.streak = 0;
@@ -6715,7 +6934,8 @@ function handleGameClick(lon, lat, event) {
 }
 
 function advanceToNextCard() {
-  if (!_game || _game.done) return;
+  if (!_game || _game.done || _game._advancing) return;
+  _game._advancing = true;
 
   if (_game._advanceTimer) {
     clearTimeout(_game._advanceTimer);
@@ -6746,6 +6966,7 @@ function advanceToNextCard() {
     _game.mapInstance.resetZoom();
     _game._didZoom = false;
   }
+  _game._advancing = false;
 }
 
 function goBackCard() {
@@ -12036,11 +12257,6 @@ function launchTestGame(test) {
       }
 
       _game.timerId = setInterval(gameTick, 1000);
-
-      var quitBtn = document.getElementById('btn-quit');
-      if (quitBtn) {
-        quitBtn.addEventListener('click', function() { endGame(); });
-      }
 
       return;
     }

@@ -849,4 +849,39 @@ Branch: pre-beta4 (created from HEAD of pre-beta3)
 
 Branched `pre-beta4` cleanly from `pre-beta3` (commit `28711ab`) to investigate multiplayer H2H queue synchronization and presence across devices, leaving `pre-beta3` intact for production deployment at play.mapolis.app.
 
+----------------------------------------------------------------------------------------------------------
+30. Completed Task: Authoritative Head-to-Head (H2H) Multiplayer Implementation
+Status: ✅ Complete
+Target: assets/shared.js, play/assets/shared.js, play/admin/assets/shared.js, index.html, play/index.html, docs/database_migration.sql, tests/test_h2h_flow.js
+Branch: pre-beta4
+
+Full end-to-end implementation of real-time multiplayer Head-to-Head (H2H) mode using Supabase:
+
+1. Database & RPCs (PostgreSQL / Supabase):
+   - Created `h2h_join_queue`: atomic peer matching with row locking (`FOR UPDATE SKIP LOCKED`), shared deck sequence negotiation, tier-cap calculation (min tier of matched players), and automatic fallback profile registration.
+   - Created `h2h_poll_queue`: low-latency polling for queued players to discover opponent matches.
+   - Created `h2h_leave_queue`: instantaneous queue departure upon cancel or navigation.
+   - Created `h2h_sync_gameplay`: real-time score reporting and opponent score broadcast with fractional score support (numeric).
+   - Created `h2h_finalize_match`: authoritative server-side Elo calculation (K-factor 32), updating `competitive_ratings` (elo, wins, losses, ties, matches_played) and inserting immutable records in `match_results`.
+   - Created `h2h_forfeit_match`: disconnect and surrender handler for in-game resignations.
+   - Hardened RLS policies for `match_queue`, `matches`, `match_players`, `match_events`, and `match_results` eliminating infinite recursion.
+
+2. Client Multiplayer Store (`h2hStore` in `shared.js`):
+   - Exposes `joinQueue`, `pollQueue`, `leaveQueue`, `syncGameplay`, `finalizeMatch`, and `forfeitMatch` across both player and admin shared libraries.
+   - Fully compatible with anonymous sessions, automatic session token injection, and error recovery.
+
+3. Frontend Gameplay & HUD (`play/index.html` and `index.html`):
+   - Real-time matchmaking with 20-second queue timer, progress bar, and status indicators.
+   - Live score synchronization during gameplay (updating opponent score chip with scale bounce animation).
+   - In-game answer sync recording card IDs and fractional score adjustments (+1 correct, -0.5 wrong).
+   - Disconnect handling via `beforeunload` and forfeit notifications.
+   - Authoritative rating update display on the H2H results screen showing exact Elo change and new rating.
+   - Seamless bot fallback if no peer is matched within the 20-second window.
+
+4. Verification:
+   - Full automated end-to-end integration test suite (`tests/test_h2h_flow.js`) passing 100%.
+   - Profile merge regression test suite (`tests/test_profile_merge.js`) passing 100%.
+   - Clean applet compilation.
+
+
 

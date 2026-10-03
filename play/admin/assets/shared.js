@@ -1081,6 +1081,126 @@ const notesStore = {
     }
   }
 };
+
+// ─── Head-to-Head Multiplayer Store ──────────────────────────────────────────
+const h2hStore = {
+  async joinQueue(playerId, tier, cardSequence) {
+    if (!isSupabaseConfigured() || !playerId) return { status: 'waiting' };
+    await ensureAuthSession();
+    try {
+      const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/h2h_join_queue', {
+        method: 'POST',
+        headers: authedHeaders(),
+        body: JSON.stringify({
+          p_player_id: playerId,
+          p_tier: tier || 6,
+          p_card_sequence: cardSequence || null
+        })
+      });
+      if (!resp.ok) {
+        const err = await resp.text().catch(() => '');
+        console.warn('[h2hStore.joinQueue] error:', resp.status, err);
+        return { status: 'waiting' };
+      }
+      return await resp.json();
+    } catch (e) {
+      console.warn('[h2hStore.joinQueue] network exception:', e);
+      return { status: 'waiting' };
+    }
+  },
+
+  async pollQueue(playerId) {
+    if (!isSupabaseConfigured() || !playerId) return { status: 'waiting' };
+    await ensureAuthSession();
+    try {
+      const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/h2h_poll_queue', {
+        method: 'POST',
+        headers: authedHeaders(),
+        body: JSON.stringify({
+          p_player_id: playerId
+        })
+      });
+      if (!resp.ok) return { status: 'waiting' };
+      return await resp.json();
+    } catch (e) {
+      return { status: 'waiting' };
+    }
+  },
+
+  async leaveQueue(playerId) {
+    if (!isSupabaseConfigured() || !playerId) return;
+    try {
+      await fetch(SUPABASE_URL + '/rest/v1/rpc/h2h_leave_queue', {
+        method: 'POST',
+        headers: authedHeaders(),
+        body: JSON.stringify({ p_player_id: playerId })
+      });
+    } catch (e) {}
+  },
+
+  async syncGameplay(matchId, playerId, score, cardId = null, correct = null) {
+    if (!isSupabaseConfigured() || !matchId || !playerId) return null;
+    try {
+      const payload = {
+        p_match_id: matchId,
+        p_player_id: playerId,
+        p_score: score
+      };
+      if (cardId !== null && correct !== null) {
+        payload.p_card_id = String(cardId);
+        payload.p_correct = !!correct;
+      }
+      const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/h2h_sync_gameplay', {
+        method: 'POST',
+        headers: authedHeaders(),
+        body: JSON.stringify(payload)
+      });
+      if (!resp.ok) return null;
+      return await resp.json();
+    } catch (e) {
+      return null;
+    }
+  },
+
+  async finalizeMatch(matchId, playerId, finalScore) {
+    if (!isSupabaseConfigured() || !matchId || !playerId) return null;
+    try {
+      const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/h2h_finalize_match', {
+        method: 'POST',
+        headers: authedHeaders(),
+        body: JSON.stringify({
+          p_match_id: matchId,
+          p_player_id: playerId,
+          p_final_score: finalScore
+        })
+      });
+      if (!resp.ok) return null;
+      return await resp.json();
+    } catch (e) {
+      console.warn('[h2hStore.finalizeMatch] error:', e);
+      return null;
+    }
+  },
+
+  async forfeitMatch(matchId, playerId) {
+    if (!isSupabaseConfigured() || !matchId || !playerId) return null;
+    try {
+      const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/h2h_forfeit_match', {
+        method: 'POST',
+        headers: authedHeaders(),
+        body: JSON.stringify({
+          p_match_id: matchId,
+          p_player_id: playerId
+        })
+      });
+      if (!resp.ok) return null;
+      return await resp.json();
+    } catch (e) {
+      return null;
+    }
+  }
+};
+
 if (typeof window !== 'undefined') {
   window.syncStore = syncStore;
   window.mapolisUUID = mapolisUUID;
@@ -1093,7 +1213,8 @@ if (typeof window !== 'undefined') {
   window.authedHeaders = authedHeaders;
   window.signInAnonymous = signInAnonymous;
   window.notesStore = notesStore;
+  window.h2hStore = h2hStore;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { syncStore, mapolisUUID, mergeProfiles, submitRound, flushPendingRounds, getPendingRounds, ensureAuthSession, notesStore, authedHeaders, isSupabaseConfigured, SUPABASE_URL };
+  module.exports = { syncStore, mapolisUUID, mergeProfiles, submitRound, flushPendingRounds, getPendingRounds, ensureAuthSession, notesStore, h2hStore, authedHeaders, isSupabaseConfigured, SUPABASE_URL };
 }
