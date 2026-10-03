@@ -6114,37 +6114,54 @@ function buildReconciledH2HDeck(targetCount) {
   var userHasSpecific = Object.values(yf).some(Boolean);
   var oppHasSpecific = Object.values(of).some(Boolean);
 
+  var ALL_H2H_FEATS = ['countries', 'capitals', 'flags', 'cities', 'mountains', 'rivers', 'seas', 'islands'];
+
+  function getCardFeature(card) {
+    if (!card) return null;
+    var id = card.id || '', cat = card.cat || card.category || '', sc = card.subcat || '', tp = card.type || '';
+    if (id.startsWith('capital_') || cat === 'capitals') return 'capitals';
+    if (id.startsWith('flag_') || cat === 'flags') return 'flags';
+    if (id.startsWith('country_') || cat === 'countries' || tp === 'country') return 'countries';
+    if (id.startsWith('city_') || id.startsWith('heritage_') || cat === 'cities' || tp === 'city' || tp === 'heritage' || sc === 'cities' || sc === 'heritage') return 'cities';
+    if (id.startsWith('mountain_') || tp === 'mountain') return 'mountains';
+    if (id.startsWith('river_') || tp === 'river' || sc === 'rivers' || sc === 'lakes') return 'rivers';
+    if (sc === 'seas' || sc === 'oceans' || sc === 'gulfs' || sc === 'straits') return 'seas';
+    if (tp === 'island' || tp === 'archipelago' || tp === 'peninsula') return 'islands';
+    return null;
+  }
+
   function cardMatches(card, featMap) {
     if (!card || !featMap) return false;
-    var sc = card.subcat || '', cat = card.category || '';
-    if (featMap.countries && (sc === 'countries' || cat === 'countries')) return true;
-    if (featMap.capitals && (sc === 'capitals' || cat === 'capitals')) return true;
-    if (featMap.flags && (sc === 'flags' || cat === 'flags')) return true;
-    if (featMap.cities && (sc === 'cities' || sc === 'heritage' || cat === 'cities')) return true;
-    if (featMap.mountains && (sc === 'mountains' || (cat === 'landforms' && sc !== 'islands' && sc !== 'peninsulas'))) return true;
-    if (featMap.rivers && (sc === 'rivers' || sc === 'lakes' || cat === 'water' && (sc === 'rivers' || sc === 'lakes'))) return true;
-    if (featMap.seas && (sc === 'seas' || sc === 'oceans' || sc === 'gulfs' || sc === 'straits')) return true;
-    if (featMap.islands && (sc === 'islands' || sc === 'peninsulas' || sc === 'archipelagos')) return true;
-    return false;
+    var f = getCardFeature(card);
+    return f ? !!featMap[f] : false;
   }
 
-  // Union of features chosen by either player
-  var unionFeatures = {};
-  var fKeys = ['mountains', 'rivers', 'seas', 'islands', 'countries', 'capitals', 'flags', 'cities'];
-  fKeys.forEach(function(k) {
-    unionFeatures[k] = !!(yf[k] || of[k]);
-  });
-  // If user has not restricted features, all categories are active (full variety)
-  if (!userHasSpecific) {
-    fKeys.forEach(function(k) { unionFeatures[k] = true; });
+  // 3. PRNG & Deterministic Shuffle
+  var seedStr = String((_h2h && _h2h.matchId) || 'mapolis_h2h_match');
+  var h = 1779033703 ^ seedStr.length;
+  for (var si = 0; si < seedStr.length; si++) {
+    h = Math.imul(h ^ seedStr.charCodeAt(si), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  function prng() {
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return ((h ^= h >>> 16) >>> 0) / 4294967296;
+  }
+  function shuffleArr(arr) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(prng() * (i + 1));
+      var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    }
+    return arr;
   }
 
-  // 3. Collect candidates per region
+  // 4. Collect full pool per region (all categories enabled for full variety)
   var regionCards = {};
   regions.forEach(function(reg) {
     var cd = getCombinedContinentData(reg);
     if (cd) {
-      var fullPool = buildPool({
+      regionCards[reg] = buildPool({
         continent: reg,
         tierCeiling: 13,
         categories: { countries:true, capitals:true, flags:true, landforms:true, water:true, cities:true, culture:true },
@@ -6153,16 +6170,12 @@ function buildReconciledH2HDeck(targetCount) {
         citySubs:     { cities:true, heritage:true },
         cultureSubs:  { languages:true, trivia:true }
       }, cd);
-
-      var matched = fullPool.filter(function(c) { return cardMatches(c, unionFeatures); });
-      if (matched.length === 0) matched = fullPool;
-      regionCards[reg] = matched;
     } else {
       regionCards[reg] = [];
     }
   });
 
-  // 4. Sample with user priority (user selections always lead)
+  // 5. Sample with strict user priority (bot capped at max 2 cards)
   var isBotOpp = !_h2h.isOnlineMatch || (_h2h.opponent && _h2h.opponent.isBot) || !oppCont;
   var chosenCards = [];
   var seenIds = {};
@@ -6176,93 +6189,68 @@ function buildReconciledH2HDeck(targetCount) {
     return false;
   }
 
-  function partitionPool(pool) {
-    var agreed = [], userPicks = [], oppPicks = [], others = [];
-    pool.forEach(function(c) {
-      var mUser = !userHasSpecific ? (!cardMatches(c, of)) : cardMatches(c, yf);
-      var mOpp = cardMatches(c, of);
-      if (userHasSpecific && mUser && mOpp) agreed.push(c);
-      else if (mOpp) oppPicks.push(c);
-      else if (mUser) userPicks.push(c);
-      else others.push(c);
-    });
-    agreed.sort(function(a,b){ return String(a.id).localeCompare(String(b.id)); });
-    userPicks.sort(function(a,b){ return String(a.id).localeCompare(String(b.id)); });
-    oppPicks.sort(function(a,b){ return String(a.id).localeCompare(String(b.id)); });
-    others.sort(function(a,b){ return String(a.id).localeCompare(String(b.id)); });
-    return { agreed: agreed, user: userPicks, opp: oppPicks, others: others };
-  }
-
   if (isBotOpp || regions.length === 1) {
-    // 100% User region!
-    var parts = partitionPool(regionCards[regions[0]] || []);
-    // First: All agreed cards
-    parts.agreed.forEach(addCandidate);
-    // Second: User-selected cards (fills the bulk of the deck)
-    parts.user.forEach(addCandidate);
-    // Third: If space remains, at most 2 bot-selected cards (increased to 2)
-    if (chosenCards.length < targetCount) {
-      parts.opp.slice(0, 2).forEach(addCandidate);
+    var pool = (regionCards[regions[0]] || []).slice();
+    // 1. Bot Contribution: at most 2 cards if bot has a specific feature pick
+    if (oppHasSpecific) {
+      var botCandidates = pool.filter(function(c) { return cardMatches(c, of); });
+      shuffleArr(botCandidates);
+      for (var bi = 0; bi < botCandidates.length && chosenCards.length < 2; bi++) {
+        addCandidate(botCandidates[bi]);
+      }
     }
-    // Fourth: Fill remaining with other user cards/pool
-    parts.others.forEach(addCandidate);
+
+    // 2. User Contribution: Fill the remaining slots (at least 8 cards)
+    if (userHasSpecific) {
+      var userCandidates = pool.filter(function(c) { return cardMatches(c, yf) && !seenIds[c.id]; });
+      shuffleArr(userCandidates);
+      userCandidates.forEach(addCandidate);
+    } else {
+      // User has all buttons off (Whole Globe default): balanced variety across non-bot categories!
+      var byCat = {};
+      ALL_H2H_FEATS.forEach(function(f) { byCat[f] = []; });
+      pool.forEach(function(c) {
+        var f = getCardFeature(c);
+        if (f && !seenIds[c.id]) byCat[f].push(c);
+      });
+      ALL_H2H_FEATS.forEach(function(f) { shuffleArr(byCat[f]); });
+
+      var otherCats = ALL_H2H_FEATS.filter(function(f) { return !of[f]; });
+      shuffleArr(otherCats);
+
+      // Round-robin sample across categories to get an even, balanced spread
+      for (var round = 0; round < 4 && chosenCards.length < targetCount; round++) {
+        for (var ci = 0; ci < otherCats.length && chosenCards.length < targetCount; ci++) {
+          var catCards = byCat[otherCats[ci]];
+          if (catCards && catCards.length > round) {
+            addCandidate(catCards[round]);
+          }
+        }
+      }
+    }
+
+    // Fallback: fill any remaining with cards from pool
+    var rem = pool.filter(function(c) { return !seenIds[c.id]; });
+    shuffleArr(rem);
+    rem.forEach(addCandidate);
   } else {
     // 2-player human match: 50/50 balance between regions
     var half1 = Math.ceil(targetCount / 2);
-    var half2 = targetCount - half1;
-    var parts1 = partitionPool(regionCards[regions[0]] || []);
-    var parts2 = partitionPool(regionCards[regions[1]] || []);
+    var pool1 = (regionCards[regions[0]] || []).slice();
+    var pool2 = (regionCards[regions[1]] || []).slice();
+    shuffleArr(pool1);
+    shuffleArr(pool2);
 
-    var r1Picks = parts1.agreed.concat(parts1.user, parts1.opp, parts1.others);
-    for (var i = 0; i < r1Picks.length && chosenCards.length < half1; i++) {
-      addCandidate(r1Picks[i]);
+    for (var i = 0; i < pool1.length && chosenCards.length < half1; i++) {
+      addCandidate(pool1[i]);
     }
-    var r2Picks = parts2.agreed.concat(parts2.opp, parts2.user, parts2.others);
-    for (var j = 0; j < r2Picks.length && chosenCards.length < targetCount; j++) {
-      addCandidate(r2Picks[j]);
-    }
-  }
-
-  // Fallback to globe if deck isn't full
-  if (chosenCards.length < targetCount) {
-    var cdGlobe = getCombinedContinentData('globe');
-    if (cdGlobe) {
-      var globePool = buildPool({
-        continent: 'globe',
-        tierCeiling: 13,
-        categories: { countries:true, capitals:true, flags:true, landforms:true, water:true, cities:true, culture:true },
-        waterSubs:    { rivers:true, lakes:true, seas:true, oceans:true, gulfs:true, straits:true },
-        landformSubs: { mountains:true, peninsulas:true, islands:true, archipelagos:true },
-        citySubs:     { cities:true, heritage:true },
-        cultureSubs:  { languages:true, trivia:true }
-      }, cdGlobe);
-      var gParts = partitionPool(globePool);
-      var gPicks = gParts.agreed.concat(gParts.user, gParts.opp, gParts.others);
-      gPicks.forEach(addCandidate);
+    for (var j = 0; j < pool2.length && chosenCards.length < targetCount; j++) {
+      addCandidate(pool2[j]);
     }
   }
 
-  // 5. DETERMINISTIC SHUFFLE (Seed PRNG from matchId)
-  // Guarantees both players receive and play cards in the EXACT same sequence!
-  var seedStr = String((_h2h && _h2h.matchId) || 'mapolis_h2h_match');
-  var h = 1779033703 ^ seedStr.length;
-  for (var si = 0; si < seedStr.length; si++) {
-    h = Math.imul(h ^ seedStr.charCodeAt(si), 3432918353);
-    h = (h << 13) | (h >>> 19);
-  }
-  function prng() {
-    h = Math.imul(h ^ (h >>> 16), 2246822507);
-    h = Math.imul(h ^ (h >>> 13), 3266489909);
-    return ((h ^= h >>> 16) >>> 0) / 4294967296;
-  }
-
-  // Final seeded Fisher-Yates shuffle
-  for (var si2 = chosenCards.length - 1; si2 > 0; si2--) {
-    var rndIdx = Math.floor(prng() * (si2 + 1));
-    var tmp = chosenCards[si2];
-    chosenCards[si2] = chosenCards[rndIdx];
-    chosenCards[rndIdx] = tmp;
-  }
+  // Final seeded Fisher-Yates shuffle so cards are naturally distributed
+  shuffleArr(chosenCards);
 
   return chosenCards;
 }
