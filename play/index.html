@@ -5639,10 +5639,11 @@ var _h2hSetup = null;
 
 var H2H_CONTINENTS = [
   { id: 'globe', name: 'Whole Globe', icon: '🌐' },
+  { id: 'north-america', name: 'North America', icon: '🌎' },
+  { id: 'south-america', name: 'South America', icon: '🌎' },
   { id: 'europe', name: 'Europe', icon: '🇪🇺' },
   { id: 'asia', name: 'Asia', icon: '🌏' },
   { id: 'africa', name: 'Africa', icon: '🌍' },
-  { id: 'americas', name: 'Americas', icon: '🌎' },
   { id: 'oceania', name: 'Oceania', icon: '🌊' }
 ];
 
@@ -6184,9 +6185,9 @@ function buildReconciledH2HDeck(targetCount) {
     parts.agreed.forEach(addCandidate);
     // Second: User-selected cards (fills the bulk of the deck)
     parts.user.forEach(addCandidate);
-    // Third: If space remains, at most 1 bot-selected card
+    // Third: If space remains, at most 2 bot-selected cards (increased to 2)
     if (chosenCards.length < targetCount) {
-      parts.opp.slice(0, 1).forEach(addCandidate);
+      parts.opp.slice(0, 2).forEach(addCandidate);
     }
     // Fourth: Fill remaining with other user cards/pool
     parts.others.forEach(addCandidate);
@@ -6552,10 +6553,14 @@ function startH2HMatch() {
   var lowerGrade = Math.min(yourGrade, oppGrade);
   var tierCeiling = getTierCeiling(lowerGrade, 'medium');
 
+  var selectedCont = (_h2hSetup && _h2hSetup.yourContinent) || 'globe';
+  var oppCont = (_h2hSetup && _h2hSetup.oppContinent) || null;
+  var resolvedContinent = (!oppCont || oppCont === selectedCont) ? selectedCont : 'globe';
+
   var config = {
     mode: 'h2h',
     duration: 60,
-    continent: 'globe',
+    continent: resolvedContinent,
     tierCeiling: tierCeiling,
     difficulty: 'medium',
     hideBorders: false,

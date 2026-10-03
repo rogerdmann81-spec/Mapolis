@@ -2048,7 +2048,7 @@ body.impersonating .screen { padding-bottom: 54px !important; }
 
 .h2h-s-cont-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
   gap: 6px;
 }
 .h2h-s-feat-grid {
