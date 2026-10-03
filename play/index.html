@@ -5665,46 +5665,47 @@ function startH2HSetupScreen() {
   var profile = window.activeProfile || { handle: 'You', id: 'player_you' };
   var opp = _h2h.opponent || { handle: 'Challenger', rating: 1200 };
   var isBotMatch = !_h2h.isOnlineMatch || (opp && opp.isBot);
+  var isRematch = !!(_h2h.isRematch && window._lastH2HSetup);
 
-  // Bot makes NO selection for continents; at most 1 selection per category
-  var botPhys = null;
-  var botPol = null;
-  if (isBotMatch) {
-    var physList = ['mountains', 'rivers', 'seas', 'islands'];
-    var polList = ['countries', 'capitals', 'flags', 'cities'];
-    // Pick at most 1 for physical category (80% chance 1, 20% none)
-    if (Math.random() < 0.8) {
-      botPhys = physList[Math.floor(Math.random() * physList.length)];
-    }
-    // Pick at most 1 for political category (80% chance 1, 20% none)
-    if (Math.random() < 0.8) {
-      botPol = polList[Math.floor(Math.random() * polList.length)];
-    }
+  var initialYourContinent = 'globe';
+  var initialOppContinent = null;
+  var initialYourFeatures = {
+    mountains: false,
+    rivers: false,
+    seas: false,
+    islands: false,
+    countries: false,
+    capitals: false,
+    flags: false,
+    cities: false
+  };
+  var initialOppFeatures = {
+    mountains: false,
+    rivers: false,
+    seas: false,
+    islands: false,
+    countries: false,
+    capitals: false,
+    flags: false,
+    cities: false
+  };
+
+  if (isRematch && window._lastH2HSetup) {
+    // Rematch: Mirror the exact previous match setup
+    initialYourContinent = window._lastH2HSetup.yourContinent || 'globe';
+    initialOppContinent  = window._lastH2HSetup.oppContinent || null;
+    initialYourFeatures  = Object.assign({}, window._lastH2HSetup.yourFeatures);
+    initialOppFeatures   = Object.assign({}, window._lastH2HSetup.oppFeatures);
   }
 
+  // Reset rematch flag after applying
+  _h2h.isRematch = false;
+
   _h2hSetup = {
-    yourContinent: 'globe',
-    oppContinent: isBotMatch ? null : 'europe',
-    yourFeatures: {
-      mountains: true,
-      rivers: true,
-      seas: false,
-      islands: false,
-      countries: true,
-      capitals: true,
-      flags: false,
-      cities: true
-    },
-    oppFeatures: {
-      mountains: botPhys === 'mountains',
-      rivers: botPhys === 'rivers',
-      seas: botPhys === 'seas',
-      islands: botPhys === 'islands',
-      countries: botPol === 'countries',
-      capitals: botPol === 'capitals',
-      flags: botPol === 'flags',
-      cities: botPol === 'cities'
-    },
+    yourContinent: initialYourContinent,
+    oppContinent: initialOppContinent,
+    yourFeatures: initialYourFeatures,
+    oppFeatures: initialOppFeatures,
     youReady: false,
     oppReady: false,
     countdownSec: 45,
@@ -5998,17 +5999,24 @@ function renderH2HSetupUI() {
   // Feature breakdown tags
   html += '  <div class="h2h-s-deck-tags">';
   var allF = H2H_PHYSICAL_FEATURES.concat(H2H_POLITICAL_FEATURES);
+  var anyFeatSelected = false;
   allF.forEach(function(f) {
     var isYou = !!_h2hSetup.yourFeatures[f.id];
     var isOpp = !!_h2hSetup.oppFeatures[f.id];
     if (isYou && isOpp) {
+      anyFeatSelected = true;
       html += '<span class="h2h-s-d-tag both">✓ ' + f.label.split(' ')[0] + ' (Both)</span>';
     } else if (isYou) {
+      anyFeatSelected = true;
       html += '<span class="h2h-s-d-tag you">+ ' + f.label.split(' ')[0] + ' (You)</span>';
     } else if (isOpp) {
+      anyFeatSelected = true;
       html += '<span class="h2h-s-d-tag opp">+ ' + f.label.split(' ')[0] + ' (Opp)</span>';
     }
   });
+  if (!anyFeatSelected) {
+    html += '<span class="h2h-s-d-tag both">✨ All Categories (Full Variety)</span>';
+  }
   html += '  </div>';
   html += '</div>';
 
@@ -6055,10 +6063,6 @@ function renderH2HSetupUI() {
       var f = el.getAttribute('data-feat');
       AudioMgr.bubble();
       _h2hSetup.yourFeatures[f] = !_h2hSetup.yourFeatures[f];
-      // Keep at least one feature active
-      if (!Object.values(_h2hSetup.yourFeatures).some(Boolean)) {
-        _h2hSetup.yourFeatures[f] = true;
-      }
       broadcastH2HSetupState();
       renderH2HSetupUI();
     });
@@ -6098,6 +6102,8 @@ function buildReconciledH2HDeck(targetCount) {
   // 2. Feature filters
   var yf = (_h2hSetup && _h2hSetup.yourFeatures) || {};
   var of = (_h2hSetup && _h2hSetup.oppFeatures) || {};
+  var userHasSpecific = Object.values(yf).some(Boolean);
+  var oppHasSpecific = Object.values(of).some(Boolean);
 
   function cardMatches(card, featMap) {
     if (!card || !featMap) return false;
@@ -6119,9 +6125,9 @@ function buildReconciledH2HDeck(targetCount) {
   fKeys.forEach(function(k) {
     unionFeatures[k] = !!(yf[k] || of[k]);
   });
-  if (!Object.values(unionFeatures).some(Boolean)) {
-    unionFeatures.countries = true;
-    unionFeatures.capitals = true;
+  // If neither player chose specific features, enable all categories (full variety)
+  if (!userHasSpecific && !oppHasSpecific) {
+    fKeys.forEach(function(k) { unionFeatures[k] = true; });
   }
 
   // 3. Collect candidates per region
@@ -6164,8 +6170,8 @@ function buildReconciledH2HDeck(targetCount) {
   function partitionPool(pool) {
     var agreed = [], userPicks = [], oppPicks = [], others = [];
     pool.forEach(function(c) {
-      var mUser = cardMatches(c, yf);
-      var mOpp = cardMatches(c, of);
+      var mUser = !userHasSpecific || cardMatches(c, yf);
+      var mOpp = !oppHasSpecific ? (!userHasSpecific) : cardMatches(c, of);
       if (mUser && mOpp) agreed.push(c);
       else if (mUser) userPicks.push(c);
       else if (mOpp) oppPicks.push(c);
@@ -6260,6 +6266,16 @@ function launchReconciledMatch() {
   if (_h2hSetup && _h2hSetup.launchCountdown) {
     clearInterval(_h2hSetup.launchCountdown);
     _h2hSetup.launchCountdown = null;
+  }
+
+  // Preserve setup state so rematch can mirror it exactly
+  if (_h2hSetup) {
+    window._lastH2HSetup = {
+      yourContinent: _h2hSetup.yourContinent || 'globe',
+      oppContinent: _h2hSetup.oppContinent || null,
+      yourFeatures: Object.assign({}, _h2hSetup.yourFeatures),
+      oppFeatures: Object.assign({}, _h2hSetup.oppFeatures)
+    };
   }
 
   var deck = buildReconciledH2HDeck(10);
@@ -6977,25 +6993,36 @@ function renderH2HResults() {
   if (bRematch) bRematch.addEventListener('click', function() {
     AudioMgr.bubble();
     _h2h.rematchYou = true;
+    _h2h.isRematch = true;
     updateH2HRematchUi();
     if (_h2h.isOnlineMatch) {
       setTimeout(function() {
         startH2HQueue();
       }, 400);
-    } else if (_h2h.rematchYou && _h2h.rematchOpp) {
-      setTimeout(function(){ startH2HQueue(); }, 400);
+    } else {
+      _h2h.rematchOpp = true;
+      updateH2HRematchUi();
+      setTimeout(function() {
+        // Rematch against bot skips redundant waiting and opens setup with mirrored choices!
+        H2H.transition('matched');
+        startH2HSetupScreen();
+      }, 350);
     }
   });
 
   var bNew = document.getElementById('h2h-btn-newopp');
   if (bNew) bNew.addEventListener('click', function() {
     AudioMgr.bubble();
+    _h2h.isRematch = false;
+    window._lastH2HSetup = null;
     startH2HQueue();
   });
 
   var bBack = document.getElementById('h2h-btn-back');
   if (bBack) bBack.addEventListener('click', function() {
     AudioMgr.bubble();
+    _h2h.isRematch = false;
+    window._lastH2HSetup = null;
     if (_h2h.oppRematchTimer) { clearTimeout(_h2h.oppRematchTimer); _h2h.oppRematchTimer = null; }
     H2H.transition('idle');
     go('s-setup');
