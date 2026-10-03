@@ -5227,7 +5227,7 @@ var H2HStub = (function(){
 
   // 100% self-contained local avatar SVG generator using local avatar-assets.js
   // Zero external HTTP requests to DiceBear (COPPA zero-leakage compliance)
-  function makeAvatarSvg(seed) {
+  function makeAvatarSvg(seed, forcedType) {
     if (typeof FS === 'undefined') return '';
     var types = Object.keys(FS);
     var hash = 0;
@@ -5237,7 +5237,7 @@ var H2HStub = (function(){
       hash |= 0;
     }
     var posHash = Math.abs(hash);
-    var typeKey = types[posHash % types.length];
+    var typeKey = forcedType || types[posHash % types.length];
     var sh = FS[typeKey];
     if (!sh || typeof sh.svg !== 'function') return '';
     
@@ -5265,22 +5265,24 @@ var H2HStub = (function(){
     return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
   }
 
-  function makeOpponent(yourRating, yourGrade, windowDelta) {
+  function makeOpponent(yourRating, yourGrade, windowDelta, isBot) {
     var base = (typeof yourRating === 'number') ? yourRating : 1200;
     var w = (typeof windowDelta === 'number' && windowDelta > 0) ? windowDelta : 120;
     // Rating within ±w of player, clamped 800–2400
     var rating = Math.max(800, Math.min(2400, base + rint(-w, w)));
     // Opponent grade sampled within ±1 of player's grade, clamped 1–13.
-    // Real matchmaking will return the opponent's actual grade; this is stub only.
     var baseGrade = (typeof yourGrade === 'number') ? yourGrade : 5;
     var grade = Math.max(1, Math.min(13, baseGrade + rint(-1, 1)));
-    var handle = makeHandle();
+    var isRealBot = (typeof isBot === 'undefined') ? true : !!isBot;
+    var handle = isRealBot ? 'Bot' : makeHandle();
+    var avatarSeed = isRealBot ? ('Bot_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6)) : handle;
     return {
       handle: handle,
-      avatar: makeAvatarSvg(handle),
+      avatar: makeAvatarSvg(avatarSeed, isRealBot ? 'bottts' : null),
       rating: rating,
       grade: grade,
-      tier: 6
+      tier: 6,
+      isBot: isRealBot
     };
   }
 
@@ -5832,12 +5834,20 @@ function renderH2HSetupUI() {
   var yourCont = _h2hSetup.yourContinent;
   var oppCont = _h2hSetup.oppContinent;
 
+  var youAvaImg = (profile && profile.avatar && profile.avatar.svg)
+    ? '<img src="' + profile.avatar.svg + '" style="width:100%;height:100%;object-fit:contain;border-radius:10px;">'
+    : ((profile && profile.avatar && profile.avatar.face) ? profile.avatar.face : '🧭');
+
+  var oppAvaImg = (_h2h.opponent && _h2h.opponent.avatar)
+    ? '<img src="' + _h2h.opponent.avatar + '" style="width:100%;height:100%;object-fit:contain;border-radius:10px;">'
+    : ((_h2h.opponent && _h2h.opponent.isBot) ? '🤖' : '⚔️');
+
   var html = '';
 
   // 1. Top Matchup Bar
   html += '<div class="h2h-s-matchup">';
   html += '  <div class="h2h-s-slot you">';
-  html += '    <div class="h2h-s-ava">🧭</div>';
+  html += '    <div class="h2h-s-ava">' + youAvaImg + '</div>';
   html += '    <div class="h2h-s-info">';
   html += '      <h3>' + youHandle + ' (' + youRating + ')</h3>';
   html += '      <span class="h2h-s-pill-hint you">● Ocean Blue [You]</span>';
@@ -5854,7 +5864,7 @@ function renderH2HSetupUI() {
   html += '      <h3>' + oppHandle + ' (' + oppRating + ')</h3>';
   html += '      <span class="h2h-s-pill-hint opp">● Title Yellow [Opp]</span>';
   html += '    </div>';
-  html += '    <div class="h2h-s-ava">⚔️</div>';
+  html += '    <div class="h2h-s-ava">' + oppAvaImg + '</div>';
   html += '  </div>';
   html += '</div>';
 
