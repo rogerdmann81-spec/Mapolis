@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Mapolis - Unified Head-to-Head Lobby Mockup</title>
+  <link rel="stylesheet" href="fonts.css">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    :root {
+      --bg-deep: #060d2e;
+      --bg-dark: #0a0d18;
+      --bg-panel: #11152a;
+      --bg-card: #151a34;
+      --bg-inner: #0c1022;
+      --blue: #3b6ef8;
+      --blue-lt: #5b8fff;
+      --cyan: #00d2ff;
+      --orange: #ff7043;
+      --orange-lt: #ff8a65;
+      --yellow: #ffe135;
+      --text: #d0d8f0;
+      --dim: #8899bb;
+      --muted: #5a6285;
+      --correct: #22d17a;
+      --wrong: #f04060;
+      --border: rgba(91, 143, 255, 0.18);
+      --border-glow: rgba(91, 143, 255, 0.4);
+    }
+
+    body {
+      background: radial-gradient(circle at 50% 12%, #12183c 0%, #060814 100%);
+      color: var(--text);
+      font-family: 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-sizing: border-box;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    /* Top info banner */
+    .mockup-banner {
+      width: 100%;
+      background: rgba(59, 110, 248, 0.12);
+      border-bottom: 1px solid rgba(91, 143, 255, 0.25);
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: #9cb4ff;
+      box-sizing: border-box;
+    }
+    .mockup-badge {
+      background: rgba(34, 209, 122, 0.15);
+      color: #22d17a;
+      border: 1px solid rgba(34, 209, 122, 0.4);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .view-toggle-btn {
+      background: #1b2144;
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 5px 14px;
+      border-radius: 14px;
+      font-size: 12px;
+      cursor: pointer;
+      font-weight: 700;
+      transition: all 0.2s;
+    }
+    .view-toggle-btn:hover {
+      background: #273166;
+      border-color: var(--cyan);
+    }
+
+    /* Main Container */
+    .lobby-wrap {
+      width: 100%;
+      max-width: 680px;
+      padding: 16px 16px 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-sizing: border-box;
+      transition: max-width 0.3s ease;
+    }
+    .lobby-wrap.mobile-view {
+      max-width: 420px;
+      border: 2px dashed rgba(91, 143, 255, 0.35);
+      border-radius: 24px;
+      margin: 16px 0;
+      background: #080c1d;
+      padding: 14px;
+    }
+
+    /* Top Player Matchup Bar */
+    .matchup-bar {
+      background: rgba(17, 21, 42, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    }
+    .player-slot {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .player-slot.you .avatar-icon {
+      border: 2px solid #3b6ef8;
+      box-shadow: 0 0 10px rgba(59, 110, 248, 0.4);
+    }
+    .player-slot.opp .avatar-icon {
+      border: 2px solid #ff7043;
+      box-shadow: 0 0 10px rgba(255, 112, 67, 0.4);
+    }
+    .avatar-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: #1c2344;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+    }
+    .player-details h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 800;
+      color: #fff;
+    }
+    .legend-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+    .legend-indicator.you { color: #5b8fff; }
+    .legend-indicator.opp { color: #ff8a65; }
+
+    .vs-center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .vs-badge {
+      background: linear-gradient(135deg, #3b6ef8, #ff7043);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 900;
+      padding: 2px 8px;
+      border-radius: 10px;
+      letter-spacing: 0.5px;
+    }
+    .timer-text {
+      font-size: 11px;
+      font-weight: 700;
+      color: #ffe135;
+    }
+
+    /* Unified Selection Section Card */
+    .section-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+    }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .section-title {
+      font-size: 13px;
+      font-weight: 800;
+      color: #fff;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .section-hint {
+      font-size: 11px;
+      color: var(--dim);
+    }
+
+    /* Continent Selection: Sleek Grid of Visual Chips */
+    .continent-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .continent-btn {
+      background: #0d1226;
+      border: 1.5px solid rgba(91, 143, 255, 0.16);
+      border-radius: 12px;
+      padding: 10px 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      user-select: none;
+      min-height: 58px;
+    }
+    .continent-btn:hover {
+      background: #151d3b;
+      border-color: rgba(91, 143, 255, 0.4);
+    }
+    .continent-btn .flag-icon {
+      font-size: 20px;
+    }
+    .continent-btn .continent-name {
+      font-size: 12px;
+      font-weight: 800;
+      color: #d0d8f0;
+    }
+
+    /* DUAL SELECTION VISUAL STATES */
+    /* 1. Only You selected */
+    .continent-btn.sel-you,
+    .feature-btn.sel-you {
+      border-color: #3b6ef8 !important;
+      background: rgba(59, 110, 248, 0.18) !important;
+      box-shadow: 0 0 12px rgba(59, 110, 248, 0.3);
+    }
+    /* 2. Only Opponent selected */
+    .continent-btn.sel-opp,
+    .feature-btn.sel-opp {
+      border-color: #ff7043 !important;
+      background: rgba(255, 112, 67, 0.16) !important;
+      box-shadow: 0 0 12px rgba(255, 112, 67, 0.25);
+    }
+    /* 3. BOTH SELECTED (AGREED / HARMONY) */
+    .continent-btn.sel-both,
+    .feature-btn.sel-both {
+      border-color: #22d17a !important;
+      background: linear-gradient(135deg, rgba(59, 110, 248, 0.22), rgba(34, 209, 122, 0.25)) !important;
+      box-shadow: 0 0 16px rgba(34, 209, 122, 0.35);
+    }
+
+    /* Avatar indicator tags on buttons */
+    .button-badges {
+      position: absolute;
+      top: -6px;
+      right: -4px;
+      display: flex;
+      gap: 3px;
+    }
+    .player-tag {
+      font-size: 9px;
+      font-weight: 900;
+      padding: 1px 5px;
+      border-radius: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .player-tag.you {
+      background: #3b6ef8;
+      color: #fff;
+      box-shadow: 0 2px 6px rgba(59, 110, 248, 0.4);
+    }
+    .player-tag.opp {
+      background: #ff7043;
+      color: #fff;
+      box-shadow: 0 2px 6px rgba(255, 112, 67, 0.4);
+    }
+    .player-tag.both {
+      background: #22d17a;
+      color: #000;
+      box-shadow: 0 2px 6px rgba(34, 209, 122, 0.4);
+    }
+
+    /* Feature selection grid */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    .feature-btn {
+      background: #0d1226;
+      border: 1.5px solid rgba(91, 143, 255, 0.16);
+      border-radius: 10px;
+      padding: 9px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s;
+      user-select: none;
+    }
+    .feature-btn:hover {
+      background: #151d3b;
+      border-color: rgba(91, 143, 255, 0.4);
+    }
+    .feature-icon {
+      font-size: 16px;
+    }
+    .feature-text {
+      font-size: 12px;
+      font-weight: 700;
+      color: #d0d8f0;
+      flex: 1;
+    }
+
+    /* Compact Merged Deck Status Banner */
+    .deck-summary-box {
+      background: linear-gradient(135deg, rgba(20, 26, 54, 0.95), rgba(12, 16, 36, 0.95));
+      border: 1px solid var(--border-glow);
+      border-radius: 16px;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    }
+    .deck-summary-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .deck-pill {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 8px;
+      text-transform: uppercase;
+    }
+    .deck-pill.merged {
+      background: rgba(0, 210, 255, 0.15);
+      border: 1px solid rgba(0, 210, 255, 0.35);
+      color: #00d2ff;
+    }
+    .deck-pill.consensus {
+      background: rgba(34, 209, 122, 0.15);
+      border: 1px solid rgba(34, 209, 122, 0.35);
+      color: #22d17a;
+    }
+
+    .mini-progress-bar {
+      height: 10px;
+      width: 100%;
+      background: #18203d;
+      border-radius: 5px;
+      overflow: hidden;
+      display: flex;
+    }
+    .bar-seg {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 800;
+      color: #000;
+      transition: width 0.3s ease;
+    }
+    .bar-you { background: linear-gradient(90deg, #3b6ef8, #5b8fff); }
+    .bar-opp { background: linear-gradient(90deg, #ff7043, #ff8a65); }
+    .bar-both { background: linear-gradient(90deg, #22d17a, #5bf0a0); width: 100% !important; }
+
+    .deck-topics-row {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+    .topic-chip {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 6px;
+    }
+    .topic-chip.both { background: rgba(34,209,122,0.15); border: 1px solid rgba(34,209,122,0.3); color: #5bf0a0; }
+    .topic-chip.you { background: rgba(59,110,248,0.15); border: 1px solid rgba(59,110,248,0.3); color: #9cb4ff; }
+    .topic-chip.opp { background: rgba(255,112,67,0.15); border: 1px solid rgba(255,112,67,0.3); color: #ff9d7d; }
+
+    /* Bottom Action Bar: Ready Status & Launch */
+    .action-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(17, 21, 42, 0.85);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px 16px;
+    }
+    .btn-ready {
+      flex: 1;
+      background: linear-gradient(135deg, #1b3585, #2251c7);
+      border: 1px solid rgba(91, 143, 255, 0.4);
+      color: #fff;
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      padding: 13px 18px;
+      border-radius: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.25s;
+    }
+    .btn-ready:hover {
+      background: linear-gradient(135deg, #2345a8, #2a64f5);
+      transform: translateY(-1px);
+    }
+    .btn-ready.is-ready {
+      background: linear-gradient(135deg, #126338, #1ea358);
+      border-color: #22d17a;
+      box-shadow: 0 4px 20px rgba(34, 209, 122, 0.4);
+    }
+
+    .opp-ready-card {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .opp-ready-card.waiting {
+      background: rgba(255, 225, 53, 0.1);
+      border: 1px solid rgba(255, 225, 53, 0.3);
+      color: #ffe135;
+    }
+    .opp-ready-card.ready {
+      background: rgba(34, 209, 122, 0.15);
+      border: 1px solid rgba(34, 209, 122, 0.4);
+      color: #22d17a;
+    }
+
+    /* Simulation Toolbar */
+    .sim-bar {
+      background: rgba(13, 17, 34, 0.85);
+      border: 1px solid rgba(255, 225, 53, 0.25);
+      border-radius: 12px;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    .sim-bar-title {
+      font-size: 11px;
+      font-weight: 800;
+      color: #ffe135;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .sim-btn-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .sim-btn {
+      background: #1a2242;
+      border: 1px solid var(--border);
+      color: #d0d8f0;
+      padding: 5px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .sim-btn:hover {
+      background: #273363;
+      color: #fff;
+      border-color: var(--cyan);
+    }
+
+    .pulsing-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #ffe135;
+      display: inline-block;
+      animation: pulseDot 1.2s infinite;
+    }
+    @keyframes pulseDot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.4); opacity: 0.4; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Mockup Info Banner -->
+  <div class="mockup-banner">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span class="mockup-badge">Unified Screen</span>
+      <span>Single Selection Set with Live Opponent Indicators</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button class="view-toggle-btn" id="btn-toggle-view" onclick="toggleViewport()">📱 Switch to Mobile View</button>
+    </div>
+  </div>
+
+  <div class="lobby-wrap" id="lobby-container">
+    
+    <!-- 1. Matchup Header Bar -->
+    <div class="matchup-bar">
+      <!-- Player 1 (You) -->
+      <div class="player-slot you">
+        <div class="avatar-icon">🧭</div>
+        <div class="player-details">
+          <h3>You (Roger)</h3>
+          <span class="legend-indicator you">● Blue Pill [You]</span>
+        </div>
+      </div>
+
+      <!-- VS Center -->
+      <div class="vs-center">
+        <span class="vs-badge">VS</span>
+        <span class="timer-text" id="countdown-text">Auto 0:25</span>
+      </div>
+
+      <!-- Player 2 (Opponent) -->
+      <div class="player-slot opp">
+        <div class="player-details" style="text-align:right;">
+          <h3>Gnapoley</h3>
+          <span class="legend-indicator opp">● Orange Pill [Opponent]</span>
+        </div>
+        <div class="avatar-icon">⚔️</div>
+      </div>
+    </div>
+
+    <!-- 2. Continent / Globe Selection (One Single Set of 6 Chips) -->
+    <div class="section-card">
+      <div class="section-header">
+        <span class="section-title"><span>🌍</span> Region / Continent</span>
+        <span class="section-hint">Tap to pick your home territory</span>
+      </div>
+
+      <div class="continent-grid">
+        <!-- Whole Globe -->
+        <div class="continent-btn" id="cont-globe" onclick="selectYourContinent('globe')">
+          <div class="button-badges" id="badge-globe"></div>
+          <span class="flag-icon">🌐</span>
+          <span class="continent-name">Whole Globe</span>
+        </div>
+
+        <!-- Europe -->
+        <div class="continent-btn sel-you" id="cont-europe" onclick="selectYourContinent('europe')">
+          <div class="button-badges" id="badge-europe">
+            <span class="player-tag you">You</span>
+          </div>
+          <span class="flag-icon">🇪🇺</span>
+          <span class="continent-name">Europe</span>
+        </div>
+
+        <!-- Asia -->
+        <div class="continent-btn sel-opp" id="cont-asia" onclick="selectYourContinent('asia')">
+          <div class="button-badges" id="badge-asia">
+            <span class="player-tag opp">Opponent</span>
+          </div>
+          <span class="flag-icon">🌏</span>
+          <span class="continent-name">Asia</span>
+        </div>
+
+        <!-- Africa -->
+        <div class="continent-btn" id="cont-africa" onclick="selectYourContinent('africa')">
+          <div class="button-badges" id="badge-africa"></div>
+          <span class="flag-icon">🌍</span>
+          <span class="continent-name">Africa</span>
+        </div>
+
+        <!-- Americas -->
+        <div class="continent-btn" id="cont-americas" onclick="selectYourContinent('americas')">
+          <div class="button-badges" id="badge-americas"></div>
+          <span class="flag-icon">🌎</span>
+          <span class="continent-name">Americas</span>
+        </div>
+
+        <!-- Oceania -->
+        <div class="continent-btn" id="cont-oceania" onclick="selectYourContinent('oceania')">
+          <div class="button-badges" id="badge-oceania"></div>
+          <span class="flag-icon">🌊</span>
+          <span class="continent-name">Oceania</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Physical Features (One Single Set of 4 Buttons) -->
+    <div class="section-card">
+      <div class="section-header">
+        <span class="section-title"><span>⛰️</span> Physical Geography</span>
+        <span class="section-hint">Active features enter question deck</span>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-btn sel-you" id="feat-mountains" onclick="toggleYourFeature('mountains')">
+          <div class="button-badges" id="badge-feat-mountains">
+            <span class="player-tag you">You</span>
+          </div>
+          <span class="feature-icon">🏔️</span>
+          <span class="feature-text">Mountains & Ranges</span>
+        </div>
+
+        <div class="feature-btn sel-both" id="feat-rivers" onclick="toggleYourFeature('rivers')">
+          <div class="button-badges" id="badge-feat-rivers">
+            <span class="player-tag both">Both Agreed ✓</span>
+          </div>
+          <span class="feature-icon">🏞️</span>
+          <span class="feature-text">Rivers & Lakes</span>
+        </div>
+
+        <div class="feature-btn sel-opp" id="feat-seas" onclick="toggleYourFeature('seas')">
+          <div class="button-badges" id="badge-feat-seas">
+            <span class="player-tag opp">Opponent</span>
+          </div>
+          <span class="feature-icon">🌊</span>
+          <span class="feature-text">Seas & Oceans</span>
+        </div>
+
+        <div class="feature-btn" id="feat-islands" onclick="toggleYourFeature('islands')">
+          <div class="button-badges" id="badge-feat-islands"></div>
+          <span class="feature-icon">🏝️</span>
+          <span class="feature-text">Islands & Straits</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Political & Cities (One Single Set of 4 Buttons) -->
+    <div class="section-card">
+      <div class="section-header">
+        <span class="section-title"><span>🏛️</span> Political & Cities</span>
+        <span class="section-hint">Territory, capitals, and culture</span>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-btn sel-both" id="feat-countries" onclick="toggleYourFeature('countries')">
+          <div class="button-badges" id="badge-feat-countries">
+            <span class="player-tag both">Both Agreed ✓</span>
+          </div>
+          <span class="feature-icon">🗺️</span>
+          <span class="feature-text">Countries (Territory)</span>
+        </div>
+
+        <div class="feature-btn sel-you" id="feat-capitals" onclick="toggleYourFeature('capitals')">
+          <div class="button-badges" id="badge-feat-capitals">
+            <span class="player-tag you">You</span>
+          </div>
+          <span class="feature-icon">🏛️</span>
+          <span class="feature-text">Capitals</span>
+        </div>
+
+        <div class="feature-btn sel-opp" id="feat-flags" onclick="toggleYourFeature('flags')">
+          <div class="button-badges" id="badge-feat-flags">
+            <span class="player-tag opp">Opponent</span>
+          </div>
+          <span class="feature-icon">🚩</span>
+          <span class="feature-text">Flags</span>
+        </div>
+
+        <div class="feature-btn sel-you" id="feat-cities" onclick="toggleYourFeature('cities')">
+          <div class="button-badges" id="badge-feat-cities">
+            <span class="player-tag you">You</span>
+          </div>
+          <span class="feature-icon">🏙️</span>
+          <span class="feature-text">Major Cities</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. Live Deck Reconciliation Preview (Compact Summary) -->
+    <div class="deck-summary-box">
+      <div class="deck-summary-head">
+        <span id="deck-headline">⚡ Merged Deck: <strong style="color:#ffe135;" id="deck-split-text">50% Europe + 50% Asia</strong></span>
+        <span class="deck-pill merged" id="deck-status-pill">Merged Deck</span>
+      </div>
+
+      <div class="mini-progress-bar" id="deck-bar">
+        <div class="bar-seg bar-you" id="bar-seg-you" style="width:50%;">5 Qs: Europe (You)</div>
+        <div class="bar-seg bar-opp" id="bar-seg-opp" style="width:50%;">5 Qs: Asia (Opponent)</div>
+      </div>
+
+      <div class="deck-topics-row" id="deck-topics-row">
+        <!-- Rendered topic chips -->
+      </div>
+    </div>
+
+    <!-- 6. Action Bar: Ready Button & Opponent Status -->
+    <div class="action-bar">
+      <!-- Your Ready Button -->
+      <button class="btn-ready" id="btn-you-ready" onclick="toggleYouReady()">
+        <span id="ready-icon">⚡</span>
+        <span id="ready-text">READY TO PLAY</span>
+      </button>
+
+      <!-- Opponent Status -->
+      <div class="opp-ready-card waiting" id="opp-ready-status">
+        <span class="pulsing-dot" id="opp-dot"></span>
+        <span id="opp-status-text">Opponent picking...</span>
+      </div>
+    </div>
+
+    <!-- 7. Simulation Controls for Testing -->
+    <div class="sim-bar">
+      <span class="sim-bar-title">🛠️ Test Different Opponent Actions:</span>
+      <div class="sim-btn-row">
+        <button class="sim-btn" onclick="simOpponentPickContinent('europe')">🇪🇺 Make Opponent Pick Europe (Agreement)</button>
+        <button class="sim-btn" onclick="simOpponentPickContinent('americas')">🌎 Make Opponent Pick Americas (Split)</button>
+        <button class="sim-btn" onclick="simOpponentToggleFeature('mountains')">🏔️ Opponent Toggles Mountains</button>
+        <button class="sim-btn" onclick="simToggleOpponentReady()">⚡ Opponent Clicks Ready</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    var yourContinent = 'europe';
+    var oppContinent = 'asia';
+
+    var yourFeatures = {
+      mountains: true,
+      rivers: true,
+      seas: false,
+      islands: false,
+      countries: true,
+      capitals: true,
+      flags: false,
+      cities: true
+    };
+
+    var oppFeatures = {
+      mountains: false,
+      rivers: true,
+      seas: true,
+      islands: false,
+      countries: true,
+      capitals: false,
+      flags: true,
+      cities: false
+    };
+
+    var featureNames = {
+      mountains: '🏔️ Mountains',
+      rivers: '🏞️ Rivers & Lakes',
+      seas: '🌊 Seas & Oceans',
+      islands: '🏝️ Islands',
+      countries: '🗺️ Countries',
+      capitals: '🏛️ Capitals',
+      flags: '🚩 Flags',
+      cities: '🏙️ Cities'
+    };
+
+    var continents = ['globe', 'europe', 'asia', 'africa', 'americas', 'oceania'];
+    var continentLabels = {
+      globe: 'Globe',
+      europe: 'Europe',
+      asia: 'Asia',
+      africa: 'Africa',
+      americas: 'Americas',
+      oceania: 'Oceania'
+    };
+
+    var youReady = false;
+    var oppReady = false;
+    var countdownSec = 25;
+    var launchTimer = null;
+
+    // Countdown
+    setInterval(function() {
+      if (countdownSec > 0 && !youReady) {
+        countdownSec--;
+        document.getElementById('countdown-text').innerText = 'Auto 0:' + (countdownSec < 10 ? '0' : '') + countdownSec;
+      }
+    }, 1000);
+
+    function toggleViewport() {
+      var wrap = document.getElementById('lobby-container');
+      var btn = document.getElementById('btn-toggle-view');
+      wrap.classList.toggle('mobile-view');
+      if (wrap.classList.contains('mobile-view')) {
+        btn.innerText = '💻 Switch to Desktop View';
+      } else {
+        btn.innerText = '📱 Switch to Mobile View';
+      }
+    }
+
+    function selectYourContinent(cont) {
+      if (youReady) return;
+      yourContinent = cont;
+      updateUI();
+    }
+
+    function toggleYourFeature(key) {
+      if (youReady) return;
+      yourFeatures[key] = !yourFeatures[key];
+      // Keep at least one active
+      if (!Object.values(yourFeatures).some(Boolean)) yourFeatures[key] = true;
+      updateUI();
+    }
+
+    function toggleYouReady() {
+      youReady = !youReady;
+      var btn = document.getElementById('btn-you-ready');
+      var icon = document.getElementById('ready-icon');
+      var text = document.getElementById('ready-text');
+
+      if (youReady) {
+        btn.classList.add('is-ready');
+        icon.innerText = '✓';
+        text.innerText = 'YOU ARE READY';
+      } else {
+        btn.classList.remove('is-ready');
+        icon.innerText = '⚡';
+        text.innerText = 'READY TO PLAY';
+        cancelLaunch();
+      }
+      checkBothReady();
+    }
+
+    function simToggleOpponentReady() {
+      oppReady = !oppReady;
+      var card = document.getElementById('opp-ready-status');
+      var dot = document.getElementById('opp-dot');
+      var text = document.getElementById('opp-status-text');
+
+      if (oppReady) {
+        card.className = 'opp-ready-card ready';
+        dot.style.display = 'none';
+        text.innerText = 'Opponent Ready! ✓';
+      } else {
+        card.className = 'opp-ready-card waiting';
+        dot.style.display = 'inline-block';
+        text.innerText = 'Opponent picking...';
+        cancelLaunch();
+      }
+      checkBothReady();
+    }
+
+    function simOpponentPickContinent(cont) {
+      oppContinent = cont;
+      updateUI();
+    }
+
+    function simOpponentToggleFeature(key) {
+      oppFeatures[key] = !oppFeatures[key];
+      updateUI();
+    }
+
+    function checkBothReady() {
+      var headline = document.getElementById('deck-headline');
+      if (youReady && oppReady) {
+        headline.innerHTML = '🚀 <strong style="color:#22d17a;">BOTH PLAYERS READY! Launching match in 3s...</strong>';
+        if (!launchTimer) {
+          var left = 3;
+          launchTimer = setInterval(function() {
+            left--;
+            if (left > 0) {
+              headline.innerHTML = '🚀 <strong style="color:#22d17a;">BOTH PLAYERS READY! Launching match in ' + left + 's...</strong>';
+            } else {
+              clearInterval(launchTimer);
+              headline.innerHTML = '🎉 <strong style="color:#22d17a;">MATCH COMMENCING! Loading game board...</strong>';
+            }
+          }, 1000);
+        }
+      } else {
+        cancelLaunch();
+        updateDeckSummary();
+      }
+    }
+
+    function cancelLaunch() {
+      if (launchTimer) {
+        clearInterval(launchTimer);
+        launchTimer = null;
+      }
+    }
+
+    function updateUI() {
+      // 1. Update Continent buttons
+      continents.forEach(function(c) {
+        var btn = document.getElementById('cont-' + c);
+        var badge = document.getElementById('badge-' + c);
+        var isYou = (yourContinent === c);
+        var isOpp = (oppContinent === c);
+
+        btn.className = 'continent-btn';
+        badge.innerHTML = '';
+
+        if (isYou && isOpp) {
+          btn.classList.add('sel-both');
+          badge.innerHTML = '<span class="player-tag both">Both Agreed ✓</span>';
+        } else if (isYou) {
+          btn.classList.add('sel-you');
+          badge.innerHTML = '<span class="player-tag you">You</span>';
+        } else if (isOpp) {
+          btn.classList.add('sel-opp');
+          badge.innerHTML = '<span class="player-tag opp">Opponent</span>';
+        }
+      });
+
+      // 2. Update Feature buttons
+      Object.keys(yourFeatures).forEach(function(k) {
+        var btn = document.getElementById('feat-' + k);
+        var badge = document.getElementById('badge-feat-' + k);
+        if (!btn || !badge) return;
+
+        var isYou = yourFeatures[k];
+        var isOpp = oppFeatures[k];
+
+        btn.className = 'feature-btn';
+        badge.innerHTML = '';
+
+        if (isYou && isOpp) {
+          btn.classList.add('sel-both');
+          badge.innerHTML = '<span class="player-tag both">Both Agreed ✓</span>';
+        } else if (isYou) {
+          btn.classList.add('sel-you');
+          badge.innerHTML = '<span class="player-tag you">You</span>';
+        } else if (isOpp) {
+          btn.classList.add('sel-opp');
+          badge.innerHTML = '<span class="player-tag opp">Opponent</span>';
+        }
+      });
+
+      updateDeckSummary();
+    }
+
+    function updateDeckSummary() {
+      var headline = document.getElementById('deck-headline');
+      var pill = document.getElementById('deck-status-pill');
+      var bar = document.getElementById('deck-bar');
+
+      var nameYou = continentLabels[yourContinent];
+      var nameOpp = continentLabels[oppContinent];
+
+      if (yourContinent === oppContinent) {
+        pill.className = 'deck-pill consensus';
+        pill.innerText = 'Pure Agreement (100%)';
+        headline.innerHTML = '✨ Consensus Deck: <strong style="color:#22d17a;">100% ' + nameYou + '</strong> (10 Questions)';
+        bar.innerHTML = '<div class="bar-seg bar-both">10 Qs: ' + nameYou + ' (Agreed by both!)</div>';
+      } else {
+        pill.className = 'deck-pill merged';
+        pill.innerText = 'Merged Deck';
+        headline.innerHTML = '⚡ Merged Deck: <strong style="color:#ffe135;">50% ' + nameYou + ' + 50% ' + nameOpp + '</strong> (10 Questions)';
+        bar.innerHTML = `
+          <div class="bar-seg bar-you" style="width:50%;">5 Qs: ${nameYou} (You)</div>
+          <div class="bar-seg bar-opp" style="width:50%;">5 Qs: ${nameOpp} (Opponent)</div>
+        `;
+      }
+
+      // Feature tags row
+      var row = document.getElementById('deck-topics-row');
+      row.innerHTML = '';
+      Object.keys(yourFeatures).forEach(function(k) {
+        var isYou = yourFeatures[k];
+        var isOpp = oppFeatures[k];
+        if (isYou && isOpp) {
+          row.innerHTML += `<div class="topic-chip both">✓ ${featureNames[k]} (Both)</div>`;
+        } else if (isYou) {
+          row.innerHTML += `<div class="topic-chip you">+ ${featureNames[k]} (You)</div>`;
+        } else if (isOpp) {
+          row.innerHTML += `<div class="topic-chip opp">+ ${featureNames[k]} (Opponent)</div>`;
+        }
+      });
+    }
+
+    // Init
+    updateUI();
+  </script>
+</body>
+</html>

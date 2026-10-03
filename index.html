@@ -309,6 +309,13 @@
 </div>
 
 <!-- ══════════════════════════════════════════════
+     H2H SETUP LOBBY
+     ══════════════════════════════════════════════ -->
+<div id="s-h2h-setup" class="screen">
+  <div id="h2h-setup-root"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════
      H2H RESULTS
      ══════════════════════════════════════════════ -->
 <div id="s-h2h-results" class="screen">
@@ -826,7 +833,7 @@ const MusicMgr = (function() {
     's-edu-tests':'northern', 's-edu-cards':'northern', 's-edu-search':'northern', 's-edu-messages':'northern',
     's-game':'sunrise',
     's-results':'festival', 's-leaderboard':'festival',
-    's-h2h-queue':'starlight', 's-h2h-results':'festival'
+    's-h2h-queue':'starlight', 's-h2h-setup':'starlight', 's-h2h-results':'festival'
   };
 
   return {
@@ -917,7 +924,7 @@ const SCREEN_IDS = [
 
   's-game','s-results','s-profile','s-store','s-leaderboard',
 
-  's-h2h-queue','s-h2h-results',
+  's-h2h-queue','s-h2h-setup','s-h2h-results',
 
   's-edu-dash','s-edu-students','s-edu-competitions',
 
@@ -4450,6 +4457,10 @@ function weightedPick(entries) {
 }
 
 function initDeck(pool, gameMode) {
+  if (gameMode === "h2h") {
+    // In H2H mode, the prebuilt pool is already deterministically sorted and shuffled for both players
+    return { mode: "h2h", remaining: [...pool], allCards: [...pool] };
+  }
   const shuffled = [...pool].sort(() => Math.random() - 0.5);
   if (gameMode === "all") {
     return { mode:"all", remaining: shuffled };
@@ -4459,6 +4470,18 @@ function initDeck(pool, gameMode) {
 }
 
 function drawCard(deck) {
+  if (deck.mode === "h2h") {
+    if (!deck.remaining || deck.remaining.length === 0) {
+      if (deck.allCards && deck.allCards.length > 0) {
+        deck.remaining = [...deck.allCards];
+      } else {
+        return { card: null, deck };
+      }
+    }
+    const card = deck.remaining[0];
+    const remaining = deck.remaining.slice(1);
+    return { card, deck: { ...deck, remaining } };
+  }
   if (deck.mode === "all") {
     if (deck.remaining.length === 0) return { card: null, deck };
     const idx = Math.floor(Math.random() * deck.remaining.length);
@@ -5422,7 +5445,7 @@ function startH2HQueue() {
 
     setTimeout(function() {
       H2H.transition('matched');
-      startH2HMatch();
+      startH2HSetupScreen();
     }, 600);
   }
 
@@ -5444,7 +5467,7 @@ function startH2HQueue() {
       if (remaining > 0) {
         subEl.innerHTML = 'Searching for challenger (±' + win + ' ELO) · <span style="color:#ffe135;font-weight:700;">' + remaining + 's</span>';
       } else {
-        subEl.innerHTML = 'Opponent discovered! Launching match…';
+        subEl.innerHTML = 'Opponent discovered! Launching setup…';
       }
     }
     if (timerEl) {
@@ -5481,12 +5504,12 @@ function startH2HQueue() {
       window.h2hStore.leaveQueue(profile.id);
     }
     _h2h.isOnlineMatch = false;
-    _h2h.matchId = null;
+    _h2h.matchId = 'bot_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
     var elapsed = Date.now() - queueStartedAt;
     var win = H2HStub.ratingWindowAt(elapsed);
     _h2h.opponent = H2HStub.makeOpponent(_h2h.you.rating, yourGrade, win);
     H2H.transition('matched');
-    startH2HMatch();
+    startH2HSetupScreen();
   }, QUEUE_DURATION_MS);
 }
 
@@ -5605,6 +5628,625 @@ function renderH2HQueue() {
   // Cancel button
   var cancelBtn = document.getElementById('h2h-queue-cancel');
   if (cancelBtn) cancelBtn.addEventListener('click', function() { AudioMgr.bubble(); cancelH2HQueue(); });
+}
+
+// ──────────────────────────────────────────────────────────────────
+// H2H SETUP LOBBY & RECONCILIATION SCREEN
+// ──────────────────────────────────────────────────────────────────
+var _h2hSetup = null;
+
+var H2H_CONTINENTS = [
+  { id: 'globe', name: 'Whole Globe', icon: '🌐' },
+  { id: 'europe', name: 'Europe', icon: '🇪🇺' },
+  { id: 'asia', name: 'Asia', icon: '🌏' },
+  { id: 'africa', name: 'Africa', icon: '🌍' },
+  { id: 'americas', name: 'Americas', icon: '🌎' },
+  { id: 'oceania', name: 'Oceania', icon: '🌊' }
+];
+
+var H2H_PHYSICAL_FEATURES = [
+  { id: 'mountains', label: 'Mountains & Ranges', icon: '🏔️' },
+  { id: 'rivers', label: 'Rivers & Lakes', icon: '🏞️' },
+  { id: 'seas', label: 'Seas & Oceans', icon: '🌊' },
+  { id: 'islands', label: 'Islands & Straits', icon: '🏝️' }
+];
+
+var H2H_POLITICAL_FEATURES = [
+  { id: 'countries', label: 'Countries (Territory)', icon: '🗺️' },
+  { id: 'capitals', label: 'Capitals', icon: '🏛️' },
+  { id: 'flags', label: 'Flags', icon: '🚩' },
+  { id: 'cities', label: 'Major Cities & Sites', icon: '🏙️' }
+];
+
+function startH2HSetupScreen() {
+  var profile = window.activeProfile || { handle: 'You', id: 'player_you' };
+  var opp = _h2h.opponent || { handle: 'Challenger', rating: 1200 };
+
+  _h2hSetup = {
+    yourContinent: 'globe',
+    oppContinent: 'europe',
+    yourFeatures: {
+      mountains: true,
+      rivers: true,
+      seas: false,
+      islands: false,
+      countries: true,
+      capitals: true,
+      flags: false,
+      cities: true
+    },
+    oppFeatures: {
+      mountains: false,
+      rivers: true,
+      seas: true,
+      islands: false,
+      countries: true,
+      capitals: false,
+      flags: true,
+      cities: false
+    },
+    youReady: false,
+    oppReady: false,
+    countdownSec: 20,
+    timer: null,
+    launchCountdown: null,
+    channel: null
+  };
+
+  if (!_h2h.isOnlineMatch) {
+    // Bot match: generate realistic picks
+    var contPool = ['globe', 'europe', 'asia', 'africa', 'americas', 'oceania'];
+    _h2hSetup.oppContinent = contPool[Math.floor(Math.random() * contPool.length)];
+    var fKeys = Object.keys(_h2hSetup.oppFeatures);
+    fKeys.forEach(function(k) {
+      _h2hSetup.oppFeatures[k] = Math.random() > 0.45;
+    });
+    if (!Object.values(_h2hSetup.oppFeatures).some(Boolean)) {
+      _h2hSetup.oppFeatures.countries = true;
+      _h2hSetup.oppFeatures.rivers = true;
+    }
+
+    // Bot readies up after 3-5 seconds
+    setTimeout(function() {
+      if (_h2hSetup && !_h2hSetup.oppReady && currentScreen === 's-h2h-setup') {
+        _h2hSetup.oppReady = true;
+        renderH2HSetupUI();
+        checkH2HSetupBothReady();
+      }
+    }, 2800 + Math.random() * 1800);
+  } else {
+    // Online match: Supabase Realtime broadcast channel
+    var client = (typeof _supabaseClient !== 'undefined' && _supabaseClient) ||
+      (window.supabase && typeof isSupabaseConfigured === 'function' && isSupabaseConfigured() ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null);
+    if (client && _h2h.matchId) {
+      try {
+        var ch = client.channel('h2h_setup_' + _h2h.matchId, { config: { broadcast: { self: false } } });
+        ch.on('broadcast', { event: 'setup_sync' }, function(msg) {
+          if (msg && msg.payload && msg.payload.playerId !== profile.id) {
+            var p = msg.payload;
+            if (p.continent) _h2hSetup.oppContinent = p.continent;
+            if (p.features) _h2hSetup.oppFeatures = p.features;
+            if (typeof p.isReady === 'boolean') _h2hSetup.oppReady = p.isReady;
+            renderH2HSetupUI();
+            checkH2HSetupBothReady();
+          }
+        });
+        ch.on('broadcast', { event: 'deck_broadcast' }, function(msg) {
+          if (msg && msg.payload && Array.isArray(msg.payload.cardSequence) && msg.payload.cardSequence.length > 0) {
+            _h2h.sharedDeck = msg.payload.cardSequence;
+          }
+        });
+        ch.subscribe(function(status) {
+          if (status === 'SUBSCRIBED') {
+            broadcastH2HSetupState();
+          }
+        });
+        _h2hSetup.channel = ch;
+      } catch(e) {
+        console.warn('[h2h-setup] realtime error:', e);
+      }
+    }
+  }
+
+  // 20s auto-lock countdown timer
+  if (_h2hSetup.timer) clearInterval(_h2hSetup.timer);
+  _h2hSetup.timer = setInterval(function() {
+    if (!_h2hSetup) return;
+    _h2hSetup.countdownSec--;
+    var timerEl = document.getElementById('h2h-s-countdown');
+    if (timerEl) {
+      var s = _h2hSetup.countdownSec;
+      timerEl.textContent = 'Auto 0:' + (s < 10 ? '0' : '') + Math.max(0, s);
+    }
+    if (_h2hSetup.countdownSec <= 0) {
+      clearInterval(_h2hSetup.timer);
+      _h2hSetup.timer = null;
+      launchReconciledMatch();
+    }
+  }, 1000);
+
+  renderH2HSetupUI();
+  go('s-h2h-setup');
+}
+
+function broadcastH2HSetupState() {
+  if (_h2hSetup && _h2hSetup.channel && window.activeProfile) {
+    try {
+      _h2hSetup.channel.send({
+        type: 'broadcast',
+        event: 'setup_sync',
+        payload: {
+          playerId: window.activeProfile.id,
+          continent: _h2hSetup.yourContinent,
+          features: _h2hSetup.yourFeatures,
+          isReady: _h2hSetup.youReady
+        }
+      });
+    } catch(e) {
+      console.warn('[h2h-setup] broadcast error:', e);
+    }
+  }
+}
+
+function checkH2HSetupBothReady() {
+  if (!_h2hSetup) return;
+  var headline = document.getElementById('h2h-s-deck-headline');
+  if (_h2hSetup.youReady && _h2hSetup.oppReady) {
+    if (headline) headline.innerHTML = '🚀 <strong style="color:#64be50;">BOTH READY! Launching in 3s...</strong>';
+    if (!_h2hSetup.launchCountdown) {
+      var left = 3;
+      _h2hSetup.launchCountdown = setInterval(function() {
+        left--;
+        if (headline) {
+          if (left > 0) {
+            headline.innerHTML = '🚀 <strong style="color:#64be50;">BOTH READY! Launching in ' + left + 's...</strong>';
+          } else {
+            headline.innerHTML = '🎉 <strong style="color:#64be50;">MATCH COMMENCING! Loading cards...</strong>';
+          }
+        }
+        if (left <= 0) {
+          clearInterval(_h2hSetup.launchCountdown);
+          _h2hSetup.launchCountdown = null;
+          launchReconciledMatch();
+        }
+      }, 1000);
+    }
+  } else {
+    if (_h2hSetup.launchCountdown) {
+      clearInterval(_h2hSetup.launchCountdown);
+      _h2hSetup.launchCountdown = null;
+    }
+  }
+}
+
+function renderH2HSetupUI() {
+  var root = document.getElementById('h2h-setup-root');
+  if (!root || !_h2hSetup) return;
+
+  var profile = window.activeProfile || { handle: 'You', rating: 1200 };
+  var youHandle = escapeHtml(profile.handle || 'You');
+  var youRating = (_h2h && _h2h.you && _h2h.you.rating) || 1200;
+  var oppHandle = escapeHtml((_h2h.opponent && _h2h.opponent.handle) || 'Opponent');
+  var oppRating = (_h2h.opponent && typeof _h2h.opponent.rating === 'number') ? _h2h.opponent.rating : 1200;
+
+  var yourCont = _h2hSetup.yourContinent;
+  var oppCont = _h2hSetup.oppContinent;
+
+  var html = '';
+
+  // 1. Top Matchup Bar
+  html += '<div class="h2h-s-matchup">';
+  html += '  <div class="h2h-s-slot you">';
+  html += '    <div class="h2h-s-ava">🧭</div>';
+  html += '    <div class="h2h-s-info">';
+  html += '      <h3>' + youHandle + ' (' + youRating + ')</h3>';
+  html += '      <span class="h2h-s-pill-hint you">● Ocean Blue [You]</span>';
+  html += '    </div>';
+  html += '  </div>';
+
+  html += '  <div class="h2h-s-vs">';
+  html += '    <span class="h2h-s-vs-badge">VS</span>';
+  html += '    <span class="h2h-s-timer" id="h2h-s-countdown">Auto 0:' + (_h2hSetup.countdownSec < 10 ? '0' : '') + _h2hSetup.countdownSec + '</span>';
+  html += '  </div>';
+
+  html += '  <div class="h2h-s-slot opp">';
+  html += '    <div class="h2h-s-info" style="text-align:right;">';
+  html += '      <h3>' + oppHandle + ' (' + oppRating + ')</h3>';
+  html += '      <span class="h2h-s-pill-hint opp">● Title Yellow [Opp]</span>';
+  html += '    </div>';
+  html += '    <div class="h2h-s-ava">⚔️</div>';
+  html += '  </div>';
+  html += '</div>';
+
+  // 2. Region / Continent Single Selection
+  html += '<div class="h2h-s-card">';
+  html += '  <div class="h2h-s-card-head">';
+  html += '    <span class="h2h-s-card-title"><span>🌍</span> Region / Continent</span>';
+  html += '    <span class="h2h-s-card-hint">Tap to set territory</span>';
+  html += '  </div>';
+  html += '  <div class="h2h-s-cont-grid">';
+  H2H_CONTINENTS.forEach(function(c) {
+    var isYou = (yourCont === c.id);
+    var isOpp = (oppCont === c.id);
+    var cls = 'h2h-s-btn cont-btn';
+    var badgeHtml = '';
+    if (isYou && isOpp) {
+      cls += ' sel-both';
+      badgeHtml = '<span class="h2h-s-tag both">Both Agreed ✓</span>';
+    } else if (isYou) {
+      cls += ' sel-you';
+      badgeHtml = '<span class="h2h-s-tag you">You</span>';
+    } else if (isOpp) {
+      cls += ' sel-opp';
+      badgeHtml = '<span class="h2h-s-tag opp">Opponent</span>';
+    }
+    html += '<div class="' + cls + '" data-cont="' + c.id + '">';
+    html += '  <div class="h2h-s-badges">' + badgeHtml + '</div>';
+    html += '  <span style="font-size:20px;">' + c.icon + '</span>';
+    html += '  <span style="font-size:11px;font-weight:800;">' + c.name + '</span>';
+    html += '</div>';
+  });
+  html += '  </div>';
+  html += '</div>';
+
+  // 3. Physical Geography Single Selection
+  html += '<div class="h2h-s-card">';
+  html += '  <div class="h2h-s-card-head">';
+  html += '    <span class="h2h-s-card-title"><span>⛰️</span> Physical Geography</span>';
+  html += '    <span class="h2h-s-card-hint">Union enters the card deck</span>';
+  html += '  </div>';
+  html += '  <div class="h2h-s-feat-grid">';
+  H2H_PHYSICAL_FEATURES.forEach(function(f) {
+    var isYou = !!_h2hSetup.yourFeatures[f.id];
+    var isOpp = !!_h2hSetup.oppFeatures[f.id];
+    var cls = 'h2h-s-btn';
+    var badgeHtml = '';
+    if (isYou && isOpp) {
+      cls += ' sel-both';
+      badgeHtml = '<span class="h2h-s-tag both">Both Agreed ✓</span>';
+    } else if (isYou) {
+      cls += ' sel-you';
+      badgeHtml = '<span class="h2h-s-tag you">You</span>';
+    } else if (isOpp) {
+      cls += ' sel-opp';
+      badgeHtml = '<span class="h2h-s-tag opp">Opponent</span>';
+    }
+    html += '<div class="' + cls + '" data-feat="' + f.id + '">';
+    html += '  <div class="h2h-s-badges">' + badgeHtml + '</div>';
+    html += '  <span style="font-size:16px;">' + f.icon + '</span>';
+    html += '  <span style="font-size:12px;font-weight:700;flex:1;">' + f.label + '</span>';
+    html += '</div>';
+  });
+  html += '  </div>';
+  html += '</div>';
+
+  // 4. Political & Cities Single Selection
+  html += '<div class="h2h-s-card">';
+  html += '  <div class="h2h-s-card-head">';
+  html += '    <span class="h2h-s-card-title"><span>🏛️</span> Political & Cities</span>';
+  html += '    <span class="h2h-s-card-hint">Capitals, borders & culture</span>';
+  html += '  </div>';
+  html += '  <div class="h2h-s-feat-grid">';
+  H2H_POLITICAL_FEATURES.forEach(function(f) {
+    var isYou = !!_h2hSetup.yourFeatures[f.id];
+    var isOpp = !!_h2hSetup.oppFeatures[f.id];
+    var cls = 'h2h-s-btn';
+    var badgeHtml = '';
+    if (isYou && isOpp) {
+      cls += ' sel-both';
+      badgeHtml = '<span class="h2h-s-tag both">Both Agreed ✓</span>';
+    } else if (isYou) {
+      cls += ' sel-you';
+      badgeHtml = '<span class="h2h-s-tag you">You</span>';
+    } else if (isOpp) {
+      cls += ' sel-opp';
+      badgeHtml = '<span class="h2h-s-tag opp">Opponent</span>';
+    }
+    html += '<div class="' + cls + '" data-feat="' + f.id + '">';
+    html += '  <div class="h2h-s-badges">' + badgeHtml + '</div>';
+    html += '  <span style="font-size:16px;">' + f.icon + '</span>';
+    html += '  <span style="font-size:12px;font-weight:700;flex:1;">' + f.label + '</span>';
+    html += '</div>';
+  });
+  html += '  </div>';
+  html += '</div>';
+
+  // 5. Live Deck Reconciliation Preview
+  var cNameYou = (H2H_CONTINENTS.find(function(c){ return c.id === yourCont; }) || {}).name || 'Globe';
+  var cNameOpp = (H2H_CONTINENTS.find(function(c){ return c.id === oppCont; }) || {}).name || 'Europe';
+
+  html += '<div class="h2h-s-deck-box">';
+  html += '  <div class="h2h-s-deck-head">';
+  if (yourCont === oppCont) {
+    html += '    <span id="h2h-s-deck-headline">✨ Consensus Deck: <strong style="color:#64be50;">100% ' + cNameYou + '</strong> (10 Questions)</span>';
+    html += '    <span style="background:rgba(100,190,80,0.18);border:1px solid #64be50;color:#64be50;font-size:9px;font-weight:800;padding:2px 6px;border-radius:6px;">Consensus Match</span>';
+  } else {
+    html += '    <span id="h2h-s-deck-headline">⚡ Merged Deck: <strong style="color:#ffe135;">50% ' + cNameYou + ' + 50% ' + cNameOpp + '</strong> (10 Questions)</span>';
+    html += '    <span style="background:rgba(91,143,255,0.18);border:1px solid #5b8fff;color:#9cb4ff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:6px;">Merged Pool</span>';
+  }
+  html += '  </div>';
+
+  // Visual ratio bar
+  html += '  <div class="h2h-s-deck-bar">';
+  if (yourCont === oppCont) {
+    html += '    <div class="h2h-s-bar-seg h2h-s-bar-both"></div>';
+  } else {
+    html += '    <div class="h2h-s-bar-seg h2h-s-bar-you" style="width:50%;"></div>';
+    html += '    <div class="h2h-s-bar-seg h2h-s-bar-opp" style="width:50%;"></div>';
+  }
+  html += '  </div>';
+
+  // Feature breakdown tags
+  html += '  <div class="h2h-s-deck-tags">';
+  var allF = H2H_PHYSICAL_FEATURES.concat(H2H_POLITICAL_FEATURES);
+  allF.forEach(function(f) {
+    var isYou = !!_h2hSetup.yourFeatures[f.id];
+    var isOpp = !!_h2hSetup.oppFeatures[f.id];
+    if (isYou && isOpp) {
+      html += '<span class="h2h-s-d-tag both">✓ ' + f.label.split(' ')[0] + ' (Both)</span>';
+    } else if (isYou) {
+      html += '<span class="h2h-s-d-tag you">+ ' + f.label.split(' ')[0] + ' (You)</span>';
+    } else if (isOpp) {
+      html += '<span class="h2h-s-d-tag opp">+ ' + f.label.split(' ')[0] + ' (Opp)</span>';
+    }
+  });
+  html += '  </div>';
+  html += '</div>';
+
+  // 6. Action Bar
+  html += '<div class="h2h-s-action">';
+  if (_h2hSetup.youReady) {
+    html += '  <button class="h2h-s-btn-ready is-ready" id="h2h-s-btn-ready">';
+    html += '    <span>✓</span><span>YOU ARE READY</span>';
+    html += '  </button>';
+  } else {
+    html += '  <button class="h2h-s-btn-ready" id="h2h-s-btn-ready">';
+    html += '    <span>⚡</span><span>READY TO PLAY</span>';
+    html += '  </button>';
+  }
+
+  if (_h2hSetup.oppReady) {
+    html += '  <div class="h2h-s-opp-status ready">';
+    html += '    <span>✓</span><span>Opponent Ready!</span>';
+    html += '  </div>';
+  } else {
+    html += '  <div class="h2h-s-opp-status waiting">';
+    html += '    <span style="font-size:12px;">⏳</span><span>Opponent choosing...</span>';
+    html += '  </div>';
+  }
+  html += '</div>';
+
+  root.innerHTML = html;
+
+  // Wire event handlers
+  root.querySelectorAll('[data-cont]').forEach(function(el) {
+    el.addEventListener('click', function() {
+      if (_h2hSetup.youReady) return;
+      var c = el.getAttribute('data-cont');
+      AudioMgr.bubble();
+      _h2hSetup.yourContinent = c;
+      broadcastH2HSetupState();
+      renderH2HSetupUI();
+    });
+  });
+
+  root.querySelectorAll('[data-feat]').forEach(function(el) {
+    el.addEventListener('click', function() {
+      if (_h2hSetup.youReady) return;
+      var f = el.getAttribute('data-feat');
+      AudioMgr.bubble();
+      _h2hSetup.yourFeatures[f] = !_h2hSetup.yourFeatures[f];
+      // Keep at least one feature active
+      if (!Object.values(_h2hSetup.yourFeatures).some(Boolean)) {
+        _h2hSetup.yourFeatures[f] = true;
+      }
+      broadcastH2HSetupState();
+      renderH2HSetupUI();
+    });
+  });
+
+  var readyBtn = document.getElementById('h2h-s-btn-ready');
+  if (readyBtn) {
+    readyBtn.addEventListener('click', function() {
+      AudioMgr.bubble();
+      _h2hSetup.youReady = !_h2hSetup.youReady;
+      broadcastH2HSetupState();
+      renderH2HSetupUI();
+      checkH2HSetupBothReady();
+    });
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────
+// H2H RECONCILED DECK BUILDER (Exact Deterministic Sequence For Both)
+// ──────────────────────────────────────────────────────────────────
+function buildReconciledH2HDeck(targetCount) {
+  targetCount = targetCount || 10;
+  var yourCont = (_h2hSetup && _h2hSetup.yourContinent) || 'globe';
+  var oppCont = (_h2hSetup && _h2hSetup.oppContinent) || 'europe';
+
+  // 1. Reconciled continents
+  var regions = [];
+  if (yourCont === oppCont) {
+    regions = [yourCont];
+  } else if (yourCont === 'globe' || oppCont === 'globe') {
+    regions = (yourCont === 'globe') ? ['globe', oppCont] : ['globe', yourCont];
+  } else {
+    regions = [yourCont, oppCont];
+  }
+
+  // 2. Union of features chosen by either player
+  var unionFeatures = {};
+  var fKeys = ['mountains', 'rivers', 'seas', 'islands', 'countries', 'capitals', 'flags', 'cities'];
+  fKeys.forEach(function(k) {
+    unionFeatures[k] = !!((_h2hSetup && _h2hSetup.yourFeatures && _h2hSetup.yourFeatures[k]) ||
+                          (_h2hSetup && _h2hSetup.oppFeatures && _h2hSetup.oppFeatures[k]));
+  });
+  if (!Object.values(unionFeatures).some(Boolean)) {
+    unionFeatures.countries = true;
+    unionFeatures.capitals = true;
+  }
+
+  function matchesFeatures(card) {
+    if (!card) return false;
+    var sc = card.subcat || '';
+    var cat = card.category || '';
+    if (unionFeatures.countries && (sc === 'countries' || cat === 'countries')) return true;
+    if (unionFeatures.capitals && (sc === 'capitals' || cat === 'capitals')) return true;
+    if (unionFeatures.flags && (sc === 'flags' || cat === 'flags')) return true;
+    if (unionFeatures.cities && (sc === 'cities' || sc === 'heritage' || cat === 'cities')) return true;
+    if (unionFeatures.mountains && (sc === 'mountains' || (cat === 'landforms' && sc !== 'islands' && sc !== 'peninsulas'))) return true;
+    if (unionFeatures.rivers && (sc === 'rivers' || sc === 'lakes' || cat === 'water' && (sc === 'rivers' || sc === 'lakes'))) return true;
+    if (unionFeatures.seas && (sc === 'seas' || sc === 'oceans' || sc === 'gulfs' || sc === 'straits')) return true;
+    if (unionFeatures.islands && (sc === 'islands' || sc === 'peninsulas' || sc === 'archipelagos')) return true;
+    return false;
+  }
+
+  // 3. Collect candidates per region
+  var regionCards = {};
+  regions.forEach(function(reg) {
+    var cd = getCombinedContinentData(reg);
+    if (cd) {
+      var fullPool = buildPool({
+        continent: reg,
+        tierCeiling: 13,
+        categories: { countries:true, capitals:true, flags:true, landforms:true, water:true, cities:true, culture:true },
+        waterSubs:    { rivers:true, lakes:true, seas:true, oceans:true, gulfs:true, straits:true },
+        landformSubs: { mountains:true, peninsulas:true, islands:true, archipelagos:true },
+        citySubs:     { cities:true, heritage:true },
+        cultureSubs:  { languages:true, trivia:true }
+      }, cd);
+
+      var matched = fullPool.filter(matchesFeatures);
+      if (matched.length === 0) matched = fullPool;
+      regionCards[reg] = matched;
+    } else {
+      regionCards[reg] = [];
+    }
+  });
+
+  // 4. Sample balanced cards
+  var chosenCards = [];
+  var seenIds = {};
+
+  if (regions.length === 1) {
+    var pool = (regionCards[regions[0]] || []).slice();
+    pool.sort(function(a, b) { return String(a.id).localeCompare(String(b.id)); });
+    for (var i = 0; i < pool.length && chosenCards.length < targetCount; i++) {
+      var c = pool[i];
+      if (!seenIds[c.id]) {
+        chosenCards.push(c);
+        seenIds[c.id] = true;
+      }
+    }
+  } else {
+    var half1 = Math.ceil(targetCount / 2);
+    var half2 = targetCount - half1;
+    var p1 = (regionCards[regions[0]] || []).slice();
+    var p2 = (regionCards[regions[1]] || []).slice();
+    p1.sort(function(a, b) { return String(a.id).localeCompare(String(b.id)); });
+    p2.sort(function(a, b) { return String(a.id).localeCompare(String(b.id)); });
+
+    for (var i = 0; i < p1.length && chosenCards.length < half1; i++) {
+      var c1 = p1[i];
+      if (!seenIds[c1.id]) {
+        chosenCards.push(c1);
+        seenIds[c1.id] = true;
+      }
+    }
+    for (var j = 0; j < p2.length && chosenCards.length < targetCount; j++) {
+      var c2 = p2[j];
+      if (!seenIds[c2.id]) {
+        chosenCards.push(c2);
+        seenIds[c2.id] = true;
+      }
+    }
+  }
+
+  // Fallback to globe if needed
+  if (chosenCards.length < targetCount) {
+    var cdGlobe = getCombinedContinentData('globe');
+    if (cdGlobe) {
+      var globePool = buildPool({
+        continent: 'globe',
+        tierCeiling: 13,
+        categories: { countries:true, capitals:true, flags:true, landforms:true, water:true, cities:true, culture:true },
+        waterSubs:    { rivers:true, lakes:true, seas:true, oceans:true, gulfs:true, straits:true },
+        landformSubs: { mountains:true, peninsulas:true, islands:true, archipelagos:true },
+        citySubs:     { cities:true, heritage:true },
+        cultureSubs:  { languages:true, trivia:true }
+      }, cdGlobe);
+      globePool.sort(function(a, b) { return String(a.id).localeCompare(String(b.id)); });
+      for (var k = 0; k < globePool.length && chosenCards.length < targetCount; k++) {
+        var card = globePool[k];
+        if (!seenIds[card.id]) {
+          chosenCards.push(card);
+          seenIds[card.id] = true;
+        }
+      }
+    }
+  }
+
+  // 5. DETERMINISTIC SHUFFLE (Seed PRNG from matchId)
+  // Guarantees both players receive and play cards in the EXACT same sequence!
+  var seedStr = String((_h2h && _h2h.matchId) || 'mapolis_h2h_match');
+  var h = 1779033703 ^ seedStr.length;
+  for (var si = 0; si < seedStr.length; si++) {
+    h = Math.imul(h ^ seedStr.charCodeAt(si), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  function prng() {
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return ((h ^= h >>> 16) >>> 0) / 4294967296;
+  }
+
+  // Sort by ID first to guarantee identical initial state
+  chosenCards.sort(function(a, b) { return String(a.id).localeCompare(String(b.id)); });
+
+  // Fisher-Yates shuffle with seeded PRNG
+  for (var si2 = chosenCards.length - 1; si2 > 0; si2--) {
+    var rndIdx = Math.floor(prng() * (si2 + 1));
+    var tmp = chosenCards[si2];
+    chosenCards[si2] = chosenCards[rndIdx];
+    chosenCards[rndIdx] = tmp;
+  }
+
+  return chosenCards;
+}
+
+function launchReconciledMatch() {
+  if (_h2hSetup && _h2hSetup.timer) {
+    clearInterval(_h2hSetup.timer);
+    _h2hSetup.timer = null;
+  }
+  if (_h2hSetup && _h2hSetup.launchCountdown) {
+    clearInterval(_h2hSetup.launchCountdown);
+    _h2hSetup.launchCountdown = null;
+  }
+
+  var deck = buildReconciledH2HDeck(10);
+  _h2h.sharedDeck = deck;
+
+  // Broadcast to peer if online
+  if (_h2hSetup && _h2hSetup.channel) {
+    try {
+      _h2hSetup.channel.send({
+        type: 'broadcast',
+        event: 'deck_broadcast',
+        payload: { cardSequence: deck }
+      });
+      setTimeout(function() {
+        if (_h2hSetup && _h2hSetup.channel) {
+          _h2hSetup.channel.unsubscribe();
+          _h2hSetup.channel = null;
+        }
+      }, 500);
+    } catch(e) {}
+  }
+
+  AudioMgr.bubble();
+  startH2HMatch();
 }
 
 // ──────────────────────────────────────────────────────────────────
