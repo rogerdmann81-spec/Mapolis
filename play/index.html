@@ -5690,6 +5690,13 @@ function startH2HSetupScreen() {
     cities: false
   };
 
+  if (!isRematch && isBotMatch) {
+    // Fresh bot match: bot makes a single choice from the non-continent feature cards
+    var nonContCards = ['mountains', 'rivers', 'seas', 'islands', 'countries', 'capitals', 'flags', 'cities'];
+    var botPick = nonContCards[Math.floor(Math.random() * nonContCards.length)];
+    initialOppFeatures[botPick] = true;
+  }
+
   if (isRematch && window._lastH2HSetup) {
     // Rematch: Mirror the exact previous match setup
     initialYourContinent = window._lastH2HSetup.yourContinent || 'globe';
@@ -6016,6 +6023,8 @@ function renderH2HSetupUI() {
   });
   if (!anyFeatSelected) {
     html += '<span class="h2h-s-d-tag both">✨ All Categories (Full Variety)</span>';
+  } else if (!_h2hSetup || !Object.values(_h2hSetup.yourFeatures).some(Boolean)) {
+    html += '<span class="h2h-s-d-tag you">✨ Your Pool: Full Variety</span>';
   }
   html += '  </div>';
   html += '</div>';
@@ -6125,8 +6134,8 @@ function buildReconciledH2HDeck(targetCount) {
   fKeys.forEach(function(k) {
     unionFeatures[k] = !!(yf[k] || of[k]);
   });
-  // If neither player chose specific features, enable all categories (full variety)
-  if (!userHasSpecific && !oppHasSpecific) {
+  // If user has not restricted features, all categories are active (full variety)
+  if (!userHasSpecific) {
     fKeys.forEach(function(k) { unionFeatures[k] = true; });
   }
 
@@ -6170,11 +6179,11 @@ function buildReconciledH2HDeck(targetCount) {
   function partitionPool(pool) {
     var agreed = [], userPicks = [], oppPicks = [], others = [];
     pool.forEach(function(c) {
-      var mUser = !userHasSpecific || cardMatches(c, yf);
-      var mOpp = !oppHasSpecific ? (!userHasSpecific) : cardMatches(c, of);
-      if (mUser && mOpp) agreed.push(c);
-      else if (mUser) userPicks.push(c);
+      var mUser = !userHasSpecific ? (!cardMatches(c, of)) : cardMatches(c, yf);
+      var mOpp = cardMatches(c, of);
+      if (userHasSpecific && mUser && mOpp) agreed.push(c);
       else if (mOpp) oppPicks.push(c);
+      else if (mUser) userPicks.push(c);
       else others.push(c);
     });
     agreed.sort(function(a,b){ return String(a.id).localeCompare(String(b.id)); });
