@@ -4472,11 +4472,7 @@ function initDeck(pool, gameMode) {
 function drawCard(deck) {
   if (deck.mode === "h2h") {
     if (!deck.remaining || deck.remaining.length === 0) {
-      if (deck.allCards && deck.allCards.length > 0) {
-        deck.remaining = [...deck.allCards];
-      } else {
-        return { card: null, deck };
-      }
+      return { card: null, deck };
     }
     const card = deck.remaining[0];
     const remaining = deck.remaining.slice(1);
@@ -5302,16 +5298,14 @@ var H2HStub = (function(){
     return 400;
   }
 
-  // Build a randomized 60s answer schedule for the stub opponent.
-  // ~5–9 attempts, weighted toward correct (~62%).
+  // Build a randomized answer schedule for the stub opponent (up to 10 questions).
   function makeAnswerSchedule() {
     var sched = [];
-    var n = rint(5, 9);
-    var slots = [];
-    for (var i = 0; i < n; i++) slots.push(rint(2, 58));
-    slots.sort(function(a,b){return a-b;});
-    for (var j = 0; j < slots.length; j++) {
-      sched.push({ at: slots[j], correct: Math.random() < 0.62 });
+    var t = 0;
+    for (var i = 0; i < 10; i++) {
+      t += 2.6 + Math.random() * 3.0; // average ~4.1s per question
+      if (t > 58) break;
+      sched.push({ at: Math.round(t * 10) / 10, correct: Math.random() < 0.65 });
     }
     return sched;
   }
@@ -5692,7 +5686,7 @@ function startH2HSetupScreen() {
 
   if (!isRematch && isBotMatch) {
     // Fresh bot match: bot makes a single choice from the non-continent feature cards
-    var nonContCards = ['mountains', 'rivers', 'seas', 'islands', 'countries', 'capitals', 'flags', 'cities'];
+    var nonContCards = ['mountains', 'rivers', 'seas', 'islands', 'capitals', 'flags', 'cities'];
     var botPick = nonContCards[Math.floor(Math.random() * nonContCards.length)];
     initialOppFeatures[botPick] = true;
   }
@@ -6022,9 +6016,9 @@ function renderH2HSetupUI() {
     }
   });
   if (!anyFeatSelected) {
-    html += '<span class="h2h-s-d-tag both">✨ All Categories (Full Variety)</span>';
-  } else if (!_h2hSetup || !Object.values(_h2hSetup.yourFeatures).some(Boolean)) {
-    html += '<span class="h2h-s-d-tag you">✨ Your Pool: Full Variety</span>';
+    html += '<span class="h2h-s-d-tag both">🌍 Countries Only (100%)</span>';
+  } else {
+    html += '<span class="h2h-s-d-tag both">🌍 Countries (≥50% Base)</span>';
   }
   html += '  </div>';
   html += '</div>';
@@ -6090,53 +6084,73 @@ function renderH2HSetupUI() {
 }
 
 // ──────────────────────────────────────────────────────────────────
+// H2H CARD PULLER (Direct from buildPool, respecting tier ceiling)
+// ──────────────────────────────────────────────────────────────────
+function pullH2HCards(continentKey, buttonId, tierCeiling) {
+  var cd = getCombinedContinentData(continentKey);
+  if (!cd) return [];
+  var tc = (typeof tierCeiling === 'number' && tierCeiling >= 1) ? tierCeiling : 13;
+  var cfg = {
+    continent: continentKey,
+    tierCeiling: tc,
+    categories: {}
+  };
+  if (buttonId === 'countries') {
+    cfg.categories.countries = true;
+  } else if (buttonId === 'capitals') {
+    cfg.categories.capitals = true;
+  } else if (buttonId === 'flags') {
+    cfg.categories.flags = true;
+  } else if (buttonId === 'cities') {
+    cfg.categories.cities = true;
+    cfg.citySubs = { cities: true };
+  } else if (buttonId === 'mountains') {
+    cfg.categories.landforms = true;
+    cfg.landformSubs = { mountains: true };
+  } else if (buttonId === 'rivers') {
+    cfg.categories.water = true;
+    cfg.waterSubs = { rivers: true, lakes: true };
+  } else if (buttonId === 'seas') {
+    cfg.categories.water = true;
+    cfg.waterSubs = { seas: true, oceans: true, gulfs: true, straits: true };
+  } else if (buttonId === 'islands') {
+    cfg.categories.landforms = true;
+    cfg.landformSubs = { islands: true, archipelagos: true, peninsulas: true };
+  }
+  var res = buildPool(cfg, cd);
+  // Graceful step-up if strict tier ceiling produces too few cards in a small continent/category
+  if ((!res || res.length < 3) && tc < 13) {
+    cfg.tierCeiling = 13;
+    res = buildPool(cfg, cd);
+  }
+  return res || [];
+}
+
+// ──────────────────────────────────────────────────────────────────
 // H2H RECONCILED DECK BUILDER (Exact Deterministic Sequence For Both)
 // ──────────────────────────────────────────────────────────────────
 function buildReconciledH2HDeck(targetCount) {
   targetCount = targetCount || 10;
+  // Rule: Countries must always get at least 50% of the deck
+  var minCountries = Math.ceil(targetCount * 0.5); // 5 cards minimum
+  var maxExtras = targetCount - minCountries; // At most 5 cards can be extra categories
+
+  // Tier Capping: Lower of the two players' grades (or player vs bot grade)
+  var profile = window.activeProfile;
+  var yourGradeRaw = (profile && typeof estimateGrade === 'function') ? estimateGrade(profile) : 5;
+  var oppGradeRaw  = (_h2h && _h2h.opponent && typeof _h2h.opponent.grade === 'number') ? _h2h.opponent.grade : yourGradeRaw;
+  var yourGrade = Math.max(1, Math.min(13, Math.floor(yourGradeRaw)));
+  var oppGrade  = Math.max(1, Math.min(13, Math.floor(oppGradeRaw)));
+  var lowerGrade = Math.min(yourGrade, oppGrade);
+  var tierCeiling = (typeof getTierCeiling === 'function') ? getTierCeiling(lowerGrade, 'medium') : lowerGrade;
+
   var yourCont = (_h2hSetup && _h2hSetup.yourContinent) || 'globe';
   var oppCont = (_h2hSetup && _h2hSetup.oppContinent) || null;
-
-  // 1. Reconciled continents:
-  // If opponent is a bot (oppCont is null) or same, 100% of questions come from YOUR selected continent!
-  var regions = [];
-  if (!oppCont || yourCont === oppCont) {
-    regions = [yourCont];
-  } else if (yourCont === 'globe' || oppCont === 'globe') {
-    regions = (yourCont === 'globe') ? ['globe', oppCont] : ['globe', yourCont];
-  } else {
-    regions = [yourCont, oppCont];
-  }
-
-  // 2. Feature filters
   var yf = (_h2hSetup && _h2hSetup.yourFeatures) || {};
   var of = (_h2hSetup && _h2hSetup.oppFeatures) || {};
-  var userHasSpecific = Object.values(yf).some(Boolean);
-  var oppHasSpecific = Object.values(of).some(Boolean);
+  var isBot = !_h2h.isOnlineMatch || (_h2h.opponent && _h2h.opponent.isBot) || !oppCont;
 
-  var ALL_H2H_FEATS = ['countries', 'capitals', 'flags', 'cities', 'mountains', 'rivers', 'seas', 'islands'];
-
-  function getCardFeature(card) {
-    if (!card) return null;
-    var id = card.id || '', cat = card.cat || card.category || '', sc = card.subcat || '', tp = card.type || '';
-    if (id.startsWith('capital_') || cat === 'capitals') return 'capitals';
-    if (id.startsWith('flag_') || cat === 'flags') return 'flags';
-    if (id.startsWith('country_') || cat === 'countries' || tp === 'country') return 'countries';
-    if (id.startsWith('city_') || id.startsWith('heritage_') || cat === 'cities' || tp === 'city' || tp === 'heritage' || sc === 'cities' || sc === 'heritage') return 'cities';
-    if (id.startsWith('mountain_') || tp === 'mountain') return 'mountains';
-    if (id.startsWith('river_') || tp === 'river' || sc === 'rivers' || sc === 'lakes') return 'rivers';
-    if (sc === 'seas' || sc === 'oceans' || sc === 'gulfs' || sc === 'straits') return 'seas';
-    if (tp === 'island' || tp === 'archipelago' || tp === 'peninsula') return 'islands';
-    return null;
-  }
-
-  function cardMatches(card, featMap) {
-    if (!card || !featMap) return false;
-    var f = getCardFeature(card);
-    return f ? !!featMap[f] : false;
-  }
-
-  // 3. PRNG & Deterministic Shuffle
+  // PRNG & Deterministic Shuffle (seeded by matchId for exact peer sync)
   var seedStr = String((_h2h && _h2h.matchId) || 'mapolis_h2h_match');
   var h = 1779033703 ^ seedStr.length;
   for (var si = 0; si < seedStr.length; si++) {
@@ -6148,38 +6162,17 @@ function buildReconciledH2HDeck(targetCount) {
     h = Math.imul(h ^ (h >>> 13), 3266489909);
     return ((h ^= h >>> 16) >>> 0) / 4294967296;
   }
-  function shuffleArr(arr) {
-    for (var i = arr.length - 1; i > 0; i--) {
+  function shuffle(arr) {
+    var a = (arr || []).slice();
+    for (var i = a.length - 1; i > 0; i--) {
       var j = Math.floor(prng() * (i + 1));
-      var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+      var t = a[i]; a[i] = a[j]; a[j] = t;
     }
-    return arr;
+    return a;
   }
 
-  // 4. Collect full pool per region (all categories enabled for full variety)
-  var regionCards = {};
-  regions.forEach(function(reg) {
-    var cd = getCombinedContinentData(reg);
-    if (cd) {
-      regionCards[reg] = buildPool({
-        continent: reg,
-        tierCeiling: 13,
-        categories: { countries:true, capitals:true, flags:true, landforms:true, water:true, cities:true, culture:true },
-        waterSubs:    { rivers:true, lakes:true, seas:true, oceans:true, gulfs:true, straits:true },
-        landformSubs: { mountains:true, peninsulas:true, islands:true, archipelagos:true },
-        citySubs:     { cities:true, heritage:true },
-        cultureSubs:  { languages:true, trivia:true }
-      }, cd);
-    } else {
-      regionCards[reg] = [];
-    }
-  });
-
-  // 5. Sample with strict user priority (bot capped at max 2 cards)
-  var isBotOpp = !_h2h.isOnlineMatch || (_h2h.opponent && _h2h.opponent.isBot) || !oppCont;
   var chosenCards = [];
   var seenIds = {};
-
   function addCandidate(c) {
     if (c && !seenIds[c.id] && chosenCards.length < targetCount) {
       chosenCards.push(c);
@@ -6189,70 +6182,106 @@ function buildReconciledH2HDeck(targetCount) {
     return false;
   }
 
-  if (isBotOpp || regions.length === 1) {
-    var pool = (regionCards[regions[0]] || []).slice();
-    // 1. Bot Contribution: at most 2 cards if bot has a specific feature pick
-    if (oppHasSpecific) {
-      var botCandidates = pool.filter(function(c) { return cardMatches(c, of); });
-      shuffleArr(botCandidates);
-      for (var bi = 0; bi < botCandidates.length && chosenCards.length < 2; bi++) {
-        addCandidate(botCandidates[bi]);
-      }
-    }
+  // Active extra categories (excluding 'countries' which is always the baseline)
+  var userExtras = Object.keys(yf).filter(function(k) { return !!yf[k] && k !== 'countries'; });
+  var oppExtras = Object.keys(of).filter(function(k) { return !!of[k] && k !== 'countries'; });
 
-    // 2. User Contribution: Fill the remaining slots (at least 8 cards)
-    if (userHasSpecific) {
-      var userCandidates = pool.filter(function(c) { return cardMatches(c, yf) && !seenIds[c.id]; });
-      shuffleArr(userCandidates);
-      userCandidates.forEach(addCandidate);
-    } else {
-      // User has all buttons off (Whole Globe default): balanced variety across non-bot categories!
-      var byCat = {};
-      ALL_H2H_FEATS.forEach(function(f) { byCat[f] = []; });
-      pool.forEach(function(c) {
-        var f = getCardFeature(c);
-        if (f && !seenIds[c.id]) byCat[f].push(c);
-      });
-      ALL_H2H_FEATS.forEach(function(f) { shuffleArr(byCat[f]); });
+  var isSingleCont = isBot || !oppCont || yourCont === oppCont;
 
-      var otherCats = ALL_H2H_FEATS.filter(function(f) { return !of[f]; });
-      shuffleArr(otherCats);
+  if (isSingleCont) {
+    var cont = yourCont;
 
-      // Round-robin sample across categories to get an even, balanced spread
-      for (var round = 0; round < 4 && chosenCards.length < targetCount; round++) {
-        for (var ci = 0; ci < otherCats.length && chosenCards.length < targetCount; ci++) {
-          var catCards = byCat[otherCats[ci]];
-          if (catCards && catCards.length > round) {
-            addCandidate(catCards[round]);
+    // 1. Extra categories in this continent (at most maxExtras = 5 total)
+    if (isBot) {
+      // In a bot match: if user explicitly selected features, honor user's picks 100%
+      if (userExtras.length > 0) {
+        userExtras.forEach(function(cat) {
+          var uPool = shuffle(pullH2HCards(cont, cat, tierCeiling));
+          for (var ui = 0; ui < uPool.length && chosenCards.length < maxExtras; ui++) {
+            addCandidate(uPool[ui]);
           }
+        });
+      } else if (oppExtras.length > 0) {
+        // If user left all extras off, bot can contribute up to 2 cards
+        var botPool = shuffle(pullH2HCards(cont, oppExtras[0], tierCeiling));
+        for (var bi = 0; bi < botPool.length && chosenCards.length < 2; bi++) {
+          addCandidate(botPool[bi]);
         }
       }
+    } else {
+      // Human 2-player match on same continent: merge both players' picks
+      if (oppExtras.length > 0) {
+        oppExtras.forEach(function(cat) {
+          var opPool = shuffle(pullH2HCards(cont, cat, tierCeiling));
+          for (var oi = 0; oi < opPool.length && chosenCards.length < 2; oi++) {
+            addCandidate(opPool[oi]);
+          }
+        });
+      }
+      if (userExtras.length > 0) {
+        userExtras.forEach(function(cat) {
+          var uPool = shuffle(pullH2HCards(cont, cat, tierCeiling));
+          for (var ui = 0; ui < uPool.length && chosenCards.length < maxExtras; ui++) {
+            addCandidate(uPool[ui]);
+          }
+        });
+      }
     }
 
-    // Fallback: fill any remaining with cards from pool
-    var rem = pool.filter(function(c) { return !seenIds[c.id]; });
-    shuffleArr(rem);
-    rem.forEach(addCandidate);
+    // 2. Country cards fill all remaining slots (guaranteed at least 50% = 5+ cards, or 100% if no extras)
+    var countryPool = shuffle(pullH2HCards(cont, 'countries', tierCeiling));
+    countryPool.forEach(addCandidate);
+
   } else {
-    // 2-player human match: 50/50 balance between regions
-    var half1 = Math.ceil(targetCount / 2);
-    var pool1 = (regionCards[regions[0]] || []).slice();
-    var pool2 = (regionCards[regions[1]] || []).slice();
-    shuffleArr(pool1);
-    shuffleArr(pool2);
+    // Two different continents selected (e.g. Europe vs Asia)
+    var cont1 = yourCont;
+    var cont2 = oppCont;
 
-    for (var i = 0; i < pool1.length && chosenCards.length < half1; i++) {
-      addCandidate(pool1[i]);
+    // 1. Extra categories: strictly limited to their type within THAT continent
+    if (userExtras.length > 0) {
+      userExtras.forEach(function(cat) {
+        var p1Pool = shuffle(pullH2HCards(cont1, cat, tierCeiling));
+        for (var i = 0; i < p1Pool.length && chosenCards.length < 2; i++) {
+          addCandidate(p1Pool[i]);
+        }
+      });
     }
-    for (var j = 0; j < pool2.length && chosenCards.length < targetCount; j++) {
-      addCandidate(pool2[j]);
+    if (oppExtras.length > 0) {
+      oppExtras.forEach(function(cat) {
+        var p2Pool = shuffle(pullH2HCards(cont2, cat, tierCeiling));
+        for (var j = 0; j < p2Pool.length && chosenCards.length < maxExtras; j++) {
+          addCandidate(p2Pool[j]);
+        }
+      });
     }
+
+    // 2. Country cards from BOTH continents fill the rest (at least 50% = 5+ cards)
+    var c1Pool = shuffle(pullH2HCards(cont1, 'countries', tierCeiling));
+    var c2Pool = shuffle(pullH2HCards(cont2, 'countries', tierCeiling));
+
+    var needed = targetCount - chosenCards.length;
+    var half1 = Math.ceil(needed / 2);
+    var half2 = needed - half1;
+
+    for (var k1 = 0; k1 < c1Pool.length && half1 > 0; k1++) {
+      if (addCandidate(c1Pool[k1])) half1--;
+    }
+    for (var k2 = 0; k2 < c2Pool.length && half2 > 0; k2++) {
+      if (addCandidate(c2Pool[k2])) half2--;
+    }
+    // Fill any edge-case gaps with remaining countries from either continent
+    c1Pool.forEach(addCandidate);
+    c2Pool.forEach(addCandidate);
   }
 
-  // Final seeded Fisher-Yates shuffle so cards are naturally distributed
-  shuffleArr(chosenCards);
+  // Fallback if needed from globe countries
+  if (chosenCards.length < targetCount) {
+    var globeFallback = shuffle(pullH2HCards('globe', 'countries', tierCeiling));
+    globeFallback.forEach(addCandidate);
+  }
 
-  return chosenCards;
+  // Final seeded Fisher-Yates shuffle so questions are fairly and randomly sequenced
+  return shuffle(chosenCards);
 }
 
 function launchReconciledMatch() {
@@ -6674,7 +6703,9 @@ function setupH2HHud() {
   // Build clock row (first child of topbar)
   var clockRow = document.createElement('div');
   clockRow.id = 'h2h-clock-row';
-  clockRow.innerHTML = '<div id="h2h-clock">1:00</div>';
+  clockRow.innerHTML =
+    '<div id="h2h-clock">1:00</div>' +
+    '<div id="h2h-q-badge" style="font-family:\'Space Mono\',monospace;font-weight:700;font-size:13px;color:#a8c8e0;background:rgba(17,20,40,.78);border:1px solid rgba(91,143,255,.45);border-radius:11px;padding:4px 10px;margin-left:8px;display:flex;align-items:center;">1 / 10</div>';
 
   // Build card row that wraps existing q-card with chips on either side
   var youSvg = (window.activeProfile && window.activeProfile.avatar && window.activeProfile.avatar.svg) || null;
@@ -6759,6 +6790,14 @@ function _formatH2HScore(n) {
 // Compute final outcome and rating delta, persist to profile, navigate to results
 function finishH2HMatch() {
   if (!_h2h || _h2h.state === 'finished') return;
+  _h2h.state = 'finished';
+
+  // Stop game loop and timers immediately
+  if (_game) {
+    _game.done = true;
+    if (_game.timerId) { clearInterval(_game.timerId); _game.timerId = null; }
+    if (_game._advanceTimer) { clearTimeout(_game._advanceTimer); _game._advanceTimer = null; }
+  }
 
   // Capture stars earned before _game gets torn down by go('s-h2h-results').
   var h2hStarsEarned = (_game && typeof _game.score === 'number') ? _game.score : 0;
@@ -7255,6 +7294,11 @@ function updateGameUI() {
       else if (t > _game.config.duration * 0.11) clk.style.color = '#ffa040';
       else clk.style.color = '#ff6060';
     }
+    const qBadge = document.getElementById('h2h-q-badge');
+    if (qBadge) {
+      const qNum = Math.min((_game.cardsAnswered || 0) + 1, _game.totalCards || 10);
+      qBadge.textContent = qNum + ' / ' + (_game.totalCards || 10);
+    }
     const youEl = document.getElementById('h2h-you-score');
     if (youEl) youEl.textContent = _formatH2HScore(_h2h.yourScore);
     const oppEl = document.getElementById('h2h-opp-score');
@@ -7702,8 +7746,11 @@ function goBackCard() {
 
 function endGame() {
   if (!_game) return;
-  // H2H mode is finalized by finishH2HMatch, not endGame
-  if (_game.config.mode === 'h2h') return;
+  // H2H mode is finalized by finishH2HMatch
+  if (_game.config.mode === 'h2h') {
+    finishH2HMatch();
+    return;
+  }
   _game.done = true;
   if (_game.timerId) { clearInterval(_game.timerId); _game.timerId = null; }
   if (_game._advanceTimer) { clearTimeout(_game._advanceTimer); _game._advanceTimer = null; }

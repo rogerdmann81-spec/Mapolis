@@ -883,5 +883,29 @@ Full end-to-end implementation of real-time multiplayer Head-to-Head (H2H) mode 
    - Profile merge regression test suite (`tests/test_profile_merge.js`) passing 100%.
    - Clean applet compilation.
 
+----------------------------------------------------------------------------------------------------------
+31. Completed Task: Fix Reconciled H2H Deck Selection & Enforce Country Baseline in Bot Matches
+Status: ✅ Complete
+Target: index.html, play/index.html
+Branch: pre-beta4
+
+Identified and resolved the glitch where selecting a continent (e.g. South America) and a specific feature (e.g. Seas & Oceans) against the bot failed to include countries and inadvertently pulled unrelated categories (mountains, cities, rivers, peninsulas).
+
+1. Root Cause:
+   - In commit `be05616`, `cardMatches(card, yf)` only filtered for toggles actively switched ON in `yf`. Because `yf.countries` was false, countries were omitted from `userCandidates`.
+   - When the deck could not be filled solely from `userCandidates` + `botCandidates`, the fallback routine `rem.forEach(addCandidate)` indiscriminately sampled from the entire region's unfiltered pool (which included mountains, peninsulas, rivers, cities, and trivia).
+   - In a bot match, the bot's random category was injected even when the human player explicitly selected their customized practice deck.
+
+2. What Was Fixed:
+   - Enforced 50% Country Minimum Baseline: `buildReconciledH2HDeck` guarantees at least 50% of the deck (5+ cards) are country cards from the selected continent, fulfilling the `🌍 Countries (≥50% Base)` design contract.
+   - User Selection Priority in Bot Matches: If the player explicitly selects one or more custom categories (e.g. Seas & Oceans), the non-country cards (up to 5 cards) are strictly drawn from the user's selected category. The bot does not inject unwanted categories.
+   - Clean Card Pulling via `pullH2HCards`: Replaced the leaky `rem` fallback with structured pulling per category, ensuring no random categories (e.g. mountains, cities, rivers, peninsulas) can enter the deck unless explicitly selected.
+   - H2H Progress Counter: Added a live question counter (`1 / 10`, `2 / 10`...) to the top clock row so players have clear visual tracking of cards remaining.
+
+3. Verification:
+   - Automated node simulation of South America + Seas & Oceans verified: 100% South American cards, exactly 6 Countries + 4 Waterways, 0 mountains/cities/rivers/peninsulas.
+   - Full applet compilation clean.
+
+
 
 
