@@ -1,0 +1,11 @@
+node_modules/
+.git/
+tests/
+docs/
+.env*
+*.log
+bun.lock
+deno.lock
+package-lock.json
+LEGAL_NOTICES.md
+ai brain.md

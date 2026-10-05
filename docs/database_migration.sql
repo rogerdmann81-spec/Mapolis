@@ -109,6 +109,12 @@ ALTER TABLE match_results ALTER COLUMN opponent_score TYPE NUMERIC;
 ALTER TABLE match_events ALTER COLUMN score_delta TYPE NUMERIC;
 ALTER TABLE match_queue ADD COLUMN IF NOT EXISTS card_sequence_json JSONB;
 
+-- Setup tracking columns for real-time lobby choice synchronization
+ALTER TABLE match_players ADD COLUMN IF NOT EXISTS setup_continent text DEFAULT 'globe';
+ALTER TABLE match_players ADD COLUMN IF NOT EXISTS setup_features jsonb DEFAULT '{}'::jsonb;
+ALTER TABLE match_players ADD COLUMN IF NOT EXISTS setup_ready boolean DEFAULT false;
+ALTER TABLE match_players ADD COLUMN IF NOT EXISTS setup_updated_at timestamptz DEFAULT now();
+
 -- Clean legacy triggers
 DROP TRIGGER IF EXISTS check_match_queue ON match_queue;
 DROP FUNCTION IF EXISTS matchmaker_process();
@@ -147,7 +153,8 @@ CREATE POLICY "match_results_read" ON match_results
 CREATE OR REPLACE FUNCTION h2h_join_queue(
   p_player_id uuid,
   p_tier int,
-  p_card_sequence jsonb DEFAULT NULL
+  p_card_sequence jsonb DEFAULT NULL,
+  p_profile_data jsonb DEFAULT NULL
 ) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
@@ -158,28 +165,62 @@ DECLARE
   v_card_seq jsonb;
   v_match_id uuid;
   v_queue_id uuid;
+  v_safe_handle text;
 BEGIN
   IF v_auth_uid IS NULL THEN
     RAISE EXCEPTION 'h2h_join_queue: not authenticated';
   END IF;
 
-  -- Ensure profile exists and is associated with caller
-  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id) THEN
-    INSERT INTO profiles (player_id, auth_uid, handle, cr, stats)
-    VALUES (p_player_id, v_auth_uid, 'Player-' || substring(p_player_id::text from 1 for 8), 1200, '{}'::jsonb)
-    ON CONFLICT (player_id) DO UPDATE SET auth_uid = COALESCE(profiles.auth_uid, EXCLUDED.auth_uid);
+  -- Ensure profile exists and is updated with caller's real handle, avatar, and stats
+  IF EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id) THEN
+    IF p_profile_data IS NOT NULL THEN
+      UPDATE profiles SET
+        auth_uid = COALESCE(v_auth_uid, auth_uid),
+        avatar_svg = COALESCE(p_profile_data->>'avatar_svg', avatar_svg),
+        avatar_face = COALESCE(p_profile_data->>'avatar_face', avatar_face),
+        avatar_selections = COALESCE(p_profile_data->'avatar_selections', avatar_selections),
+        stats = COALESCE(p_profile_data->'stats', stats),
+        cr = COALESCE((p_profile_data->'stats'->'h2h'->>'rating')::int, (p_profile_data->>'rating')::int, cr)
+      WHERE player_id = p_player_id;
+    ELSE
+      UPDATE profiles SET auth_uid = v_auth_uid WHERE player_id = p_player_id AND (auth_uid IS NULL OR auth_uid = v_auth_uid);
+    END IF;
   ELSE
-    UPDATE profiles SET auth_uid = v_auth_uid WHERE player_id = p_player_id AND (auth_uid IS NULL OR auth_uid = v_auth_uid);
+    -- Profile does not exist yet; verify handle is not taken by another user
+    v_safe_handle := COALESCE(p_profile_data->>'handle', 'Player-' || substring(p_player_id::text from 1 for 8));
+    IF EXISTS (SELECT 1 FROM profiles WHERE lower(handle) = lower(v_safe_handle) AND player_id != p_player_id) THEN
+      v_safe_handle := v_safe_handle || '_' || substring(p_player_id::text from 1 for 4);
+    END IF;
+
+    INSERT INTO profiles (player_id, auth_uid, handle, avatar_svg, avatar_face, avatar_selections, stats, cr)
+    VALUES (
+      p_player_id,
+      v_auth_uid,
+      v_safe_handle,
+      p_profile_data->>'avatar_svg',
+      COALESCE(p_profile_data->>'avatar_face', '🧑'),
+      p_profile_data->'avatar_selections',
+      COALESCE(p_profile_data->'stats', '{}'::jsonb),
+      COALESCE((p_profile_data->'stats'->'h2h'->>'rating')::int, (p_profile_data->>'rating')::int, 1200)
+    )
+    ON CONFLICT (player_id) DO UPDATE SET
+      auth_uid = COALESCE(EXCLUDED.auth_uid, profiles.auth_uid),
+      avatar_svg = COALESCE(EXCLUDED.avatar_svg, profiles.avatar_svg),
+      avatar_face = COALESCE(EXCLUDED.avatar_face, profiles.avatar_face),
+      avatar_selections = COALESCE(EXCLUDED.avatar_selections, profiles.avatar_selections),
+      stats = COALESCE(EXCLUDED.stats, profiles.stats),
+      cr = COALESCE(EXCLUDED.cr, profiles.cr);
   END IF;
 
   DELETE FROM match_queue WHERE entered_at < now() - interval '45 seconds';
 
   SELECT m.id, m.card_pool_tier, m.status, m.started_at, m.card_sequence_json,
          p.player_id as opp_id, p.handle as opp_handle, p.avatar_svg as opp_svg, p.avatar_face as opp_face,
-         COALESCE(cr.elo, 1200) as opp_elo,
-         COALESCE(cr.wins, 0) as opp_wins,
-         COALESCE(cr.losses, 0) as opp_losses,
-         COALESCE(cr.ties, 0) as opp_ties
+         p.avatar_selections as opp_selections, p.stats as opp_stats, p.country as opp_country, p.birth_year as opp_birth_year,
+         COALESCE((p.stats->'h2h'->>'rating')::int, cr.elo, NULLIF(p.cr, 0), 1200) as opp_elo,
+         COALESCE((p.stats->'h2h'->>'wins')::int, cr.wins, 0) as opp_wins,
+         COALESCE((p.stats->'h2h'->>'losses')::int, cr.losses, 0) as opp_losses,
+         COALESCE((p.stats->'h2h'->>'ties')::int, cr.ties, 0) as opp_ties
   INTO v_matched
   FROM match_players mp_me
   JOIN matches m ON m.id = mp_me.match_id
@@ -201,7 +242,12 @@ BEGIN
       'opponent', jsonb_build_object(
         'player_id', v_matched.opp_id,
         'handle', v_matched.opp_handle,
-        'avatar', COALESCE(v_matched.opp_svg, v_matched.opp_face),
+        'avatar_svg', v_matched.opp_svg,
+        'avatar_face', v_matched.opp_face,
+        'avatar_selections', v_matched.opp_selections,
+        'stats', v_matched.opp_stats,
+        'country', v_matched.opp_country,
+        'birth_year', v_matched.opp_birth_year,
         'rating', v_matched.opp_elo,
         'wins', v_matched.opp_wins,
         'losses', v_matched.opp_losses,
@@ -215,10 +261,11 @@ BEGIN
   END IF;
 
   SELECT mq.*, p.handle as opp_handle, p.avatar_svg as opp_svg, p.avatar_face as opp_face,
-         COALESCE(cr.elo, 1200) as opp_elo,
-         COALESCE(cr.wins, 0) as opp_wins,
-         COALESCE(cr.losses, 0) as opp_losses,
-         COALESCE(cr.ties, 0) as opp_ties
+         p.avatar_selections as opp_selections, p.stats as opp_stats, p.country as opp_country, p.birth_year as opp_birth_year,
+         COALESCE((p.stats->'h2h'->>'rating')::int, cr.elo, NULLIF(p.cr, 0), 1200) as opp_elo,
+         COALESCE((p.stats->'h2h'->>'wins')::int, cr.wins, 0) as opp_wins,
+         COALESCE((p.stats->'h2h'->>'losses')::int, cr.losses, 0) as opp_losses,
+         COALESCE((p.stats->'h2h'->>'ties')::int, cr.ties, 0) as opp_ties
   INTO v_opp_queue
   FROM match_queue mq
   JOIN profiles p ON p.player_id = mq.profile_id
@@ -250,7 +297,12 @@ BEGIN
       'opponent', jsonb_build_object(
         'player_id', v_opp_queue.profile_id,
         'handle', v_opp_queue.opp_handle,
-        'avatar', COALESCE(v_opp_queue.opp_svg, v_opp_queue.opp_face),
+        'avatar_svg', v_opp_queue.opp_svg,
+        'avatar_face', v_opp_queue.opp_face,
+        'avatar_selections', v_opp_queue.opp_selections,
+        'stats', v_opp_queue.opp_stats,
+        'country', v_opp_queue.opp_country,
+        'birth_year', v_opp_queue.opp_birth_year,
         'rating', v_opp_queue.opp_elo,
         'wins', v_opp_queue.opp_wins,
         'losses', v_opp_queue.opp_losses,
@@ -290,10 +342,11 @@ BEGIN
 
   SELECT m.id, m.card_pool_tier, m.status, m.started_at, m.card_sequence_json,
          p.player_id as opp_id, p.handle as opp_handle, p.avatar_svg as opp_svg, p.avatar_face as opp_face,
-         COALESCE(cr.elo, 1200) as opp_elo,
-         COALESCE(cr.wins, 0) as opp_wins,
-         COALESCE(cr.losses, 0) as opp_losses,
-         COALESCE(cr.ties, 0) as opp_ties
+         p.avatar_selections as opp_selections, p.stats as opp_stats, p.country as opp_country, p.birth_year as opp_birth_year,
+         COALESCE((p.stats->'h2h'->>'rating')::int, cr.elo, NULLIF(p.cr, 0), 1200) as opp_elo,
+         COALESCE((p.stats->'h2h'->>'wins')::int, cr.wins, 0) as opp_wins,
+         COALESCE((p.stats->'h2h'->>'losses')::int, cr.losses, 0) as opp_losses,
+         COALESCE((p.stats->'h2h'->>'ties')::int, cr.ties, 0) as opp_ties
   INTO v_matched
   FROM match_players mp_me
   JOIN matches m ON m.id = mp_me.match_id
@@ -315,7 +368,12 @@ BEGIN
       'opponent', jsonb_build_object(
         'player_id', v_matched.opp_id,
         'handle', v_matched.opp_handle,
-        'avatar', COALESCE(v_matched.opp_svg, v_matched.opp_face),
+        'avatar_svg', v_matched.opp_svg,
+        'avatar_face', v_matched.opp_face,
+        'avatar_selections', v_matched.opp_selections,
+        'stats', v_matched.opp_stats,
+        'country', v_matched.opp_country,
+        'birth_year', v_matched.opp_birth_year,
         'rating', v_matched.opp_elo,
         'wins', v_matched.opp_wins,
         'losses', v_matched.opp_losses,
@@ -327,6 +385,71 @@ BEGIN
       'started_at', v_matched.started_at
     );
   END IF;
+
+  RETURN jsonb_build_object('status', 'waiting');
+END;
+$$;
+
+-- H2H Real-Time Lobby Choice & Setup Sync RPC
+CREATE OR REPLACE FUNCTION h2h_sync_setup(
+  p_match_id uuid,
+  p_player_id uuid,
+  p_continent text,
+  p_features jsonb,
+  p_ready boolean
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_opp RECORD;
+BEGIN
+  -- Update caller's setup choices
+  UPDATE match_players
+  SET setup_continent = COALESCE(p_continent, setup_continent, 'globe'),
+      setup_features = COALESCE(p_features, setup_features, '{}'::jsonb),
+      setup_ready = COALESCE(p_ready, setup_ready, false),
+      setup_updated_at = now()
+  WHERE match_id = p_match_id AND profile_id = p_player_id;
+
+  -- Query opponent's setup choices and REAL profile stats
+  SELECT mp.setup_continent, mp.setup_features, mp.setup_ready,
+         p.player_id, p.handle, p.avatar_svg, p.avatar_face, p.avatar_selections, p.stats, p.country, p.birth_year,
+         COALESCE((p.stats->'h2h'->>'rating')::int, cr.elo, NULLIF(p.cr, 0), 1200) as opp_elo,
+         COALESCE((p.stats->'h2h'->>'wins')::int, cr.wins, 0) as opp_wins,
+         COALESCE((p.stats->'h2h'->>'losses')::int, cr.losses, 0) as opp_losses,
+         COALESCE((p.stats->'h2h'->>'ties')::int, cr.ties, 0) as opp_ties
+  INTO v_opp
+  FROM match_players mp
+  JOIN profiles p ON p.player_id = mp.profile_id
+  LEFT JOIN competitive_ratings cr ON cr.profile_id = p.player_id
+  WHERE mp.match_id = p_match_id AND mp.profile_id != p_player_id
+  LIMIT 1;
+
+  IF FOUND THEN
+    RETURN jsonb_build_object(
+      'has_opponent', true,
+      'opp_continent', COALESCE(v_opp.setup_continent, 'globe'),
+      'opp_features', COALESCE(v_opp.setup_features, '{}'::jsonb),
+      'opp_ready', COALESCE(v_opp.setup_ready, false),
+      'opponent', jsonb_build_object(
+        'player_id', v_opp.player_id,
+        'handle', v_opp.handle,
+        'avatar_svg', v_opp.avatar_svg,
+        'avatar_face', v_opp.avatar_face,
+        'avatar_selections', v_opp.avatar_selections,
+        'stats', v_opp.stats,
+        'birth_year', v_opp.birth_year,
+        'rating', v_opp.opp_elo,
+        'wins', v_opp.opp_wins,
+        'losses', v_opp.opp_losses,
+        'ties', v_opp.opp_ties,
+        'country', v_opp.country
+      )
+    );
+  ELSE
+    RETURN jsonb_build_object('has_opponent', false);
+  END IF;
+END;
+$$;
 
   RETURN jsonb_build_object('status', 'waiting');
 END;

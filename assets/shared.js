@@ -1084,7 +1084,7 @@ const notesStore = {
 
 // ─── Head-to-Head Multiplayer Store ──────────────────────────────────────────
 const h2hStore = {
-  async joinQueue(playerId, tier, cardSequence) {
+  async joinQueue(playerId, tier, cardSequence, profileData = null) {
     if (!isSupabaseConfigured() || !playerId) return { status: 'waiting' };
     await ensureAuthSession();
     try {
@@ -1094,7 +1094,8 @@ const h2hStore = {
         body: JSON.stringify({
           p_player_id: playerId,
           p_tier: tier || 6,
-          p_card_sequence: cardSequence || null
+          p_card_sequence: cardSequence || null,
+          p_profile_data: profileData || null
         })
       });
       if (!resp.ok) {
@@ -1136,6 +1137,27 @@ const h2hStore = {
         body: JSON.stringify({ p_player_id: playerId })
       });
     } catch (e) {}
+  },
+
+  async syncSetup(matchId, playerId, continent, features, isReady) {
+    if (!isSupabaseConfigured() || !matchId || !playerId) return null;
+    try {
+      const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/h2h_sync_setup', {
+        method: 'POST',
+        headers: authedHeaders(),
+        body: JSON.stringify({
+          p_match_id: matchId,
+          p_player_id: playerId,
+          p_continent: continent || 'globe',
+          p_features: features || {},
+          p_ready: !!isReady
+        })
+      });
+      if (!resp.ok) return null;
+      return await resp.json();
+    } catch (e) {
+      return null;
+    }
   },
 
   async syncGameplay(matchId, playerId, score, cardId = null, correct = null) {

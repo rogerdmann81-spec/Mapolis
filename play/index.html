@@ -5414,6 +5414,25 @@ function startH2HQueue() {
   var cd = getCombinedContinentData('globe');
   var candidateDeck = cd ? composeH2HDeck(tentativeConfig, cd) : [];
 
+  // Pre-fetch public profiles for realistic matchmaking fallback if needed
+  var _candidateOpponents = [];
+  try {
+    var cachedLb = localStorage.getItem(LEADERBOARD_CACHE_KEY);
+    if (cachedLb) {
+      var parsedLb = JSON.parse(cachedLb);
+      if (Array.isArray(parsedLb) && parsedLb.length > 0) {
+        _candidateOpponents = parsedLb.filter(function(p) { return p.player_id !== profile.id; });
+      }
+    }
+  } catch (e) {}
+  if (window.syncStore && typeof window.syncStore.fetchLeaderboard === 'function') {
+    window.syncStore.fetchLeaderboard().then(function(res) {
+      if (res && Array.isArray(res.data) && res.data.length > 0) {
+        _candidateOpponents = res.data.filter(function(p) { return p.player_id !== profile.id; });
+      }
+    }).catch(function(){});
+  }
+
   function handleMatchSuccess(matchData) {
     if (_h2h.state !== 'waiting') return;
     if (_h2h.queueTimer) { clearTimeout(_h2h.queueTimer); _h2h.queueTimer = null; }
@@ -5423,12 +5442,41 @@ function startH2HQueue() {
     _h2h.isOnlineMatch = true;
     _h2h.matchId = matchData.match_id;
     var opp = matchData.opponent || {};
+
+    var oppSvg = opp.avatar_svg || (opp.avatar && opp.avatar.startsWith('data:image/svg') ? opp.avatar : null);
+    var oppFace = opp.avatar_face || '🧑';
+    var oppStats = opp.stats || {};
+    var oppRating = (oppStats.h2h && typeof oppStats.h2h.rating === 'number')
+      ? oppStats.h2h.rating
+      : ((typeof opp.rating === 'number') ? opp.rating : 1200);
+    var oppWins = (oppStats.h2h && typeof oppStats.h2h.wins === 'number')
+      ? oppStats.h2h.wins
+      : ((typeof opp.wins === 'number') ? opp.wins : 0);
+    var oppLosses = (oppStats.h2h && typeof oppStats.h2h.losses === 'number')
+      ? oppStats.h2h.losses
+      : ((typeof opp.losses === 'number') ? opp.losses : 0);
+    var oppTies = (oppStats.h2h && typeof oppStats.h2h.ties === 'number')
+      ? oppStats.h2h.ties
+      : ((typeof opp.ties === 'number') ? opp.ties : 0);
+    var oppGrade = (typeof estimateGrade === 'function')
+      ? estimateGrade({ birthYear: opp.birth_year, stats: oppStats })
+      : (opp.tier || yourGrade);
+
     _h2h.opponent = {
+      id: opp.player_id || null,
       handle: opp.handle || 'Challenger',
-      avatar: opp.avatar || null,
-      rating: (typeof opp.rating === 'number') ? opp.rating : 1200,
-      grade: opp.tier || yourGrade,
-      tier: matchData.tier || 6
+      avatar: oppSvg || opp.avatar || oppFace,
+      avatarFace: oppFace,
+      avatarSvg: oppSvg,
+      rating: oppRating,
+      wins: oppWins,
+      losses: oppLosses,
+      ties: oppTies,
+      country: opp.country || '',
+      stats: oppStats,
+      grade: oppGrade,
+      tier: matchData.tier || 6,
+      isBot: false
     };
     if (matchData.card_sequence && Array.isArray(matchData.card_sequence) && matchData.card_sequence.length > 0) {
       _h2h.sharedDeck = matchData.card_sequence;
@@ -5437,6 +5485,35 @@ function startH2HQueue() {
     var subEl = document.getElementById('h2h-queue-sub');
     if (subEl) {
       subEl.innerHTML = 'Challenger discovered! (<span style="color:#5bf0a0;font-weight:700;">' + escapeHtml(_h2h.opponent.handle) + '</span>) Launching…';
+    }
+
+    // Enrich with full real profile stats from Supabase
+    if (opp.player_id && window.syncStore && typeof window.syncStore.fetchProfileById === 'function') {
+      window.syncStore.fetchProfileById(opp.player_id).then(function(realProf) {
+        if (realProf && _h2h.opponent && _h2h.opponent.id === opp.player_id) {
+          if (realProf.handle) _h2h.opponent.handle = realProf.handle;
+          if (realProf.avatar) {
+            if (realProf.avatar.svg) {
+              _h2h.opponent.avatar = realProf.avatar.svg;
+              _h2h.opponent.avatarSvg = realProf.avatar.svg;
+            }
+            if (realProf.avatar.face) _h2h.opponent.avatarFace = realProf.avatar.face;
+          }
+          if (realProf.stats) {
+            _h2h.opponent.stats = realProf.stats;
+            if (realProf.stats.h2h) {
+              if (typeof realProf.stats.h2h.rating === 'number') _h2h.opponent.rating = realProf.stats.h2h.rating;
+              if (typeof realProf.stats.h2h.wins === 'number') _h2h.opponent.wins = realProf.stats.h2h.wins;
+              if (typeof realProf.stats.h2h.losses === 'number') _h2h.opponent.losses = realProf.stats.h2h.losses;
+              if (typeof realProf.stats.h2h.ties === 'number') _h2h.opponent.ties = realProf.stats.h2h.ties;
+            }
+          }
+          if (typeof estimateGrade === 'function') {
+            _h2h.opponent.grade = estimateGrade(realProf);
+          }
+          if (currentScreen === 's-h2h-setup') renderH2HSetupUI();
+        }
+      }).catch(function(e){ console.warn('[h2h] fetchProfileById error:', e); });
     }
 
     setTimeout(function() {
@@ -5471,9 +5548,20 @@ function startH2HQueue() {
     }
   }, 250);
 
-  // Connect to Supabase match queue
+  // Connect to Supabase match queue with caller's real profile stats
   if (window.h2hStore && profile.id) {
-    window.h2hStore.joinQueue(profile.id, yourGrade, candidateDeck).then(function(res) {
+    var myProfileData = {
+      handle: profile.name || profile.handle || 'Player',
+      avatar_svg: (profile.avatar && profile.avatar.svg) || null,
+      avatar_face: (profile.avatar && profile.avatar.face) || '🧑',
+      avatar_selections: (profile.avatar && profile.avatar.selections) || null,
+      stats: profile.stats || {},
+      country: profile.country || '',
+      rating: (_h2h.you && _h2h.you.rating) || 1200,
+      tier: yourGrade
+    };
+
+    window.h2hStore.joinQueue(profile.id, yourGrade, candidateDeck, myProfileData).then(function(res) {
       if (res && res.status === 'matched') {
         handleMatchSuccess(res);
       } else {
@@ -5501,9 +5589,54 @@ function startH2HQueue() {
     }
     _h2h.isOnlineMatch = false;
     _h2h.matchId = 'bot_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
-    var elapsed = Date.now() - queueStartedAt;
-    var win = H2HStub.ratingWindowAt(elapsed);
-    _h2h.opponent = H2HStub.makeOpponent(_h2h.you.rating, yourGrade, win);
+
+    // If real public profiles exist in the database, pair against a real profile ghost
+    var realGhost = (_candidateOpponents && _candidateOpponents.length > 0)
+      ? _candidateOpponents[Math.floor(Math.random() * _candidateOpponents.length)]
+      : null;
+
+    if (realGhost) {
+      var ghostSvg = realGhost.avatar_svg || null;
+      var ghostFace = realGhost.avatar_face || '🧑';
+      var ghostStats = realGhost.stats || {};
+      var ghostRating = (ghostStats.h2h && typeof ghostStats.h2h.rating === 'number')
+        ? ghostStats.h2h.rating
+        : ((typeof realGhost.cr === 'number' && realGhost.cr > 0) ? realGhost.cr : Math.max(900, Math.min(2100, _h2h.you.rating + rint(-60, 60))));
+      var ghostWins = (ghostStats.h2h && typeof ghostStats.h2h.wins === 'number')
+        ? ghostStats.h2h.wins
+        : ((ghostStats && typeof ghostStats.totalCorrect === 'number' && ghostStats.totalCorrect > 0) ? Math.floor(ghostStats.totalCorrect / 10) : 0);
+      var ghostLosses = (ghostStats.h2h && typeof ghostStats.h2h.losses === 'number')
+        ? ghostStats.h2h.losses
+        : 0;
+      var ghostTies = (ghostStats.h2h && typeof ghostStats.h2h.ties === 'number')
+        ? ghostStats.h2h.ties
+        : 0;
+      var ghostGrade = (typeof estimateGrade === 'function')
+        ? estimateGrade({ birthYear: realGhost.birth_year, stats: ghostStats })
+        : yourGrade;
+
+      _h2h.opponent = {
+        id: realGhost.player_id,
+        handle: realGhost.handle || 'Challenger',
+        avatar: ghostSvg || ghostFace,
+        avatarFace: ghostFace,
+        avatarSvg: ghostSvg,
+        rating: ghostRating,
+        wins: ghostWins,
+        losses: ghostLosses,
+        ties: ghostTies,
+        stats: ghostStats,
+        country: realGhost.country || '',
+        grade: ghostGrade,
+        tier: getTierCeiling(ghostGrade, 'medium'),
+        isBot: true
+      };
+    } else {
+      var elapsed = Date.now() - queueStartedAt;
+      var win = H2HStub.ratingWindowAt(elapsed);
+      _h2h.opponent = H2HStub.makeOpponent(_h2h.you.rating, yourGrade, win);
+    }
+
     H2H.transition('matched');
     startH2HSetupScreen();
   }, QUEUE_DURATION_MS);
@@ -5656,6 +5789,8 @@ var H2H_POLITICAL_FEATURES = [
 
 function startH2HSetupScreen() {
   var profile = window.activeProfile || { handle: 'You', id: 'player_you' };
+  var yourGradeRaw = (profile && typeof estimateGrade === 'function') ? estimateGrade(profile) : 5;
+  var yourGrade = Math.max(1, Math.min(13, Math.floor(yourGradeRaw)));
   var opp = _h2h.opponent || { handle: 'Challenger', rating: 1200 };
   var isBotMatch = !_h2h.isOnlineMatch || (opp && opp.isBot);
   var isRematch = !!(_h2h.isRematch && window._lastH2HSetup);
@@ -5682,10 +5817,8 @@ function startH2HSetupScreen() {
   };
 
   if (!isRematch && isBotMatch) {
-    // Fresh bot match: bot makes a single choice from the non-continent feature cards
-    var nonContCards = ['mountains', 'rivers', 'seas', 'islands', 'capitals', 'flags', 'cities'];
-    var botPick = nonContCards[Math.floor(Math.random() * nonContCards.length)];
-    initialOppFeatures[botPick] = true;
+    // Fresh bot match: start with no pre-selections so user sees opponent make live choices on screen!
+    initialOppContinent = null;
   }
 
   if (isRematch && window._lastH2HSetup) {
@@ -5709,50 +5842,159 @@ function startH2HSetupScreen() {
     countdownSec: 45,
     timer: null,
     launchCountdown: null,
-    channel: null
+    channel: null,
+    botStep1Timer: null,
+    botStep2Timer: null,
+    botStep3Timer: null
   };
 
-  if (isBotMatch) {
-    // Bot readies up after 4-6 seconds so user sees opponent ready, but user has full 45s
-    setTimeout(function() {
-      if (_h2hSetup && !_h2hSetup.oppReady && currentScreen === 's-h2h-setup') {
-        _h2hSetup.oppReady = true;
-        renderH2HSetupUI();
-        checkH2HSetupBothReady();
-      }
-    }, 4200 + Math.random() * 2000);
+  if (isBotMatch && !isRematch) {
+    // Staged live bot selections so user sees opponent making choices in real time!
+    // Step 1: Opponent picks a continent after 1.4 - 2.2s
+    _h2hSetup.botStep1Timer = setTimeout(function() {
+      if (!_h2hSetup || currentScreen !== 's-h2h-setup') return;
+      var contList = ['globe', 'north-america', 'south-america', 'europe', 'asia', 'africa', 'oceania'];
+      var botCont = (Math.random() < 0.4 && _h2hSetup.yourContinent)
+        ? _h2hSetup.yourContinent
+        : contList[Math.floor(Math.random() * contList.length)];
+      _h2hSetup.oppContinent = botCont;
+      if (typeof AudioMgr !== 'undefined' && AudioMgr.pop) AudioMgr.pop();
+      renderH2HSetupUI();
+    }, 1400 + Math.random() * 800);
+
+    // Step 2: Opponent picks a feature card after 2.8 - 3.8s
+    _h2hSetup.botStep2Timer = setTimeout(function() {
+      if (!_h2hSetup || currentScreen !== 's-h2h-setup') return;
+      var nonContCards = ['mountains', 'rivers', 'seas', 'islands', 'capitals', 'flags', 'cities'];
+      var botPick = nonContCards[Math.floor(Math.random() * nonContCards.length)];
+      _h2hSetup.oppFeatures[botPick] = true;
+      if (typeof AudioMgr !== 'undefined' && AudioMgr.pop) AudioMgr.pop();
+      renderH2HSetupUI();
+    }, 2800 + Math.random() * 1000);
+
+    // Step 3: Opponent readies up after 4.8 - 6.2s
+    _h2hSetup.botStep3Timer = setTimeout(function() {
+      if (!_h2hSetup || _h2hSetup.oppReady || currentScreen !== 's-h2h-setup') return;
+      _h2hSetup.oppReady = true;
+      if (typeof AudioMgr !== 'undefined' && AudioMgr.bubble) AudioMgr.bubble();
+      renderH2HSetupUI();
+      checkH2HSetupBothReady();
+    }, 4800 + Math.random() * 1400);
+  } else if (isBotMatch && isRematch) {
+    // Rematch bot readies up smoothly after 2.5s
+    _h2hSetup.botStep3Timer = setTimeout(function() {
+      if (!_h2hSetup || _h2hSetup.oppReady || currentScreen !== 's-h2h-setup') return;
+      _h2hSetup.oppReady = true;
+      renderH2HSetupUI();
+      checkH2HSetupBothReady();
+    }, 2500);
   } else {
-    // Online match: Supabase Realtime broadcast channel
-    var client = (typeof _supabaseClient !== 'undefined' && _supabaseClient) ||
-      (window.supabase && typeof isSupabaseConfigured === 'function' && isSupabaseConfigured() ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null);
-    if (client && _h2h.matchId) {
+    // Online match: Fast authoritative RPC sync with 500ms polling loop
+    async function syncOnlineSetup(isUserAction) {
+      if (!_h2hSetup || currentScreen !== 's-h2h-setup' || !_h2h.matchId || !profile || !profile.id) return;
+      if (!window.h2hStore || typeof window.h2hStore.syncSetup !== 'function') return;
+
       try {
-        var ch = client.channel('h2h_setup_' + _h2h.matchId, { config: { broadcast: { self: false } } });
-        ch.on('broadcast', { event: 'setup_sync' }, function(msg) {
-          if (msg && msg.payload && msg.payload.playerId !== profile.id) {
-            var p = msg.payload;
-            if (p.continent !== undefined) _h2hSetup.oppContinent = p.continent;
-            if (p.features) _h2hSetup.oppFeatures = p.features;
-            if (typeof p.isReady === 'boolean') _h2hSetup.oppReady = p.isReady;
+        var res = await window.h2hStore.syncSetup(
+          _h2h.matchId,
+          profile.id,
+          _h2hSetup.yourContinent,
+          _h2hSetup.yourFeatures,
+          _h2hSetup.youReady
+        );
+
+        if (res && res.has_opponent) {
+          var updated = false;
+
+          // Sync opponent real profile stats if provided
+          if (res.opponent && _h2h.opponent) {
+            var o = res.opponent;
+            if (o.handle && _h2h.opponent.handle !== o.handle) {
+              _h2h.opponent.handle = o.handle;
+              updated = true;
+            }
+            if (typeof o.rating === 'number' && _h2h.opponent.rating !== o.rating) {
+              _h2h.opponent.rating = o.rating;
+              updated = true;
+            }
+            if (typeof o.wins === 'number' && _h2h.opponent.wins !== o.wins) {
+              _h2h.opponent.wins = o.wins;
+              updated = true;
+            }
+            if (typeof o.losses === 'number' && _h2h.opponent.losses !== o.losses) {
+              _h2h.opponent.losses = o.losses;
+              updated = true;
+            }
+            if (typeof o.ties === 'number' && _h2h.opponent.ties !== o.ties) {
+              _h2h.opponent.ties = o.ties;
+              updated = true;
+            }
+            if (o.stats) {
+              _h2h.opponent.stats = o.stats;
+              if (o.stats.h2h) {
+                if (typeof o.stats.h2h.rating === 'number') _h2h.opponent.rating = o.stats.h2h.rating;
+                if (typeof o.stats.h2h.wins === 'number') _h2h.opponent.wins = o.stats.h2h.wins;
+                if (typeof o.stats.h2h.losses === 'number') _h2h.opponent.losses = o.stats.h2h.losses;
+                if (typeof o.stats.h2h.ties === 'number') _h2h.opponent.ties = o.stats.h2h.ties;
+              }
+              if (typeof estimateGrade === 'function') {
+                var estGrade = estimateGrade({ birthYear: o.birth_year || (o.stats && o.stats.birthYear), stats: o.stats });
+                if (typeof estGrade === 'number') _h2h.opponent.grade = estGrade;
+              }
+            }
+            if (o.avatar_svg || o.avatar_face) {
+              var newAva = o.avatar_svg || o.avatar_face;
+              if (_h2h.opponent.avatar !== newAva) {
+                _h2h.opponent.avatar = newAva;
+                _h2h.opponent.avatarSvg = o.avatar_svg;
+                _h2h.opponent.avatarFace = o.avatar_face;
+                updated = true;
+              }
+            }
+          }
+
+          // Sync opponent's live choices in real time
+          if (res.opp_continent !== undefined && _h2hSetup.oppContinent !== res.opp_continent) {
+            _h2hSetup.oppContinent = res.opp_continent;
+            updated = true;
+            if (typeof AudioMgr !== 'undefined' && AudioMgr.pop) AudioMgr.pop();
+          }
+          if (res.opp_features && JSON.stringify(_h2hSetup.oppFeatures) !== JSON.stringify(res.opp_features)) {
+            _h2hSetup.oppFeatures = res.opp_features;
+            updated = true;
+            if (typeof AudioMgr !== 'undefined' && AudioMgr.pop) AudioMgr.pop();
+          }
+          if (typeof res.opp_ready === 'boolean' && _h2hSetup.oppReady !== res.opp_ready) {
+            _h2hSetup.oppReady = res.opp_ready;
+            updated = true;
+            if (res.opp_ready && typeof AudioMgr !== 'undefined' && AudioMgr.bubble) AudioMgr.bubble();
+          }
+
+          if (updated && currentScreen === 's-h2h-setup') {
             renderH2HSetupUI();
             checkH2HSetupBothReady();
           }
-        });
-        ch.on('broadcast', { event: 'deck_broadcast' }, function(msg) {
-          if (msg && msg.payload && Array.isArray(msg.payload.cardSequence) && msg.payload.cardSequence.length > 0) {
-            _h2h.sharedDeck = msg.payload.cardSequence;
-          }
-        });
-        ch.subscribe(function(status) {
-          if (status === 'SUBSCRIBED') {
-            broadcastH2HSetupState();
-          }
-        });
-        _h2hSetup.channel = ch;
-      } catch(e) {
-        console.warn('[h2h-setup] realtime error:', e);
+        }
+      } catch (err) {
+        console.warn('[h2h-setup] syncOnlineSetup exception:', err);
       }
     }
+
+    _h2hSetup.syncOnlineSetup = syncOnlineSetup;
+
+    // Initial immediate sync
+    syncOnlineSetup(false);
+
+    // Active polling loop every 500ms while in the setup lobby
+    if (_h2hSetup.pollTimer) clearInterval(_h2hSetup.pollTimer);
+    _h2hSetup.pollTimer = setInterval(function() {
+      if (currentScreen === 's-h2h-setup') {
+        syncOnlineSetup(false);
+      } else if (_h2hSetup && _h2hSetup.pollTimer) {
+        clearInterval(_h2hSetup.pollTimer);
+        _h2hSetup.pollTimer = null;
+      }
+    }, 500);
   }
 
   // 45s auto-lock countdown timer (generous time for user)
@@ -5777,21 +6019,8 @@ function startH2HSetupScreen() {
 }
 
 function broadcastH2HSetupState() {
-  if (_h2hSetup && _h2hSetup.channel && window.activeProfile) {
-    try {
-      _h2hSetup.channel.send({
-        type: 'broadcast',
-        event: 'setup_sync',
-        payload: {
-          playerId: window.activeProfile.id,
-          continent: _h2hSetup.yourContinent,
-          features: _h2hSetup.yourFeatures,
-          isReady: _h2hSetup.youReady
-        }
-      });
-    } catch(e) {
-      console.warn('[h2h-setup] broadcast error:', e);
-    }
+  if (_h2hSetup && typeof _h2hSetup.syncOnlineSetup === 'function') {
+    _h2hSetup.syncOnlineSetup(true);
   }
 }
 
@@ -5836,16 +6065,29 @@ function renderH2HSetupUI() {
   var oppHandle = escapeHtml((_h2h.opponent && _h2h.opponent.handle) || 'Opponent');
   var oppRating = (_h2h.opponent && typeof _h2h.opponent.rating === 'number') ? _h2h.opponent.rating : 1200;
 
+  var yourGradeRaw = (profile && typeof estimateGrade === 'function') ? estimateGrade(profile) : 5;
+  var yourGrade = Math.max(1, Math.min(13, Math.floor(yourGradeRaw)));
+  var oppGradeRaw = (_h2h.opponent && typeof _h2h.opponent.grade === 'number') ? _h2h.opponent.grade : yourGradeRaw;
+  var oppGrade = Math.max(1, Math.min(13, Math.floor(oppGradeRaw)));
+
   var yourCont = _h2hSetup.yourContinent;
   var oppCont = _h2hSetup.oppContinent;
 
-  var youAvaImg = (profile && profile.avatar && profile.avatar.svg)
-    ? '<img src="' + profile.avatar.svg + '" style="width:100%;height:100%;object-fit:contain;border-radius:10px;">'
-    : ((profile && profile.avatar && profile.avatar.face) ? profile.avatar.face : '🧭');
+  var yourStatsText = (profile.stats && profile.stats.h2h)
+    ? 'Gr ' + yourGrade + ' · ' + (profile.stats.h2h.wins || 0) + 'W-' + (profile.stats.h2h.losses || 0) + 'L'
+    : 'Grade ' + yourGrade;
+  var oppGradeText = 'Gr ' + oppGrade;
+  var oppStatsText = (_h2h.opponent && typeof _h2h.opponent.wins === 'number')
+    ? oppGradeText + ' · ' + (_h2h.opponent.wins || 0) + 'W-' + (_h2h.opponent.losses || 0) + 'L'
+    : oppGradeText;
 
-  var oppAvaImg = (_h2h.opponent && _h2h.opponent.avatar)
-    ? '<img src="' + _h2h.opponent.avatar + '" style="width:100%;height:100%;object-fit:contain;border-radius:10px;">'
-    : ((_h2h.opponent && _h2h.opponent.isBot) ? '🤖' : '⚔️');
+  var oppAvaImg = (_h2h.opponent && _h2h.opponent.avatarSvg)
+    ? '<img src="' + _h2h.opponent.avatarSvg + '" style="width:100%;height:100%;object-fit:contain;border-radius:10px;">'
+    : ((_h2h.opponent && _h2h.opponent.avatar && _h2h.opponent.avatar.startsWith('data:image/svg'))
+      ? '<img src="' + _h2h.opponent.avatar + '" style="width:100%;height:100%;object-fit:contain;border-radius:10px;">'
+      : ((_h2h.opponent && _h2h.opponent.avatarFace)
+        ? _h2h.opponent.avatarFace
+        : ((_h2h.opponent && _h2h.opponent.avatar) ? _h2h.opponent.avatar : ((_h2h.opponent && _h2h.opponent.isBot) ? '🤖' : '⚔️'))));
 
   var html = '';
 
@@ -5855,7 +6097,7 @@ function renderH2HSetupUI() {
   html += '    <div class="h2h-s-ava">' + youAvaImg + '</div>';
   html += '    <div class="h2h-s-info">';
   html += '      <h3>' + youHandle + ' (' + youRating + ')</h3>';
-  html += '      <span class="h2h-s-pill-hint you">● Ocean Blue [You]</span>';
+  html += '      <span class="h2h-s-pill-hint you">● Ocean Blue [You] · ' + youStatsText + '</span>';
   html += '    </div>';
   html += '  </div>';
 
@@ -5867,7 +6109,7 @@ function renderH2HSetupUI() {
   html += '  <div class="h2h-s-slot opp">';
   html += '    <div class="h2h-s-info" style="text-align:right;">';
   html += '      <h3>' + oppHandle + ' (' + oppRating + ')</h3>';
-  html += '      <span class="h2h-s-pill-hint opp">● Title Yellow [Opp]</span>';
+  html += '      <span class="h2h-s-pill-hint opp">' + oppStatsText + ' · ● Title Yellow [Opp]</span>';
   html += '    </div>';
   html += '    <div class="h2h-s-ava">' + oppAvaImg + '</div>';
   html += '  </div>';
@@ -6288,9 +6530,25 @@ function buildReconciledH2HDeck(targetCount) {
 }
 
 function launchReconciledMatch() {
+  if (_h2hSetup && _h2hSetup.botStep1Timer) {
+    clearTimeout(_h2hSetup.botStep1Timer);
+    _h2hSetup.botStep1Timer = null;
+  }
+  if (_h2hSetup && _h2hSetup.botStep2Timer) {
+    clearTimeout(_h2hSetup.botStep2Timer);
+    _h2hSetup.botStep2Timer = null;
+  }
+  if (_h2hSetup && _h2hSetup.botStep3Timer) {
+    clearTimeout(_h2hSetup.botStep3Timer);
+    _h2hSetup.botStep3Timer = null;
+  }
   if (_h2hSetup && _h2hSetup.timer) {
     clearInterval(_h2hSetup.timer);
     _h2hSetup.timer = null;
+  }
+  if (_h2hSetup && _h2hSetup.pollTimer) {
+    clearInterval(_h2hSetup.pollTimer);
+    _h2hSetup.pollTimer = null;
   }
   if (_h2hSetup && _h2hSetup.launchCountdown) {
     clearInterval(_h2hSetup.launchCountdown);
