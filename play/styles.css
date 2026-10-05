@@ -2056,6 +2056,9 @@ body.impersonating .screen { padding-bottom: 54px !important; }
   grid-template-columns: repeat(2, 1fr);
   gap: 6px;
 }
+.h2h-s-feat-grid > :last-child:nth-child(odd) {
+  grid-column: span 2;
+}
 
 .h2h-s-btn {
   background: #0d1226;

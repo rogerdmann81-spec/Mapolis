@@ -5649,7 +5649,6 @@ var H2H_PHYSICAL_FEATURES = [
 ];
 
 var H2H_POLITICAL_FEATURES = [
-  { id: 'countries', label: 'Countries (Territory)', icon: '🗺️' },
   { id: 'capitals', label: 'Capitals', icon: '🏛️' },
   { id: 'flags', label: 'Flags', icon: '🚩' },
   { id: 'cities', label: 'Major Cities & Sites', icon: '🏙️' }
@@ -5668,7 +5667,6 @@ function startH2HSetupScreen() {
     rivers: false,
     seas: false,
     islands: false,
-    countries: false,
     capitals: false,
     flags: false,
     cities: false
@@ -5678,7 +5676,6 @@ function startH2HSetupScreen() {
     rivers: false,
     seas: false,
     islands: false,
-    countries: false,
     capitals: false,
     flags: false,
     cities: false
@@ -5880,7 +5877,7 @@ function renderH2HSetupUI() {
   html += '<div class="h2h-s-card">';
   html += '  <div class="h2h-s-card-head">';
   html += '    <span class="h2h-s-card-title"><span>🌍</span> Region / Continent</span>';
-  html += '    <span class="h2h-s-card-hint">Tap to set territory</span>';
+  html += '    <span class="h2h-s-card-hint">Countries assumed base · Tap to set territory</span>';
   html += '  </div>';
   html += '  <div class="h2h-s-cont-grid">';
   H2H_CONTINENTS.forEach(function(c) {
@@ -5942,7 +5939,7 @@ function renderH2HSetupUI() {
   html += '<div class="h2h-s-card">';
   html += '  <div class="h2h-s-card-head">';
   html += '    <span class="h2h-s-card-title"><span>🏛️</span> Political & Cities</span>';
-  html += '    <span class="h2h-s-card-hint">Capitals, borders & culture</span>';
+  html += '    <span class="h2h-s-card-hint">Capitals, flags & urban sites</span>';
   html += '  </div>';
   html += '  <div class="h2h-s-feat-grid">';
   H2H_POLITICAL_FEATURES.forEach(function(f) {
@@ -6272,6 +6269,12 @@ function buildReconciledH2HDeck(targetCount) {
     // Fill any edge-case gaps with remaining countries from either continent
     c1Pool.forEach(addCandidate);
     c2Pool.forEach(addCandidate);
+  }
+
+  // Step up continent countries first if a specific continent was chosen
+  if (chosenCards.length < targetCount && isSingleCont && cont !== 'globe') {
+    var contStepUp = shuffle(pullH2HCards(cont, 'countries', 13));
+    contStepUp.forEach(addCandidate);
   }
 
   // Fallback if needed from globe countries

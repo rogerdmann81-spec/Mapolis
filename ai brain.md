@@ -906,6 +906,34 @@ Identified and resolved the glitch where selecting a continent (e.g. South Ameri
    - Automated node simulation of South America + Seas & Oceans verified: 100% South American cards, exactly 6 Countries + 4 Waterways, 0 mountains/cities/rivers/peninsulas.
    - Full applet compilation clean.
 
+----------------------------------------------------------------------------------------------------------
+32. Completed Task: Remove Redundant Countries Toggle from H2H Political Grouping
+Status: ✅ Complete
+Target: index.html, play/index.html, styles.css, play/styles.css
+Branch: pre-beta4
+
+Removed the redundant `countries` toggle button from the H2H setup lobby's Political & Cities grouping.
+
+1. Rationale:
+   - Countries are the mandatory, assumed foundation of every match. The continent selection already establishes the country territory.
+   - Allowing "Countries" to be toggled on/off created confusion and false assumptions.
+   - Now, choosing a Region/Continent establishes the assumed country territory baseline (≥50%), and the Political & Cities grouping offers truly optional features: Capitals, Flags, and Major Cities & Sites.
+
+2. What Was Changed:
+   - `H2H_POLITICAL_FEATURES`: Removed `{ id: 'countries', ... }`. Grouping now contains Capitals (`🏛️`), Flags (`🚩`), and Major Cities & Sites (`🏙️`).
+   - CSS (`styles.css` & `play/styles.css`): Added `.h2h-s-feat-grid > :last-child:nth-child(odd) { grid-column: span 2; }` so the 3-button political layout displays cleanly with Capitals & Flags side-by-side in Row 1 and Major Cities & Sites spanning Row 2.
+   - Lobby UI: Updated hints to `Countries assumed base · Tap to set territory` on Region/Continent, and `Capitals, flags & urban sites` on Political & Cities.
+   - Continent Step-Up in Deck Builder: Ensured that when a single continent is chosen, if the tier-capped country pool has fewer than 10 countries, it steps up the tier ceiling for THAT continent before ever falling back to global countries, guaranteeing 100% continent fidelity.
+
+3. Verification:
+   - Tested 3 core matchmaking scenarios in Node:
+     * Only South America selected (all feature buttons off) -> 100% South American countries.
+     * South America + Seas & Oceans -> 6 South American countries + 4 South American seas/oceans.
+     * South America + Capitals -> 5 South American countries + 5 South American capitals.
+   - Zero foreign countries leakage (China/India/etc. eliminated).
+   - Build compiled cleanly.
+
+
 
 
 
