@@ -1248,3 +1248,19 @@ Branch: pre-beta4
      - Netlify production site `mapolis-play` (`play.mapolis.app`) configured to track and deploy from `pre-beta4-h2h-updates`.
 
 
+
+### Task 46: Fix H2H First Question Visibility Bug
+- **Issue**: On the first question in Head-to-Head (H2H) mode, neither player could see the first question card. The question card was blank until the first question was answered, after which all subsequent questions displayed normally.
+- **Root Cause**:
+  1. In `setupH2HHud()`, `cardRow` is constructed in memory to hold `[youChip, qCard, oppChip]`.
+  2. When `cardRow.appendChild(qCard)` executed, the live `.q-card` was detached from `#s-game .game-topbar`.
+  3. `qCard.innerHTML` was then reset with empty skeleton divs (`<div id="q-cat"></div><div id="q-text"></div>`), wiping out the initial question text rendered by `initGameScreen()`.
+  4. `showQuestion()` was immediately called *before* `cardRow` was mounted into the DOM.
+  5. Because `cardRow` was still detached in memory, `document.getElementById('q-cat')`, `document.getElementById('q-text')`, and `document.querySelector('#s-game .q-card')` all returned `null`. As a result, `showQuestion()` silently failed to populate the question elements.
+  6. Immediately afterwards, `topbar.insertBefore(cardRow, topbar.firstChild)` mounted the detached `cardRow` into the document, but with the empty, unpopulated divs.
+  7. As a result, question 1 remained completely blank. When either player tapped an answer, the game advanced to question 2 and invoked `showQuestion()` with `cardRow` already mounted in the DOM, so questions 2 through 10 rendered normally.
+- **Resolution**:
+  1. In `setupH2HHud()`, reordered DOM operations so that `cardRow`, `bannerContainer`, and `clockRow` are mounted into `topbar` *before* invoking `showQuestion()`.
+  2. In `showQuestion()`, hardened element selection by searching inside `qCard` (`(qCard && qCard.querySelector('#q-cat')) || document.getElementById('q-cat')`) to guarantee resilience even if queried during layout shifts.
+  3. Synchronized updates across `index.html` and `play/index.html`.
+  4. Verified with standalone DOM simulation and full test suites.

@@ -6972,7 +6972,6 @@ function setupH2HHud() {
   cardRow.appendChild(oppChip);
 
   qCard.innerHTML = '<div class="q-cat" id="q-cat"></div><div class="q-count" id="q-count" style="display:none;"></div><div class="q-back" id="q-back" title="Previous card" style="display:none;">←</div><div class="q-text" id="q-text"></div>';
-  showQuestion();
 
   // Build banner container for countdown
   var bannerContainer = document.createElement('div');
@@ -6980,10 +6979,12 @@ function setupH2HHud() {
   bannerContainer.style.display = 'none';
   bannerContainer.style.width = '100%';
 
-  // Insert clock row + banner container + card row at the top of the topbar
+  // Insert clock row + banner container + card row at the top of the topbar BEFORE showing question
   topbar.insertBefore(cardRow, topbar.firstChild);
   topbar.insertBefore(bannerContainer, cardRow);
   topbar.insertBefore(clockRow, bannerContainer);
+
+  showQuestion();
 }
 
 function escapeHtml(s) {
@@ -7954,13 +7955,13 @@ function showQuestion() {
   const q = _game.currentQ;
 
   // Self-heal: ensure question card has proper element structure if overwritten by previous match's waiting view
-  const qCard = document.querySelector('#s-game .q-card');
+  const qCard = document.querySelector('#s-game .q-card') || document.querySelector('.q-card');
   if (qCard && (!document.getElementById('q-cat') || !document.getElementById('q-text') || qCard.querySelector('.h2h-waiting-view'))) {
     qCard.innerHTML = '<div class="q-cat" id="q-cat"></div><div class="q-count" id="q-count" style="display:none;"></div><div class="q-back" id="q-back" title="Previous card" style="display:none;">←</div><div class="q-text" id="q-text"></div>';
   }
 
-  const catEl = document.getElementById('q-cat');
-  const textEl = document.getElementById('q-text');
+  const catEl = (qCard && qCard.querySelector('#q-cat')) || document.getElementById('q-cat');
+  const textEl = (qCard && qCard.querySelector('#q-text')) || document.getElementById('q-text');
   const catInfo = CAT_DISPLAY[q.cat] || { icon:'❓', label:'QUIZ', color:'var(--blue-lt)' };
 
   if (catEl) {
