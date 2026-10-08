@@ -952,6 +952,10 @@ function go(id) {
 
   if (cur) cur.classList.remove('active');
 
+  if (currentScreen === 's-h2h-results' && id !== 's-h2h-results') {
+    if (typeof leaveH2HResultsScreen === 'function') leaveH2HResultsScreen();
+  }
+
   screenHistory.push(currentScreen);
 
   el.classList.add('active');
@@ -5190,6 +5194,12 @@ var _h2h = {
   oppScore: 0,
   yourAnswers: [],         // [{ at, correct }]
   oppAnswers: [],
+  oppCorrect: 0,
+  oppWrong: 0,
+  youFinished: false,
+  oppFinished: false,
+  finishCountdown: null,
+  finishInitiator: null,
   oppSchedule: [],         // [{ at, correct }] precomputed
   oppTimers: [],
   outcome: null,           // 'win' | 'loss' | 'tie'
@@ -5272,12 +5282,20 @@ var H2HStub = (function(){
     var isRealBot = (typeof isBot === 'undefined') ? true : !!isBot;
     var handle = isRealBot ? 'Bot' : makeHandle();
     var avatarSeed = isRealBot ? ('Bot_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6)) : handle;
+    var botMatches = 10 + (Math.abs(rating - 1200) % 25);
+    var botWins = Math.round(botMatches * (rating >= 1200 ? 0.58 : 0.42));
+    var botLosses = Math.round(botMatches * (rating >= 1200 ? 0.36 : 0.52));
+    var botTies = Math.max(0, botMatches - botWins - botLosses);
     return {
       handle: handle,
       avatar: makeAvatarSvg(avatarSeed, isRealBot ? 'bottts' : null),
       rating: rating,
       grade: grade,
       tier: 6,
+      matches: botMatches,
+      wins: botWins,
+      losses: botLosses,
+      ties: botTies,
       isBot: isRealBot
     };
   }
@@ -5299,10 +5317,11 @@ var H2HStub = (function(){
   }
 
   // Build a randomized answer schedule for the stub opponent (up to 10 questions).
-  function makeAnswerSchedule() {
+  function makeAnswerSchedule(totalCards) {
+    var count = totalCards || 10;
     var sched = [];
     var t = 0;
-    for (var i = 0; i < 10; i++) {
+    for (var i = 0; i < count; i++) {
       t += 2.6 + Math.random() * 3.0; // average ~4.1s per question
       if (t > 58) break;
       sched.push({ at: Math.round(t * 10) / 10, correct: Math.random() < 0.65 });
@@ -5366,11 +5385,73 @@ window.addEventListener('beforeunload', function() {
 // ──────────────────────────────────────────────────────────────────
 // H2H QUEUE SCREEN — ports queue_screen_mockup.html verbatim
 // ──────────────────────────────────────────────────────────────────
+function resetH2HState() {
+  if (typeof _h2h === 'undefined' || !_h2h) return;
+  if (_h2h.queueTimer) { clearTimeout(_h2h.queueTimer); _h2h.queueTimer = null; }
+  if (_h2h.queueProgressTimer) { clearInterval(_h2h.queueProgressTimer); _h2h.queueProgressTimer = null; }
+  if (_h2h.queueCountersTimer) { clearInterval(_h2h.queueCountersTimer); _h2h.queueCountersTimer = null; }
+  if (_h2h.queueDotsTimer) { clearInterval(_h2h.queueDotsTimer); _h2h.queueDotsTimer = null; }
+  if (_h2h.pollTimer) { clearInterval(_h2h.pollTimer); _h2h.pollTimer = null; }
+  if (_h2h.oppTimers && _h2h.oppTimers.length) {
+    _h2h.oppTimers.forEach(function(t){ clearTimeout(t); });
+    _h2h.oppTimers = [];
+  }
+  if (_h2h.oppRematchTimer) { clearTimeout(_h2h.oppRematchTimer); _h2h.oppRematchTimer = null; }
+  if (typeof _h2hSetup !== 'undefined' && _h2hSetup) {
+    if (_h2hSetup.botStep1Timer) { clearTimeout(_h2hSetup.botStep1Timer); _h2hSetup.botStep1Timer = null; }
+    if (_h2hSetup.botStep2Timer) { clearTimeout(_h2hSetup.botStep2Timer); _h2hSetup.botStep2Timer = null; }
+    if (_h2hSetup.botStep3Timer) { clearTimeout(_h2hSetup.botStep3Timer); _h2hSetup.botStep3Timer = null; }
+    if (_h2hSetup.timer) { clearInterval(_h2hSetup.timer); _h2hSetup.timer = null; }
+    if (_h2hSetup.pollTimer) { clearInterval(_h2hSetup.pollTimer); _h2hSetup.pollTimer = null; }
+    if (_h2hSetup.launchCountdown) { clearInterval(_h2hSetup.launchCountdown); _h2hSetup.launchCountdown = null; }
+    if (_h2hSetup.channel) {
+      try { _h2hSetup.channel.unsubscribe(); } catch(e) {}
+      _h2hSetup.channel = null;
+    }
+    _h2hSetup = null;
+  }
+  // Thoroughly reset in-match and finish state flags
+  _h2h.youFinished = false;
+  _h2h.oppFinished = false;
+  _h2h.finishCountdown = null;
+  _h2h.finishInitiator = null;
+  _h2h.yourScore = 0;
+  _h2h.oppScore = 0;
+  _h2h.yourAnswers = [];
+  _h2h.oppAnswers = [];
+  _h2h.oppCorrect = 0;
+  _h2h.oppWrong = 0;
+  _h2h.matchId = null;
+  _h2h.isOnlineMatch = false;
+  _h2h.sharedDeck = null;
+  _h2h.outcome = null;
+  _h2h.ratingDelta = 0;
+  _h2h.starsEarned = 0;
+  _h2h.rematchYou = false;
+  _h2h.rematchOpp = false;
+  _h2h.opponent = null;
+  _h2h._oppDiscAlerted = false;
+
+  // Clean up any lingering HUD elements or waiting screen HTML in the question card
+  var bCont = document.getElementById('h2h-banner-container');
+  if (bCont) { bCont.innerHTML = ''; bCont.style.display = 'none'; }
+  var clk = document.getElementById('h2h-clock');
+  if (clk) { clk.classList.remove('h2h-clock-urgent'); clk.textContent = '1:00'; clk.style.color = ''; }
+  var qCard = document.querySelector('#s-game .q-card');
+  if (qCard) {
+    qCard.innerHTML = '<div class="q-cat" id="q-cat">COUNTRIES</div><div class="q-count" id="q-count"></div><div class="q-back" id="q-back" title="Previous card">←</div><div class="q-text" id="q-text">Tap the map to answer</div>';
+  }
+  var prog = document.getElementById('prog');
+  if (prog) { prog.style.width = '100%'; prog.style.background = ''; }
+}
+
 function startH2HQueue() {
   var profile = window.activeProfile;
   if (!profile) { showToast('No profile loaded', 1500); return; }
   if (!profile.stats) profile.stats = {};
   if (!profile.stats.h2h) profile.stats.h2h = { rating: 1200, matches: 0, wins: 0, losses: 0, ties: 0, currentStreak: 0, bestStreak: 0 };
+
+  resetH2HState();
 
   // Snapshot pre-match state for the results screen
   _h2h.you = JSON.parse(JSON.stringify(profile.stats.h2h));
@@ -5379,6 +5460,12 @@ function startH2HQueue() {
   _h2h.oppScore = 0;
   _h2h.yourAnswers = [];
   _h2h.oppAnswers = [];
+  _h2h.oppCorrect = 0;
+  _h2h.oppWrong = 0;
+  _h2h.youFinished = false;
+  _h2h.oppFinished = false;
+  _h2h.finishCountdown = null;
+  _h2h.finishInitiator = null;
   _h2h.outcome = null;
   _h2h.ratingDelta = 0;
   _h2h.starsEarned = 0;
@@ -5403,6 +5490,7 @@ function startH2HQueue() {
     duration: 60,
     continent: 'globe',
     tierCeiling: tierCeiling,
+    targetCards: 10,
     difficulty: 'medium',
     hideBorders: false,
     categories: { countries: true, capitals: true, flags: true, landforms: true, water: true, cities: true, culture: true },
@@ -5412,7 +5500,7 @@ function startH2HQueue() {
     cultureSubs:  { languages: true, trivia: true }
   };
   var cd = getCombinedContinentData('globe');
-  var candidateDeck = cd ? composeH2HDeck(tentativeConfig, cd) : [];
+  var candidateDeck = buildH2HDeck({ continent: 'globe' }, { continent: 'globe' }, tierCeiling, 'queue_' + Date.now());
 
   // Pre-fetch public profiles for realistic matchmaking fallback if needed
   var _candidateOpponents = [];
@@ -5435,8 +5523,10 @@ function startH2HQueue() {
 
   function handleMatchSuccess(matchData) {
     if (_h2h.state !== 'waiting') return;
+    H2H.transition('matched');
     if (_h2h.queueTimer) { clearTimeout(_h2h.queueTimer); _h2h.queueTimer = null; }
     if (_h2h.queueProgressTimer) { clearInterval(_h2h.queueProgressTimer); _h2h.queueProgressTimer = null; }
+    if (_h2h.queueCountersTimer) { clearInterval(_h2h.queueCountersTimer); _h2h.queueCountersTimer = null; }
     if (_h2h.pollTimer) { clearInterval(_h2h.pollTimer); _h2h.pollTimer = null; }
 
     _h2h.isOnlineMatch = true;
@@ -5458,6 +5548,9 @@ function startH2HQueue() {
     var oppTies = (oppStats.h2h && typeof oppStats.h2h.ties === 'number')
       ? oppStats.h2h.ties
       : ((typeof opp.ties === 'number') ? opp.ties : 0);
+    var oppMatches = (oppStats.h2h && typeof oppStats.h2h.matches === 'number')
+      ? oppStats.h2h.matches
+      : ((typeof opp.matches === 'number') ? opp.matches : (oppWins + oppLosses + oppTies));
     var oppGrade = (typeof estimateGrade === 'function')
       ? estimateGrade({ birthYear: opp.birth_year, stats: oppStats })
       : (opp.tier || yourGrade);
@@ -5469,6 +5562,7 @@ function startH2HQueue() {
       avatarFace: oppFace,
       avatarSvg: oppSvg,
       rating: oppRating,
+      matches: oppMatches,
       wins: oppWins,
       losses: oppLosses,
       ties: oppTies,
@@ -5506,6 +5600,7 @@ function startH2HQueue() {
               if (typeof realProf.stats.h2h.wins === 'number') _h2h.opponent.wins = realProf.stats.h2h.wins;
               if (typeof realProf.stats.h2h.losses === 'number') _h2h.opponent.losses = realProf.stats.h2h.losses;
               if (typeof realProf.stats.h2h.ties === 'number') _h2h.opponent.ties = realProf.stats.h2h.ties;
+              if (typeof realProf.stats.h2h.matches === 'number') _h2h.opponent.matches = realProf.stats.h2h.matches;
             }
           }
           if (typeof estimateGrade === 'function') {
@@ -5522,10 +5617,10 @@ function startH2HQueue() {
     }, 600);
   }
 
-  // Queue runs for 20 seconds searching for opponents in Supabase.
+  // Queue runs for 60 seconds searching for opponents in Supabase.
   // Window widens progressively: ±40 -> ±90 -> ±160 -> ±260.
-  // If no peer is matched within 20 seconds, bot fallback pairs seamlessly.
-  var QUEUE_DURATION_MS = 20000;
+  // If no peer is matched within 60 seconds, bot fallback pairs seamlessly.
+  var QUEUE_DURATION_MS = 60000;
   var queueStartedAt = Date.now();
 
   // Progress countdown updater
@@ -5615,6 +5710,10 @@ function startH2HQueue() {
         ? estimateGrade({ birthYear: realGhost.birth_year, stats: ghostStats })
         : yourGrade;
 
+      var ghostMatches = (ghostStats.h2h && typeof ghostStats.h2h.matches === 'number')
+        ? ghostStats.h2h.matches
+        : (ghostWins + ghostLosses + ghostTies);
+
       _h2h.opponent = {
         id: realGhost.player_id,
         handle: realGhost.handle || 'Challenger',
@@ -5622,6 +5721,7 @@ function startH2HQueue() {
         avatarFace: ghostFace,
         avatarSvg: ghostSvg,
         rating: ghostRating,
+        matches: ghostMatches,
         wins: ghostWins,
         losses: ghostLosses,
         ties: ghostTies,
@@ -5643,11 +5743,7 @@ function startH2HQueue() {
 }
 
 function cancelH2HQueue() {
-  if (_h2h.queueTimer) { clearTimeout(_h2h.queueTimer); _h2h.queueTimer = null; }
-  if (_h2h.queueProgressTimer) { clearInterval(_h2h.queueProgressTimer); _h2h.queueProgressTimer = null; }
-  if (_h2h.pollTimer) { clearInterval(_h2h.pollTimer); _h2h.pollTimer = null; }
-  if (_h2h.queueDotsTimer) { clearInterval(_h2h.queueDotsTimer); _h2h.queueDotsTimer = null; }
-  if (_h2h.queueCountersTimer) { clearInterval(_h2h.queueCountersTimer); _h2h.queueCountersTimer = null; }
+  resetH2HState();
   if (window.h2hStore && window.activeProfile && window.activeProfile.id) {
     window.h2hStore.leaveQueue(window.activeProfile.id);
   }
@@ -5712,12 +5808,12 @@ function renderH2HQueue() {
   html += '<div class="frame">';
   html += '<div class="stars" id="h2h-stars-bg"></div>';
   html += '<div class="q-title" id="h2h-queue-title"><span class="qt-base">Finding an opponent</span><span class="qt-dot">.</span><span class="qt-dot">.</span><span class="qt-dot">.</span></div>';
-  html += '<div class="q-sub" id="h2h-queue-sub">Searching for challenger (±40 ELO) · <span style="color:#ffe135;font-weight:700;">20s</span></div>';
+  html += '<div class="q-sub" id="h2h-queue-sub">Searching for challenger (±40 ELO) · <span style="color:#ffe135;font-weight:700;">60s</span></div>';
   html += '<div class="globe-wrap"><div class="ring2"></div><div class="ring"></div><div id="h2h-globe-mount" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;"></div></div>';
   html += '<div class="q-stats">';
   html += '<div class="q-stat"><div class="q-stat-num" id="h2h-online">1</div><div class="q-stat-lbl">Active Profiles</div></div>';
   html += '<div class="q-divider"></div>';
-  html += '<div class="q-stat"><div class="q-stat-num" id="h2h-queue-sec" style="color:#ffe135;">20s</div><div class="q-stat-lbl">Search Timer</div></div>';
+  html += '<div class="q-stat"><div class="q-stat-num" id="h2h-queue-sec" style="color:#ffe135;">60s</div><div class="q-stat-lbl">Search Timer</div></div>';
   html += '<div class="q-divider"></div>';
   html += '<div class="q-stat"><div class="q-stat-num" id="h2h-queue-count">1</div><div class="q-stat-lbl">In queue</div></div>';
   html += '</div>';
@@ -5832,6 +5928,34 @@ function startH2HSetupScreen() {
   // Reset rematch flag after applying
   _h2h.isRematch = false;
 
+  // Thoroughly reset match gameplay flags for this new upcoming match
+  _h2h.youFinished = false;
+  _h2h.oppFinished = false;
+  _h2h.finishCountdown = null;
+  _h2h.finishInitiator = null;
+  _h2h.yourScore = 0;
+  _h2h.oppScore = 0;
+  _h2h.yourAnswers = [];
+  _h2h.oppAnswers = [];
+  _h2h.oppCorrect = 0;
+  _h2h.oppWrong = 0;
+  _h2h.outcome = null;
+  _h2h.ratingDelta = 0;
+  _h2h.starsEarned = 0;
+  _h2h._oppDiscAlerted = false;
+
+  // Clean up any lingering HUD elements or waiting screen HTML in the question card
+  var bCont = document.getElementById('h2h-banner-container');
+  if (bCont) { bCont.innerHTML = ''; bCont.style.display = 'none'; }
+  var clk = document.getElementById('h2h-clock');
+  if (clk) { clk.classList.remove('h2h-clock-urgent'); clk.textContent = '1:00'; clk.style.color = ''; }
+  var qCard = document.querySelector('#s-game .q-card');
+  if (qCard) {
+    qCard.innerHTML = '<div class="q-cat" id="q-cat">COUNTRIES</div><div class="q-count" id="q-count"></div><div class="q-back" id="q-back" title="Previous card">←</div><div class="q-text" id="q-text">Tap the map to answer</div>';
+  }
+  var prog = document.getElementById('prog');
+  if (prog) { prog.style.width = '100%'; prog.style.background = ''; }
+
   _h2hSetup = {
     yourContinent: initialYourContinent,
     oppContinent: initialOppContinent,
@@ -5929,6 +6053,10 @@ function startH2HSetupScreen() {
               _h2h.opponent.ties = o.ties;
               updated = true;
             }
+            if (typeof o.matches === 'number' && _h2h.opponent.matches !== o.matches) {
+              _h2h.opponent.matches = o.matches;
+              updated = true;
+            }
             if (o.stats) {
               _h2h.opponent.stats = o.stats;
               if (o.stats.h2h) {
@@ -5936,6 +6064,7 @@ function startH2HSetupScreen() {
                 if (typeof o.stats.h2h.wins === 'number') _h2h.opponent.wins = o.stats.h2h.wins;
                 if (typeof o.stats.h2h.losses === 'number') _h2h.opponent.losses = o.stats.h2h.losses;
                 if (typeof o.stats.h2h.ties === 'number') _h2h.opponent.ties = o.stats.h2h.ties;
+                if (typeof o.stats.h2h.matches === 'number') _h2h.opponent.matches = o.stats.h2h.matches;
               }
               if (typeof estimateGrade === 'function') {
                 var estGrade = estimateGrade({ birthYear: o.birth_year || (o.stats && o.stats.birthYear), stats: o.stats });
@@ -5963,6 +6092,9 @@ function startH2HSetupScreen() {
             _h2hSetup.oppFeatures = res.opp_features;
             updated = true;
             if (typeof AudioMgr !== 'undefined' && AudioMgr.pop) AudioMgr.pop();
+          }
+          if (res.card_sequence && Array.isArray(res.card_sequence) && res.card_sequence.length > 0) {
+            _h2h.sharedDeck = res.card_sequence;
           }
           if (typeof res.opp_ready === 'boolean' && _h2hSetup.oppReady !== res.opp_ready) {
             _h2hSetup.oppReady = res.opp_ready;
@@ -6073,13 +6205,27 @@ function renderH2HSetupUI() {
   var yourCont = _h2hSetup.yourContinent;
   var oppCont = _h2hSetup.oppContinent;
 
-  var yourStatsText = (profile.stats && profile.stats.h2h)
+  var youStatsText = (profile.stats && profile.stats.h2h)
     ? 'Gr ' + yourGrade + ' · ' + (profile.stats.h2h.wins || 0) + 'W-' + (profile.stats.h2h.losses || 0) + 'L'
     : 'Grade ' + yourGrade;
   var oppGradeText = 'Gr ' + oppGrade;
   var oppStatsText = (_h2h.opponent && typeof _h2h.opponent.wins === 'number')
     ? oppGradeText + ' · ' + (_h2h.opponent.wins || 0) + 'W-' + (_h2h.opponent.losses || 0) + 'L'
     : oppGradeText;
+
+  var youSvg = (profile && profile.avatarSvg)
+    ? profile.avatarSvg
+    : ((profile && profile.avatar && typeof profile.avatar === 'object')
+      ? profile.avatar.svg
+      : ((profile && typeof profile.avatar === 'string' && profile.avatar.startsWith('data:image/svg')) ? profile.avatar : null));
+  var youFace = (profile && profile.avatarFace)
+    ? profile.avatarFace
+    : ((profile && profile.avatar && typeof profile.avatar === 'object' && profile.avatar.face)
+      ? profile.avatar.face
+      : ((profile && typeof profile.avatar === 'string' && !profile.avatar.startsWith('data:image/svg')) ? profile.avatar : '🧑'));
+  var youAvaImg = youSvg
+    ? '<img src="' + youSvg + '" style="width:100%;height:100%;object-fit:contain;border-radius:10px;">'
+    : youFace;
 
   var oppAvaImg = (_h2h.opponent && _h2h.opponent.avatarSvg)
     ? '<img src="' + _h2h.opponent.avatarSvg + '" style="width:100%;height:100%;object-fit:contain;border-radius:10px;">'
@@ -6323,210 +6469,166 @@ function renderH2HSetupUI() {
 }
 
 // ──────────────────────────────────────────────────────────────────
-// H2H CARD PULLER (Direct from buildPool, respecting tier ceiling)
+// H2H UNIFIED DECK BUILDER
+// Recycles Solo Mode "All Cards" buildPool directly for both players,
+// combines without duplicates, reserves the first 5 cards for countries,
+// draws remaining 5 cards randomly, and deterministic shuffles with PRNG.
 // ──────────────────────────────────────────────────────────────────
-function pullH2HCards(continentKey, buttonId, tierCeiling) {
-  var cd = getCombinedContinentData(continentKey);
-  if (!cd) return [];
-  var tc = (typeof tierCeiling === 'number' && tierCeiling >= 1) ? tierCeiling : 13;
-  var cfg = {
-    continent: continentKey,
-    tierCeiling: tc,
-    categories: {}
-  };
-  if (buttonId === 'countries') {
-    cfg.categories.countries = true;
-  } else if (buttonId === 'capitals') {
-    cfg.categories.capitals = true;
-  } else if (buttonId === 'flags') {
-    cfg.categories.flags = true;
-  } else if (buttonId === 'cities') {
-    cfg.categories.cities = true;
-    cfg.citySubs = { cities: true };
-  } else if (buttonId === 'mountains') {
-    cfg.categories.landforms = true;
-    cfg.landformSubs = { mountains: true };
-  } else if (buttonId === 'rivers') {
-    cfg.categories.water = true;
-    cfg.waterSubs = { rivers: true, lakes: true };
-  } else if (buttonId === 'seas') {
-    cfg.categories.water = true;
-    cfg.waterSubs = { seas: true, oceans: true, gulfs: true, straits: true };
-  } else if (buttonId === 'islands') {
-    cfg.categories.landforms = true;
-    cfg.landformSubs = { islands: true, archipelagos: true, peninsulas: true };
-  }
-  var res = buildPool(cfg, cd);
-  // Graceful step-up if strict tier ceiling produces too few cards in a small continent/category
-  if ((!res || res.length < 3) && tc < 13) {
-    cfg.tierCeiling = 13;
-    res = buildPool(cfg, cd);
-  }
-  return res || [];
-}
-
-// ──────────────────────────────────────────────────────────────────
-// H2H RECONCILED DECK BUILDER (Exact Deterministic Sequence For Both)
-// ──────────────────────────────────────────────────────────────────
-function buildReconciledH2HDeck(targetCount) {
-  targetCount = targetCount || 10;
-  // Rule: Countries must always get at least 50% of the deck
-  var minCountries = Math.ceil(targetCount * 0.5); // 5 cards minimum
-  var maxExtras = targetCount - minCountries; // At most 5 cards can be extra categories
-
-  // Tier Capping: Lower of the two players' grades (or player vs bot grade)
-  var profile = window.activeProfile;
-  var yourGradeRaw = (profile && typeof estimateGrade === 'function') ? estimateGrade(profile) : 5;
-  var oppGradeRaw  = (_h2h && _h2h.opponent && typeof _h2h.opponent.grade === 'number') ? _h2h.opponent.grade : yourGradeRaw;
-  var yourGrade = Math.max(1, Math.min(13, Math.floor(yourGradeRaw)));
-  var oppGrade  = Math.max(1, Math.min(13, Math.floor(oppGradeRaw)));
-  var lowerGrade = Math.min(yourGrade, oppGrade);
-  var tierCeiling = (typeof getTierCeiling === 'function') ? getTierCeiling(lowerGrade, 'medium') : lowerGrade;
-
-  var yourCont = (_h2hSetup && _h2hSetup.yourContinent) || 'globe';
-  var oppCont = (_h2hSetup && _h2hSetup.oppContinent) || null;
-  var yf = (_h2hSetup && _h2hSetup.yourFeatures) || {};
-  var of = (_h2hSetup && _h2hSetup.oppFeatures) || {};
-  var isBot = !_h2h.isOnlineMatch || (_h2h.opponent && _h2h.opponent.isBot) || !oppCont;
-
-  // PRNG & Deterministic Shuffle (seeded by matchId for exact peer sync)
-  var seedStr = String((_h2h && _h2h.matchId) || 'mapolis_h2h_match');
-  var h = 1779033703 ^ seedStr.length;
-  for (var si = 0; si < seedStr.length; si++) {
-    h = Math.imul(h ^ seedStr.charCodeAt(si), 3432918353);
+function createH2HPRNG(seedStr) {
+  var str = String(seedStr || 'mapolis_h2h');
+  var h = 1779033703 ^ str.length;
+  for (var i = 0; i < str.length; i++) {
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
     h = (h << 13) | (h >>> 19);
   }
-  function prng() {
+  return function() {
     h = Math.imul(h ^ (h >>> 16), 2246822507);
     h = Math.imul(h ^ (h >>> 13), 3266489909);
     return ((h ^= h >>> 16) >>> 0) / 4294967296;
+  };
+}
+
+function seededShuffleH2H(arr, prng) {
+  var a = (arr || []).slice();
+  for (var i = a.length - 1; i > 0; i--) {
+    var j = Math.floor(prng() * (i + 1));
+    var t = a[i]; a[i] = a[j]; a[j] = t;
   }
-  function shuffle(arr) {
-    var a = (arr || []).slice();
-    for (var i = a.length - 1; i > 0; i--) {
-      var j = Math.floor(prng() * (i + 1));
-      var t = a[i]; a[i] = a[j]; a[j] = t;
+  return a;
+}
+
+function makeSoloConfigForH2HPlayer(selection, tierCeiling) {
+  var cont = (selection && selection.continent) || 'globe';
+  var f = (selection && selection.features) || {};
+  return {
+    continent: cont,
+    tierCeiling: (typeof tierCeiling === 'number' && tierCeiling >= 1) ? tierCeiling : 13,
+    categories: {
+      countries: true, // Countries is always the base
+      capitals: !!f.capitals,
+      flags: !!f.flags,
+      cities: !!f.cities,
+      landforms: !!(f.mountains || f.islands),
+      water: !!(f.rivers || f.seas),
+      culture: false
+    },
+    waterSubs: {
+      rivers: !!f.rivers,
+      lakes: !!f.rivers,
+      seas: !!f.seas,
+      oceans: !!f.seas,
+      gulfs: !!f.seas,
+      straits: !!f.seas
+    },
+    landformSubs: {
+      mountains: !!f.mountains,
+      islands: !!f.islands,
+      archipelagos: !!f.islands,
+      peninsulas: !!f.islands
+    },
+    citySubs: {
+      cities: !!f.cities,
+      heritage: !!f.cities
     }
-    return a;
-  }
+  };
+}
 
-  var chosenCards = [];
-  var seenIds = {};
-  function addCandidate(c) {
-    if (c && !seenIds[c.id] && chosenCards.length < targetCount) {
-      chosenCards.push(c);
-      seenIds[c.id] = true;
-      return true;
+function buildH2HDeck(sel1, sel2, tierCeiling, matchId) {
+  var prng = createH2HPRNG(matchId || 'h2h_match');
+  var targetCount = 10;
+
+  // CANONICAL SELECTION ORDER: Sort selections so caller argument order NEVER alters pool composition
+  var str1 = JSON.stringify(sel1 || {});
+  var str2 = JSON.stringify(sel2 || {});
+  var p1Sel = (str1.localeCompare(str2) <= 0) ? sel1 : sel2;
+  var p2Sel = (str1.localeCompare(str2) <= 0) ? sel2 : sel1;
+
+  // 1. Run solo mode algorithm for both players' selections
+  var p1Cfg = makeSoloConfigForH2HPlayer(p1Sel, tierCeiling);
+  var p2Cfg = makeSoloConfigForH2HPlayer(p2Sel, tierCeiling);
+  var cd1 = (typeof getCombinedContinentData === 'function') ? getCombinedContinentData(p1Cfg.continent) : null;
+  var cd2 = (typeof getCombinedContinentData === 'function') ? getCombinedContinentData(p2Cfg.continent) : null;
+
+  var p1Pool = (cd1 ? buildPool(p1Cfg, cd1) : []) || [];
+  var p2Pool = (cd2 ? buildPool(p2Cfg, cd2) : []) || [];
+
+  // 2. Combine cards, careful not to duplicate cards
+  var h2hDeckPool = [];
+  var seenCardIds = {};
+  function addCardToDeckPool(card) {
+    if (card && card.id && !seenCardIds[card.id]) {
+      seenCardIds[card.id] = true;
+      h2hDeckPool.push(card);
     }
-    return false;
   }
 
-  // Active extra categories (excluding 'countries' which is always the baseline)
-  var userExtras = Object.keys(yf).filter(function(k) { return !!yf[k] && k !== 'countries'; });
-  var oppExtras = Object.keys(of).filter(function(k) { return !!of[k] && k !== 'countries'; });
+  p1Pool.forEach(addCardToDeckPool);
+  p2Pool.forEach(addCardToDeckPool);
 
-  var isSingleCont = isBot || !oppCont || yourCont === oppCont;
+  // CANONICAL POOL SORT: Sort combined pool by card.id to guarantee 100% identical starting order on all devices
+  h2hDeckPool.sort(function(a, b) { return a.id.localeCompare(b.id); });
 
-  if (isSingleCont) {
-    var cont = yourCont;
+  // 3. First pull out 5 country cards
+  var countryCards = h2hDeckPool.filter(function(c) { return c.cat === 'countries'; });
+  countryCards = seededShuffleH2H(countryCards, prng);
 
-    // 1. Extra categories in this continent (at most maxExtras = 5 total)
-    if (isBot) {
-      // In a bot match: if user explicitly selected features, honor user's picks 100%
-      if (userExtras.length > 0) {
-        userExtras.forEach(function(cat) {
-          var uPool = shuffle(pullH2HCards(cont, cat, tierCeiling));
-          for (var ui = 0; ui < uPool.length && chosenCards.length < maxExtras; ui++) {
-            addCandidate(uPool[ui]);
-          }
-        });
-      } else if (oppExtras.length > 0) {
-        // If user left all extras off, bot can contribute up to 2 cards
-        var botPool = shuffle(pullH2HCards(cont, oppExtras[0], tierCeiling));
-        for (var bi = 0; bi < botPool.length && chosenCards.length < 2; bi++) {
-          addCandidate(botPool[bi]);
-        }
+  var gameDeck = [];
+  var pickedIds = {};
+  for (var ci = 0; ci < countryCards.length && gameDeck.length < 5; ci++) {
+    var cc = countryCards[ci];
+    gameDeck.push(cc);
+    pickedIds[cc.id] = true;
+  }
+
+  // If fewer than 5 country cards in pool, step up tier ceiling so 5 countries are guaranteed
+  if (gameDeck.length < 5) {
+    var fallbackCont = (p1Cfg.continent !== 'globe') ? p1Cfg.continent : ((p2Cfg.continent !== 'globe') ? p2Cfg.continent : 'globe');
+    var fallbackCd = ((typeof getCombinedContinentData === 'function') ? getCombinedContinentData(fallbackCont) : null) || cd1 || cd2;
+    var fallbackCountries = buildPool({
+      continent: fallbackCont,
+      tierCeiling: 13,
+      categories: { countries: true }
+    }, fallbackCd);
+    fallbackCountries.sort(function(a, b) { return a.id.localeCompare(b.id); });
+    fallbackCountries = seededShuffleH2H(fallbackCountries, prng);
+    for (var fi = 0; fi < fallbackCountries.length && gameDeck.length < 5; fi++) {
+      var fc = fallbackCountries[fi];
+      if (!pickedIds[fc.id]) {
+        gameDeck.push(fc);
+        pickedIds[fc.id] = true;
       }
-    } else {
-      // Human 2-player match on same continent: merge both players' picks
-      if (oppExtras.length > 0) {
-        oppExtras.forEach(function(cat) {
-          var opPool = shuffle(pullH2HCards(cont, cat, tierCeiling));
-          for (var oi = 0; oi < opPool.length && chosenCards.length < 2; oi++) {
-            addCandidate(opPool[oi]);
-          }
-        });
+    }
+  }
+
+  // 4. Pull randomly from the remaining deck pool to complete 10 cards
+  var remainingPool = h2hDeckPool.filter(function(c) { return !pickedIds[c.id]; });
+  remainingPool = seededShuffleH2H(remainingPool, prng);
+  for (var ri = 0; ri < remainingPool.length && gameDeck.length < targetCount; ri++) {
+    var rc = remainingPool[ri];
+    gameDeck.push(rc);
+    pickedIds[rc.id] = true;
+  }
+
+  // Fallback pad if pool was smaller than 10 total
+  if (gameDeck.length < targetCount) {
+    var padCountries = (buildPool({
+      continent: 'globe',
+      tierCeiling: (typeof tierCeiling === 'number') ? tierCeiling : 13,
+      categories: { countries: true }
+    }, (typeof getCombinedContinentData === 'function') ? getCombinedContinentData('globe') : cd1) || []);
+    padCountries.sort(function(a, b) { return a.id.localeCompare(b.id); });
+    padCountries = seededShuffleH2H(padCountries, prng);
+    for (var pi = 0; pi < padCountries.length && gameDeck.length < targetCount; pi++) {
+      var pc = padCountries[pi];
+      if (!pickedIds[pc.id]) {
+        gameDeck.push(pc);
+        pickedIds[pc.id] = true;
       }
-      if (userExtras.length > 0) {
-        userExtras.forEach(function(cat) {
-          var uPool = shuffle(pullH2HCards(cont, cat, tierCeiling));
-          for (var ui = 0; ui < uPool.length && chosenCards.length < maxExtras; ui++) {
-            addCandidate(uPool[ui]);
-          }
-        });
-      }
     }
-
-    // 2. Country cards fill all remaining slots (guaranteed at least 50% = 5+ cards, or 100% if no extras)
-    var countryPool = shuffle(pullH2HCards(cont, 'countries', tierCeiling));
-    countryPool.forEach(addCandidate);
-
-  } else {
-    // Two different continents selected (e.g. Europe vs Asia)
-    var cont1 = yourCont;
-    var cont2 = oppCont;
-
-    // 1. Extra categories: strictly limited to their type within THAT continent
-    if (userExtras.length > 0) {
-      userExtras.forEach(function(cat) {
-        var p1Pool = shuffle(pullH2HCards(cont1, cat, tierCeiling));
-        for (var i = 0; i < p1Pool.length && chosenCards.length < 2; i++) {
-          addCandidate(p1Pool[i]);
-        }
-      });
-    }
-    if (oppExtras.length > 0) {
-      oppExtras.forEach(function(cat) {
-        var p2Pool = shuffle(pullH2HCards(cont2, cat, tierCeiling));
-        for (var j = 0; j < p2Pool.length && chosenCards.length < maxExtras; j++) {
-          addCandidate(p2Pool[j]);
-        }
-      });
-    }
-
-    // 2. Country cards from BOTH continents fill the rest (at least 50% = 5+ cards)
-    var c1Pool = shuffle(pullH2HCards(cont1, 'countries', tierCeiling));
-    var c2Pool = shuffle(pullH2HCards(cont2, 'countries', tierCeiling));
-
-    var needed = targetCount - chosenCards.length;
-    var half1 = Math.ceil(needed / 2);
-    var half2 = needed - half1;
-
-    for (var k1 = 0; k1 < c1Pool.length && half1 > 0; k1++) {
-      if (addCandidate(c1Pool[k1])) half1--;
-    }
-    for (var k2 = 0; k2 < c2Pool.length && half2 > 0; k2++) {
-      if (addCandidate(c2Pool[k2])) half2--;
-    }
-    // Fill any edge-case gaps with remaining countries from either continent
-    c1Pool.forEach(addCandidate);
-    c2Pool.forEach(addCandidate);
   }
 
-  // Step up continent countries first if a specific continent was chosen
-  if (chosenCards.length < targetCount && isSingleCont && cont !== 'globe') {
-    var contStepUp = shuffle(pullH2HCards(cont, 'countries', 13));
-    contStepUp.forEach(addCandidate);
-  }
-
-  // Fallback if needed from globe countries
-  if (chosenCards.length < targetCount) {
-    var globeFallback = shuffle(pullH2HCards('globe', 'countries', tierCeiling));
-    globeFallback.forEach(addCandidate);
-  }
-
-  // Final seeded Fisher-Yates shuffle so questions are fairly and randomly sequenced
-  return shuffle(chosenCards);
+  // 5. Final deterministic shuffle so both players get identical questions in the same sequence
+  return seededShuffleH2H(gameDeck, prng);
 }
 
 function launchReconciledMatch() {
@@ -6565,8 +6667,30 @@ function launchReconciledMatch() {
     };
   }
 
-  var deck = buildReconciledH2HDeck(10);
+  var profile = window.activeProfile;
+  var yourGradeRaw = (profile && typeof estimateGrade === 'function') ? estimateGrade(profile) : 5;
+  var oppGradeRaw  = (_h2h && _h2h.opponent && typeof _h2h.opponent.grade === 'number') ? _h2h.opponent.grade : yourGradeRaw;
+  var yourGrade = Math.max(1, Math.min(13, Math.floor(yourGradeRaw)));
+  var oppGrade  = Math.max(1, Math.min(13, Math.floor(oppGradeRaw)));
+  var lowerGrade = Math.min(yourGrade, oppGrade);
+  var tierCeiling = (typeof getTierCeiling === 'function') ? getTierCeiling(lowerGrade, 'medium') : lowerGrade;
+
+  var p1Sel = { continent: (_h2hSetup && _h2hSetup.yourContinent) || 'globe', features: (_h2hSetup && _h2hSetup.yourFeatures) || {} };
+  var p2Sel = { continent: (_h2hSetup && _h2hSetup.oppContinent) || null, features: (_h2hSetup && _h2hSetup.oppFeatures) || {} };
+  var deck = buildH2HDeck(p1Sel, p2Sel, tierCeiling, _h2h.matchId);
   _h2h.sharedDeck = deck;
+
+  // Persist authoritative deck to Supabase for online matches
+  if (_h2h.isOnlineMatch && window.h2hStore && window.activeProfile && window.activeProfile.id && _h2h.matchId) {
+    window.h2hStore.syncSetup(
+      _h2h.matchId,
+      window.activeProfile.id,
+      (_h2hSetup && _h2hSetup.yourContinent) || 'globe',
+      (_h2hSetup && _h2hSetup.yourFeatures) || {},
+      true,
+      deck
+    ).catch(function(e){ console.warn('[launchReconciledMatch] syncSetup deck err:', e); });
+  }
 
   // Broadcast to peer if online
   if (_h2hSetup && _h2hSetup.channel) {
@@ -6592,256 +6716,47 @@ function launchReconciledMatch() {
 // ──────────────────────────────────────────────────────────────────
 // H2H MATCH START — extends s-game with H2H mode flag
 // ──────────────────────────────────────────────────────────────────
-// ──────────────────────────────────────────────────────────────────
-// H2H DECK COMPOSER
-// ──────────────────────────────────────────────────────────────────
-// Target composition (percentages, must sum to 100):
-//   countries 50 | landforms 10 | lakes 6 | rivers 5 | other_water 4
-//   capitals 7   | flags 3      | heritage 2 | languages 3
-//   cities 6     | trivia 4
-// "other_water" = seas + oceans + gulfs + straits (lakes broken out).
-//
-// When a bucket is structurally empty at the current tier (e.g. no cities
-// or languages available at tier ≤ 6) or has fewer cards than its ideal
-// share, water-fill redistribution spreads its share proportionally
-// across the remaining available buckets — weighted by each bucket's
-// OWN share. This keeps every available category represented rather
-// than dumping shortfalls entirely into countries.
-//
-// If the full 100-card target still can't be built from total available
-// content, step the target down: 100 → 50 → 40 → 30 → 20 → 10.
-var H2H_DECK_SHARES = {
-  countries:   0.50,
-  landforms:   0.10,
-  lakes:       0.06,
-  rivers:      0.05,
-  other_water: 0.04,
-  capitals:    0.07,
-  flags:       0.03,
-  heritage:    0.02,
-  languages:   0.03,
-  cities:      0.06,
-  trivia:      0.04
-};
-
-function _h2hBucketFor(card) {
-  var sc = card.subcat;
-  if (!sc) return null;
-  if (sc === 'countries') return 'countries';
-  if (sc === 'landforms') return 'landforms';
-  if (sc === 'rivers')    return 'rivers';
-  if (sc === 'lakes')     return 'lakes';
-  if (sc === 'seas' || sc === 'oceans' || sc === 'gulfs' || sc === 'straits') return 'other_water';
-  if (sc === 'capitals')  return 'capitals';
-  if (sc === 'flags')     return 'flags';
-  if (sc === 'heritage')  return 'heritage';
-  if (sc === 'languages') return 'languages';
-  if (sc === 'cities')    return 'cities';
-  if (sc === 'trivia')    return 'trivia';
-  return null;
-}
-
-function _h2hSampleN(arr, n) {
-  if (n <= 0 || arr.length === 0) return [];
-  if (n >= arr.length) return arr.slice();
-  // Fisher-Yates partial shuffle
-  var copy = arr.slice();
-  for (var i = 0; i < n; i++) {
-    var j = i + Math.floor(Math.random() * (copy.length - i));
-    var t = copy[i]; copy[i] = copy[j]; copy[j] = t;
-  }
-  return copy.slice(0, n);
-}
-
-// Iterative water-fill allocator.
-// Given per-bucket capacities and ideal shares, allocate `target` total
-// units across buckets proportional to shares, respecting per-bucket caps.
-// Any bucket whose ideal share exceeds its capacity caps at capacity, and
-// its residual share is redistributed across the still-uncapped buckets
-// in proportion to their OWN shares (not countries dump). Converges when
-// every uncapped bucket fits its tentative allocation, or when nothing
-// uncapped is left. Returns a float allocation per bucket.
-function _h2hWaterFill(capacities, shares, target) {
-  var keys = Object.keys(shares);
-  var allocation = {};
-  var capped = {};
-  var MAX_ITERS = keys.length + 2;
-
-  for (var iter = 0; iter < MAX_ITERS; iter++) {
-    var cappedTotal = 0;
-    var uncappedKeys = [];
-    var uncappedShareSum = 0;
-    keys.forEach(function(k) {
-      if (k in capped) {
-        cappedTotal += capped[k];
-      } else {
-        uncappedKeys.push(k);
-        uncappedShareSum += shares[k];
-      }
-    });
-
-    if (uncappedKeys.length === 0 || uncappedShareSum <= 0) break;
-
-    var remaining = target - cappedTotal;
-    if (remaining <= 0) break;
-
-    var tentative = {};
-    var newlyCapped = false;
-    uncappedKeys.forEach(function(k) {
-      var v = remaining * shares[k] / uncappedShareSum;
-      var cap = capacities[k] || 0;
-      if (v > cap) {
-        capped[k] = cap;
-        newlyCapped = true;
-      } else {
-        tentative[k] = v;
-      }
-    });
-
-    if (!newlyCapped) {
-      Object.keys(tentative).forEach(function(k) { allocation[k] = tentative[k]; });
-      break;
-    }
-    // otherwise loop — next iteration recomputes with smaller denominator
-  }
-
-  // Merge capped values and zero-fill missing keys
-  Object.keys(capped).forEach(function(k) { allocation[k] = capped[k]; });
-  keys.forEach(function(k) { if (!(k in allocation)) allocation[k] = 0; });
-
-  var total = 0;
-  Object.keys(allocation).forEach(function(k) { total += allocation[k]; });
-  return { allocation: allocation, totalAllocated: total };
-}
-
-// Round a float allocation to integers, summing to min(target, round(total)).
-// Largest-remainder method. Respects per-bucket caps so rounding-up can't
-// overshoot capacity.
-function _h2hRoundAllocation(allocation, capacities, target) {
-  var keys = Object.keys(allocation);
-  var floors = keys.map(function(k) {
-    var v = allocation[k];
-    return { k: k, floor: Math.floor(v), frac: v - Math.floor(v), cap: capacities[k] || 0 };
-  });
-  var floorSum = 0;
-  floors.forEach(function(f) { floorSum += f.floor; });
-
-  var totalFloat = 0;
-  keys.forEach(function(k) { totalFloat += allocation[k]; });
-  var intTarget = Math.min(target, Math.round(totalFloat));
-  var leftover = intTarget - floorSum;
-
-  // Distribute leftover to largest fractional parts, skipping capped buckets
-  if (leftover > 0) {
-    floors.sort(function(a, b) { return b.frac - a.frac; });
-    var i = 0, attempts = 0;
-    while (leftover > 0 && attempts < floors.length * 2) {
-      var f = floors[i % floors.length];
-      if (f.floor < f.cap) {
-        f.floor += 1;
-        leftover -= 1;
-      }
-      i += 1;
-      attempts += 1;
-    }
-  }
-
-  var out = {};
-  floors.forEach(function(f) { out[f.k] = f.floor; });
-  return out;
-}
-
-function _h2hTryBuild(buckets, target) {
-  // Capacity = available card count per bucket
-  var capacities = {};
-  Object.keys(H2H_DECK_SHARES).forEach(function(k) {
-    capacities[k] = (buckets[k] || []).length;
-  });
-
-  // Water-fill allocation: redistributes structurally-empty and
-  // partially-short buckets proportionally across what's available.
-  var wf = _h2hWaterFill(capacities, H2H_DECK_SHARES, target);
-  var targets = _h2hRoundAllocation(wf.allocation, capacities, target);
-
-  // Debug
-  var dbg = Object.keys(targets).map(function(k){ return k + '=' + targets[k]; }).join(' ');
-
-  // Sample each bucket
-  var picked = [];
-  var pickedIds = {};
-  Object.keys(targets).forEach(function(k) {
-    var want = targets[k];
-    if (want <= 0) return;
-    var pool = (buckets[k] || []).filter(function(c) { return !pickedIds[c.id]; });
-    var taking = Math.min(want, pool.length);
-    var sampled = _h2hSampleN(pool, taking);
-    sampled.forEach(function(c) {
-      if (!pickedIds[c.id]) {
-        picked.push(c);
-        pickedIds[c.id] = true;
-      }
-    });
-  });
-
-  return picked;
-}
-
-// Build the H2H deck against a pre-bucketed superset pool.
-// Returns an array. Empty if even the smallest step-down can't be built.
-function composeH2HDeck(config, cd) {
-  // Build the full superset pool with every category/sub enabled.
-  var fullConfig = {
-    continent: config.continent || 'globe',
-    tierCeiling: config.tierCeiling,
-    categories: { countries:true, capitals:true, flags:true, landforms:true, water:true, cities:true, culture:true },
-    waterSubs:    { rivers:true, lakes:true, seas:true, oceans:true, gulfs:true, straits:true },
-    landformSubs: { mountains:true, peninsulas:true, islands:true, archipelagos:true },
-    citySubs:     { cities:true, heritage:true },
-    cultureSubs:  { languages:true, trivia:true }
-  };
-  var fullPool = buildPool(fullConfig, cd);
-
-  // Bucket the pool
-  var buckets = {
-    countries:[], landforms:[], lakes:[], rivers:[], other_water:[],
-    capitals:[], flags:[], heritage:[], languages:[], cities:[], trivia:[]
-  };
-  fullPool.forEach(function(card){
-    var b = _h2hBucketFor(card);
-    if (b && buckets[b]) buckets[b].push(card);
-  });
-
-  // Deduplicate by card id within each bucket
-  Object.keys(buckets).forEach(function(k){
-    var seen = {};
-    buckets[k] = buckets[k].filter(function(c){
-      if (seen[c.id]) return false;
-      seen[c.id] = true;
-      return true;
-    });
-  });
-
-
-  // Try target sizes in descending order. Accept the first size where we
-  // can actually produce `size` cards (using country auto-fill for shortfalls).
-  var sizes = [100, 50, 40, 30, 20, 10];
-  for (var si = 0; si < sizes.length; si++) {
-    var target = sizes[si];
-    var result = _h2hTryBuild(buckets, target);
-    if (result && result.length >= target) {
-      return result;
-    }
-  }
-  // Nothing workable — fall back to everything we have (lets caller show error)
-  console.warn('[h2h-deck] fallback: returning best-effort pool');
-  return _h2hTryBuild(buckets, 10) || [];
-}
-
 function startH2HMatch() {
   // Stop queue timers
   if (_h2h.queueDotsTimer) { clearInterval(_h2h.queueDotsTimer); _h2h.queueDotsTimer = null; }
   if (_h2h.queueCountersTimer) { clearInterval(_h2h.queueCountersTimer); _h2h.queueCountersTimer = null; }
   if (_h2h.pollTimer) { clearInterval(_h2h.pollTimer); _h2h.pollTimer = null; }
+
+  // Guarantee pristine in-match state before starting gameplay
+  _h2h.yourScore = 0;
+  _h2h.oppScore = 0;
+  _h2h.yourAnswers = [];
+  _h2h.oppAnswers = [];
+  _h2h.oppCorrect = 0;
+  _h2h.oppWrong = 0;
+  _h2h.youFinished = false;
+  _h2h.oppFinished = false;
+  _h2h.finishCountdown = null;
+  _h2h.finishInitiator = null;
+  _h2h.outcome = null;
+  _h2h.ratingDelta = 0;
+  _h2h.starsEarned = 0;
+  _h2h._oppDiscAlerted = false;
+  _h2h.startedAt = Date.now();
+
+  // Reset live question card and remove any old countdown banners
+  var qCardEl = document.querySelector('#s-game .q-card');
+  if (qCardEl) {
+    qCardEl.innerHTML = '<div class="q-cat" id="q-cat"></div><div class="q-count" id="q-count" style="display:none;"></div><div class="q-back" id="q-back" title="Previous card" style="display:none;">←</div><div class="q-text" id="q-text"></div>';
+  }
+  var staleBanners = document.querySelectorAll('#h2h-banner-container');
+  staleBanners.forEach(function(b) { b.remove(); });
+  var clkEl = document.getElementById('h2h-clock');
+  if (clkEl) {
+    clkEl.classList.remove('h2h-clock-urgent');
+    clkEl.textContent = '1:00';
+    clkEl.style.color = '';
+  }
+  var prog = document.getElementById('prog');
+  if (prog) {
+    prog.style.width = '100%';
+    prog.style.background = 'linear-gradient(to right,var(--correct),#5bf0a0)';
+  }
 
   // Tier cap: take the LOWER of the two players' adjusted tier (estimateGrade,
   // which already folds in gradeAdjust drift), then apply 'medium' difficulty
@@ -6878,14 +6793,12 @@ function startH2HMatch() {
   if (_h2h.sharedDeck && _h2h.sharedDeck.length > 0) {
     config.prebuiltPool = _h2h.sharedDeck;
   } else {
-    var cd = getCombinedContinentData(config.continent);
-    if (cd) {
-      var composed = composeH2HDeck(config, cd);
-      if (composed && composed.length > 0) {
-        config.prebuiltPool = composed;
-      } else {
-        console.warn('[h2h] composed deck was empty — initGameScreen will fall back to buildPool');
-      }
+    var p1Sel = { continent: selectedCont, features: (_h2hSetup && _h2hSetup.yourFeatures) || {} };
+    var p2Sel = { continent: oppCont || selectedCont, features: (_h2hSetup && _h2hSetup.oppFeatures) || {} };
+    var composed = buildH2HDeck(p1Sel, p2Sel, tierCeiling, _h2h.matchId);
+    if (composed && composed.length > 0) {
+      config.prebuiltPool = composed;
+      _h2h.sharedDeck = composed;
     }
   }
 
@@ -6893,7 +6806,8 @@ function startH2HMatch() {
 
   // Pre-build the opponent's answer schedule only for bot match
   if (!_h2h.isOnlineMatch) {
-    _h2h.oppSchedule = H2HStub.makeAnswerSchedule();
+    var poolCount = (config.prebuiltPool && config.prebuiltPool.length > 0) ? config.prebuiltPool.length : 10;
+    _h2h.oppSchedule = H2HStub.makeAnswerSchedule(poolCount);
   } else {
     _h2h.oppSchedule = [];
   }
@@ -6919,8 +6833,43 @@ function setupH2HHud() {
   if (qBack) qBack.style.display = 'none';
   // Snd button stays visible (mute toggle is fine in matches)
 
-  // Already injected? bail
-  if (document.getElementById('h2h-clock')) return;
+  // If HUD elements are already injected, reset all states cleanly
+  if (document.getElementById('h2h-clock')) {
+    var bCont = document.getElementById('h2h-banner-container');
+    if (bCont) { bCont.innerHTML = ''; bCont.style.display = 'none'; }
+    var cEl = document.getElementById('h2h-clock');
+    if (cEl) { cEl.classList.remove('h2h-clock-urgent'); cEl.textContent = '1:00'; }
+    var ysEl = document.getElementById('h2h-you-score');
+    if (ysEl) ysEl.textContent = '0';
+    var osEl = document.getElementById('h2h-opp-score');
+    if (osEl) osEl.textContent = '0';
+    var qb = document.getElementById('h2h-q-badge');
+    if (qb) qb.textContent = '1 / ' + (_game ? _game.totalCards : 10);
+
+    // Refresh chips with current players and strip checkmarks
+    var youChip = document.getElementById('h2h-you-chip');
+    if (youChip) {
+      var youName = (window.activeProfile && (window.activeProfile.name || window.activeProfile.handle)) || 'You';
+      var youNameEl = youChip.querySelector('.name');
+      if (youNameEl) youNameEl.textContent = youName;
+    }
+    var oppChip = document.getElementById('h2h-opp-chip');
+    if (oppChip) {
+      var oppHandle = (_h2h.opponent && _h2h.opponent.handle) || 'Opponent';
+      var oppNameEl = oppChip.querySelector('.name');
+      if (oppNameEl) oppNameEl.textContent = oppHandle;
+      var oppAva = _h2h.opponent ? _h2h.opponent.avatar : null;
+      var oppAvaEl = oppChip.querySelector('.ava');
+      if (oppAvaEl) oppAvaEl.innerHTML = _formatChipAvatar(oppAva, (_h2h.opponent && _h2h.opponent.isBot) ? '🤖' : '⚔️');
+    }
+
+    var liveQCard = document.querySelector('#s-game .q-card');
+    if (liveQCard) {
+      liveQCard.innerHTML = '<div class="q-cat" id="q-cat"></div><div class="q-count" id="q-count" style="display:none;"></div><div class="q-back" id="q-back" title="Previous card" style="display:none;">←</div><div class="q-text" id="q-text"></div>';
+    }
+    showQuestion();
+    return;
+  }
 
   var topbar = document.querySelector('#s-game .game-topbar');
   var qCard = document.querySelector('#s-game .q-card');
@@ -6953,6 +6902,16 @@ function setupH2HHud() {
       // Tighten q-card vertically since it now shares a row with chips
       '#s-game.h2h-mode .q-card{padding:7px 11px}' +
       '#s-game.h2h-mode .q-card .q-text{font-size:13px}' +
+      // Pulsing countdown banner & countdown badge
+      '#s-game.h2h-mode #h2h-banner-container{display:none;width:100%;box-sizing:border-box;margin:2px 0 4px}' +
+      '#s-game.h2h-mode .h2h-countdown-banner{display:flex;align-items:center;justify-content:space-between;gap:8px;background:rgba(255,45,85,.18);border:1.5px solid #ff6b6b;border-radius:12px;padding:6px 10px;box-shadow:0 0 16px rgba(255,80,80,.38);animation:h2hBannerPulse .95s infinite alternate ease-in-out;width:100%;box-sizing:border-box;pointer-events:none}' +
+      '@keyframes h2hBannerPulse{0%{background:rgba(255,45,85,.14);border-color:rgba(255,107,107,.6);box-shadow:0 0 10px rgba(255,75,75,.25)}100%{background:rgba(255,45,85,.30);border-color:#ff6b6b;box-shadow:0 0 24px rgba(255,80,80,.68)}}' +
+      '#s-game.h2h-mode .h2h-pulse-badge{font-family:"Fredoka One",sans-serif;font-size:11px;color:#ff6b6b;background:rgba(255,107,107,.24);border:1px solid rgba(255,107,107,.55);border-radius:8px;padding:3px 7px;letter-spacing:.04em;white-space:nowrap;display:flex;align-items:center;gap:4px}' +
+      '#s-game.h2h-mode .h2h-banner-msg{font-family:"Nunito",sans-serif;font-size:11px;font-weight:800;color:#fff;text-align:center;flex:1;line-height:1.2}' +
+      '#s-game.h2h-mode .h2h-banner-clock{font-family:"Space Mono",monospace;font-size:15px;font-weight:700;color:#ff6b6b;background:rgba(17,20,40,.88);border:1px solid #ff6b6b;border-radius:8px;padding:2px 7px;min-width:38px;text-align:center;white-space:nowrap}' +
+      '@keyframes h2hClockPulse{0%{transform:scale(1);box-shadow:0 0 8px rgba(255,107,107,.3)}50%{transform:scale(1.10);box-shadow:0 0 20px rgba(255,107,107,.8);color:#ff6b6b;border-color:#ff6b6b}100%{transform:scale(1);box-shadow:0 0 8px rgba(255,107,107,.3)}}' +
+      '#s-game.h2h-mode #h2h-clock.h2h-clock-urgent{animation:h2hClockPulse .95s infinite alternate ease-in-out!important;color:#ff6b6b!important;border-color:#ff6b6b!important;background:rgba(36,12,22,.92)!important}' +
+      '#s-game.h2h-mode .h2h-waiting-view{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;padding:2px 4px}' +
       // Narrow phones: chips shrink
       '@media (max-width:380px){#s-game.h2h-mode .h2h-chip{padding:5px 7px;max-width:84px}#s-game.h2h-mode .h2h-chip .ava{width:26px;height:26px}#s-game.h2h-mode .h2h-chip .num{font-size:15px}}';
     document.head.appendChild(st);
@@ -7003,14 +6962,28 @@ function setupH2HHud() {
   var cardRow = document.createElement('div');
   cardRow.id = 'h2h-card-row';
 
+  // Remove any duplicate or orphaned banner containers before building
+  var staleBanners = document.querySelectorAll('#h2h-banner-container');
+  staleBanners.forEach(function(b) { b.remove(); });
+
   // Move the existing q-card into the new card row, flanked by the chips
   cardRow.appendChild(youChip);
   cardRow.appendChild(qCard);  // re-parent the live q-card element
   cardRow.appendChild(oppChip);
 
-  // Insert clock row + card row at the top of the topbar (before any remaining children)
+  qCard.innerHTML = '<div class="q-cat" id="q-cat"></div><div class="q-count" id="q-count" style="display:none;"></div><div class="q-back" id="q-back" title="Previous card" style="display:none;">←</div><div class="q-text" id="q-text"></div>';
+  showQuestion();
+
+  // Build banner container for countdown
+  var bannerContainer = document.createElement('div');
+  bannerContainer.id = 'h2h-banner-container';
+  bannerContainer.style.display = 'none';
+  bannerContainer.style.width = '100%';
+
+  // Insert clock row + banner container + card row at the top of the topbar
   topbar.insertBefore(cardRow, topbar.firstChild);
-  topbar.insertBefore(clockRow, cardRow);
+  topbar.insertBefore(bannerContainer, cardRow);
+  topbar.insertBefore(clockRow, bannerContainer);
 }
 
 function escapeHtml(s) {
@@ -7019,23 +6992,148 @@ function escapeHtml(s) {
   });
 }
 
+function startH2HCountdown(initiator, elapsedSecAgo) {
+  if (!_game || _game.done || _h2h.state === 'finished') return;
+  if (_h2h.finishCountdown != null) return; // already active
+
+  var COUNTDOWN_MAX = 10;
+  var currentRemaining = _game.timeRemaining;
+  var targetSeconds = COUNTDOWN_MAX;
+  if (typeof elapsedSecAgo === 'number' && elapsedSecAgo > 0) {
+    targetSeconds = Math.max(1, COUNTDOWN_MAX - Math.floor(elapsedSecAgo));
+  }
+  // Cut match timer down to countdown time if there was more time remaining
+  _game.timeRemaining = Math.min(currentRemaining, targetSeconds);
+  if (_game.timeRemaining <= 0) {
+    finishH2HMatch();
+    return;
+  }
+  _h2h.finishCountdown = _game.timeRemaining;
+  _h2h.finishInitiator = initiator;
+
+  // Audio alert if available
+  try {
+    if (typeof AudioMgr !== 'undefined') {
+      if (typeof AudioMgr.streak === 'function') AudioMgr.streak();
+      else if (typeof AudioMgr.bubble === 'function') AudioMgr.bubble();
+    }
+  } catch(e) {}
+
+  showH2HCountdownBanner(initiator, _game.timeRemaining);
+  updateGameUI();
+}
+
+function showH2HCountdownBanner(initiator, remainingSec) {
+  var container = document.getElementById('h2h-banner-container');
+  if (!container) return;
+  var oppName = (_h2h.opponent && _h2h.opponent.handle) || 'Opponent';
+  var msg = (initiator === 'opp')
+    ? (escapeHtml(oppName) + ' finished! Finish remaining questions!')
+    : ('You finished! Waiting for ' + escapeHtml(oppName) + ' to finish…');
+
+  container.innerHTML =
+    '<div class="h2h-countdown-banner">' +
+      '<div class="h2h-pulse-badge">⚡ ' + (initiator === 'opp' ? 'OPPONENT FINISHED' : 'YOU FINISHED') + '</div>' +
+      '<div class="h2h-banner-msg">' + msg + '</div>' +
+      '<div class="h2h-banner-clock" id="h2h-banner-clock">' + remainingSec + 's</div>' +
+    '</div>';
+  container.style.display = 'block';
+
+  var clk = document.getElementById('h2h-clock');
+  if (clk) clk.classList.add('h2h-clock-urgent');
+}
+
+function showH2HWaitingForOpponentUI() {
+  var qCard = document.querySelector('#s-game .q-card');
+  if (!qCard) return;
+  var oppName = (_h2h.opponent && _h2h.opponent.handle) || 'Opponent';
+  qCard.innerHTML =
+    '<div class="h2h-waiting-view">' +
+      '<div style="font-size:11px;color:#5bf0a0;font-weight:800;letter-spacing:.05em;text-transform:uppercase;margin-bottom:2px;">🎉 Deck Complete!</div>' +
+      '<div style="font-size:12px;color:#fff;font-weight:700;line-height:1.2;margin-bottom:3px;">Waiting for ' + escapeHtml(oppName) + ' to finish…</div>' +
+      '<div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:2px;">' +
+        '<span style="font-size:9px;color:#a8c8e0;text-transform:uppercase;letter-spacing:.06em;">Countdown:</span>' +
+        '<span id="h2h-wait-countdown-num" style="font-family:\'Space Mono\',monospace;font-size:16px;font-weight:700;color:#ff6b6b;animation:h2hClockPulse 1s infinite alternate;">' + (_game ? _game.timeRemaining : 20) + 's</span>' +
+      '</div>' +
+    '</div>';
+}
+
+function handleH2HOpponentFinished(elapsedSecAgo) {
+  if (!_h2h || _h2h.oppFinished || _h2h.state === 'finished' || !_game || _game.done) return;
+  _h2h.oppFinished = true;
+
+  var oppChip = document.getElementById('h2h-opp-chip');
+  if (oppChip) {
+    var nameEl = oppChip.querySelector('.name');
+    if (nameEl && !nameEl.innerHTML.includes('✓')) {
+      nameEl.innerHTML += ' <span style="color:#5bf0a0;font-size:8px;">✓</span>';
+    }
+  }
+
+  if (_h2h.youFinished) {
+    finishH2HMatch();
+    return;
+  }
+
+  startH2HCountdown('opp', elapsedSecAgo);
+}
+
+function handleH2HYouFinished() {
+  if (!_h2h || _h2h.youFinished || _h2h.state === 'finished' || !_game || _game.done) return;
+  _h2h.youFinished = true;
+  if (_game) {
+    _game.currentQ = null;
+    _game.locked = true;
+  }
+
+  var youChip = document.getElementById('h2h-you-chip');
+  if (youChip) {
+    var nameEl = youChip.querySelector('.name');
+    if (nameEl && !nameEl.innerHTML.includes('✓')) {
+      nameEl.innerHTML += ' <span style="color:#5bf0a0;font-size:8px;">✓</span>';
+    }
+  }
+
+  var qBadge = document.getElementById('h2h-q-badge');
+  if (qBadge) {
+    qBadge.textContent = (_game ? _game.totalCards : 10) + ' / ' + (_game ? _game.totalCards : 10);
+  }
+
+  if (_h2h.isOnlineMatch && window.h2hStore && window.activeProfile && window.activeProfile.id && _h2h.matchId) {
+    window.h2hStore.syncGameplay(_h2h.matchId, window.activeProfile.id, _h2h.yourScore, null, null, true);
+  }
+
+  if (_h2h.oppFinished) {
+    finishH2HMatch();
+    return;
+  }
+
+  startH2HCountdown('you');
+  showH2HWaitingForOpponentUI();
+}
+
 function scheduleH2HOpponent() {
   // Clear any prior timers
   if (_h2h.oppTimers && _h2h.oppTimers.length) {
     _h2h.oppTimers.forEach(function(t){ clearTimeout(t); });
   }
   _h2h.oppTimers = [];
-  _h2h.oppSchedule.forEach(function(slot){
+  var totalSlots = _h2h.oppSchedule.length;
+  _h2h.oppSchedule.forEach(function(slot, slotIdx){
     var t = setTimeout(function(){
       if (!_game || _game.done || _game.config.mode !== 'h2h') return;
       _h2h.oppAnswers.push({ at: slot.at, correct: slot.correct });
-      if (slot.correct) _h2h.oppScore += 1;
-      else _h2h.oppScore -= 0.5;
+      if (slot.correct) { _h2h.oppScore += 1; _h2h.oppCorrect++; }
+      else { _h2h.oppScore -= 0.5; _h2h.oppWrong++; }
       var el = document.getElementById('h2h-opp-score');
       if (el) {
         el.textContent = _formatH2HScore(_h2h.oppScore);
         // brief pulse
         el.animate([{transform:'scale(1.0)'},{transform:'scale(1.25)'},{transform:'scale(1.0)'}], {duration:280});
+      }
+      // Check if bot finished their final scheduled question
+      if (slotIdx === totalSlots - 1) {
+        handleH2HOpponentFinished();
       }
     }, slot.at * 1000);
     _h2h.oppTimers.push(t);
@@ -7052,6 +7150,21 @@ function _formatH2HScore(n) {
 function finishH2HMatch() {
   if (!_h2h || _h2h.state === 'finished') return;
   _h2h.state = 'finished';
+
+  var bannerContainer = document.getElementById('h2h-banner-container');
+  if (bannerContainer) {
+    bannerContainer.innerHTML = '';
+    bannerContainer.style.display = 'none';
+  }
+  var clk = document.getElementById('h2h-clock');
+  if (clk) {
+    clk.classList.remove('h2h-clock-urgent');
+    clk.style.color = '';
+  }
+  var qCard = document.querySelector('#s-game .q-card');
+  if (qCard) {
+    qCard.innerHTML = '<div class="q-cat" id="q-cat">COUNTRIES</div><div class="q-count" id="q-count"></div><div class="q-back" id="q-back" title="Previous card">←</div><div class="q-text" id="q-text">Tap the map to answer</div>';
+  }
 
   // Stop game loop and timers immediately
   if (_game) {
@@ -7077,8 +7190,46 @@ function finishH2HMatch() {
   else { _h2h.outcome = 'tie'; outcomeScore = 0.5; }
 
   var yourR = _h2h.you.rating;
-  var oppR = _h2h.opponent.rating;
+  var oppR = (_h2h.opponent && typeof _h2h.opponent.rating === 'number') ? _h2h.opponent.rating : 1200;
   _h2h.ratingDelta = H2HStub.calcRatingDelta(yourR, oppR, outcomeScore);
+
+  // Compute opponent immediate post-match career stats
+  var oppPriorRating = oppR;
+  var oppPriorW = (_h2h.opponent && typeof _h2h.opponent.wins === 'number')
+    ? _h2h.opponent.wins
+    : ((_h2h.opponent && _h2h.opponent.stats && _h2h.opponent.stats.h2h && typeof _h2h.opponent.stats.h2h.wins === 'number')
+      ? _h2h.opponent.stats.h2h.wins : 0);
+  var oppPriorL = (_h2h.opponent && typeof _h2h.opponent.losses === 'number')
+    ? _h2h.opponent.losses
+    : ((_h2h.opponent && _h2h.opponent.stats && _h2h.opponent.stats.h2h && typeof _h2h.opponent.stats.h2h.losses === 'number')
+      ? _h2h.opponent.stats.h2h.losses : 0);
+  var oppPriorT = (_h2h.opponent && typeof _h2h.opponent.ties === 'number')
+    ? _h2h.opponent.ties
+    : ((_h2h.opponent && _h2h.opponent.stats && _h2h.opponent.stats.h2h && typeof _h2h.opponent.stats.h2h.ties === 'number')
+      ? _h2h.opponent.stats.h2h.ties : 0);
+  var oppPriorMatches = (_h2h.opponent && typeof _h2h.opponent.matches === 'number')
+    ? _h2h.opponent.matches
+    : ((_h2h.opponent && _h2h.opponent.stats && _h2h.opponent.stats.h2h && typeof _h2h.opponent.stats.h2h.matches === 'number')
+      ? _h2h.opponent.stats.h2h.matches : (oppPriorW + oppPriorL + oppPriorT));
+
+  var oppIsWin = (_h2h.outcome === 'loss');
+  var oppIsLoss = (_h2h.outcome === 'win');
+  var oppIsTie = (_h2h.outcome === 'tie');
+
+  if (_h2h.opponent) {
+    _h2h.opponent.priorRating = oppPriorRating;
+    _h2h.opponent.priorWins = oppPriorW;
+    _h2h.opponent.priorLosses = oppPriorL;
+    _h2h.opponent.priorTies = oppPriorT;
+    _h2h.opponent.priorMatches = oppPriorMatches;
+
+    _h2h.opponent.postWins = oppPriorW + (oppIsWin ? 1 : 0);
+    _h2h.opponent.postLosses = oppPriorL + (oppIsLoss ? 1 : 0);
+    _h2h.opponent.postTies = oppPriorT + (oppIsTie ? 1 : 0);
+    _h2h.opponent.postMatches = oppPriorMatches + 1;
+    _h2h.opponent.ratingDelta = -_h2h.ratingDelta;
+    _h2h.opponent.postRating = Math.max(0, oppPriorRating - _h2h.ratingDelta);
+  }
 
   // Persist to profile
   var profile = window.activeProfile;
@@ -7137,6 +7288,15 @@ function finishH2HMatch() {
         ratingDelta: _h2h.ratingDelta,
         opponentHandle: (_h2h.opponent && _h2h.opponent.handle) || 'Opponent',
         opponentRating: oppR,
+        opponentRatingAfter: (_h2h.opponent && typeof _h2h.opponent.postRating === 'number') ? _h2h.opponent.postRating : Math.max(0, oppR - _h2h.ratingDelta),
+        opponentRatingDelta: (_h2h.opponent && typeof _h2h.opponent.ratingDelta === 'number') ? _h2h.opponent.ratingDelta : -_h2h.ratingDelta,
+        opponentMatches: (_h2h.opponent && _h2h.opponent.postMatches) || (oppPriorMatches + 1),
+        opponentWins: (_h2h.opponent && _h2h.opponent.postWins != null) ? _h2h.opponent.postWins : oppPriorW,
+        opponentLosses: (_h2h.opponent && _h2h.opponent.postLosses != null) ? _h2h.opponent.postLosses : oppPriorL,
+        opponentTies: (_h2h.opponent && _h2h.opponent.postTies != null) ? _h2h.opponent.postTies : oppPriorT,
+        opponentCorrect: _h2h.oppCorrect || 0,
+        opponentWrong: _h2h.oppWrong || 0,
+        opponentAvatar: (_h2h.opponent && (_h2h.opponent.avatarSvg || _h2h.opponent.avatar || _h2h.opponent.avatarFace)) || '🧑',
         starsEarned: h2hStarsEarned
       }
     };
@@ -7153,6 +7313,24 @@ function finishH2HMatch() {
             profile.stats.h2h.rating = finRes.elo_after;
             try { if (typeof saveProfiles === 'function') saveProfiles(); } catch(e) {}
           }
+          if (_h2h.opponent) {
+            if (typeof finRes.opp_elo_after === 'number') _h2h.opponent.postRating = finRes.opp_elo_after;
+            if (typeof finRes.opp_rating_delta === 'number') _h2h.opponent.ratingDelta = finRes.opp_rating_delta;
+            if (typeof finRes.opp_matches === 'number') _h2h.opponent.postMatches = finRes.opp_matches;
+            if (typeof finRes.opp_wins === 'number') _h2h.opponent.postWins = finRes.opp_wins;
+            if (typeof finRes.opp_losses === 'number') _h2h.opponent.postLosses = finRes.opp_losses;
+            if (typeof finRes.opp_ties === 'number') _h2h.opponent.postTies = finRes.opp_ties;
+          }
+          if (window._gameResults && window._gameResults.h2h && _h2h.opponent) {
+            window._gameResults.h2h.opponentRatingAfter = _h2h.opponent.postRating;
+            window._gameResults.h2h.opponentRatingDelta = _h2h.opponent.ratingDelta;
+            window._gameResults.h2h.opponentMatches = _h2h.opponent.postMatches;
+            window._gameResults.h2h.opponentWins = _h2h.opponent.postWins;
+            window._gameResults.h2h.opponentLosses = _h2h.opponent.postLosses;
+            window._gameResults.h2h.opponentTies = _h2h.opponent.postTies;
+            if (typeof finRes.opp_correct === 'number') window._gameResults.h2h.opponentCorrect = finRes.opp_correct;
+            if (typeof finRes.opp_wrong === 'number') window._gameResults.h2h.opponentWrong = finRes.opp_wrong;
+          }
           if (_h2h.state === 'finished') {
             renderH2HResults();
           }
@@ -7163,18 +7341,7 @@ function finishH2HMatch() {
   H2H.transition('finished');
   renderH2HResults();
   go('s-h2h-results');
-
-  // Stub: opponent rematch decision after a delay (bot matches only)
-  if (!_h2h.isOnlineMatch) {
-    if (_h2h.oppRematchTimer) clearTimeout(_h2h.oppRematchTimer);
-    _h2h.oppRematchTimer = H2HStub.scheduleRematchDecision(function(wantsRematch){
-      _h2h.rematchOpp = wantsRematch;
-      updateH2HRematchUi();
-      if (_h2h.rematchYou && _h2h.rematchOpp) {
-        setTimeout(function(){ startH2HQueue(); }, 600);
-      }
-    });
-  }
+  initH2HResultsScreen();
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -7183,6 +7350,8 @@ function finishH2HMatch() {
 function renderH2HResults() {
   var root = document.getElementById('h2h-results-root');
   if (!root) return;
+  var outcome = _h2h.outcome; // win | loss | tie
+  root.className = 'h2h-results-' + outcome;
 
   var profile = window.activeProfile || {};
   var youHandle = (profile && profile.name) || 'You';
@@ -7201,13 +7370,18 @@ function renderH2HResults() {
   var headlineHtml;
   if (outcome === 'win') headlineHtml = '<div class="headline">You Win!</div>';
   else if (outcome === 'tie') headlineHtml = '<div class="headline tie">Tie!</div>';
-  else headlineHtml = '<div class="headline empty">·</div>';
+  else headlineHtml = '<div class="headline loss">Defeat</div>';
 
   // Stats
   var yourPostRating = (_h2h.you.rating + _h2h.ratingDelta);
   var yourPriorRating = _h2h.you.rating;
-  var oppPriorRating = _h2h.opponent.rating;
-  var oppDelta = -_h2h.ratingDelta; // mirror for display
+  var oppPriorRating = (_h2h.opponent && typeof _h2h.opponent.rating === 'number') ? _h2h.opponent.rating : 1200;
+  var oppDelta = (_h2h.opponent && typeof _h2h.opponent.ratingDelta === 'number')
+    ? _h2h.opponent.ratingDelta
+    : -_h2h.ratingDelta; // mirror for display
+  var oppPostRating = (_h2h.opponent && typeof _h2h.opponent.postRating === 'number')
+    ? _h2h.opponent.postRating
+    : Math.max(0, oppPriorRating + oppDelta);
 
   function deltaSpan(d) {
     if (d > 0) return '<span class="delta-pos">+' + d + '</span>';
@@ -7219,11 +7393,31 @@ function renderH2HResults() {
   var yourMatches = yourH.matches || 0;
   var yourW = yourH.wins || 0, yourL = yourH.losses || 0, yourT = yourH.ties || 0;
 
-  // Opponent stats are stubbed: derived from rating
-  var oppMatches = 24 + (Math.abs(oppPriorRating - 1200) % 60);
-  var oppW = Math.round(oppMatches * 0.55);
-  var oppL = Math.round(oppMatches * 0.4);
-  var oppT = oppMatches - oppW - oppL;
+  // Real opponent career stats (never synthetic formulas)
+  var oppW, oppL, oppT, oppMatches;
+  if (_h2h.opponent && typeof _h2h.opponent.postWins === 'number') {
+    oppW = _h2h.opponent.postWins;
+    oppL = _h2h.opponent.postLosses || 0;
+    oppT = _h2h.opponent.postTies || 0;
+    oppMatches = (typeof _h2h.opponent.postMatches === 'number') ? _h2h.opponent.postMatches : (oppW + oppL + oppT);
+  } else if (_h2h.opponent && (typeof _h2h.opponent.wins === 'number' || (_h2h.opponent.stats && _h2h.opponent.stats.h2h && typeof _h2h.opponent.stats.h2h.wins === 'number'))) {
+    var rawW = (typeof _h2h.opponent.wins === 'number') ? _h2h.opponent.wins : ((_h2h.opponent.stats && _h2h.opponent.stats.h2h && _h2h.opponent.stats.h2h.wins) || 0);
+    var rawL = (typeof _h2h.opponent.losses === 'number') ? _h2h.opponent.losses : ((_h2h.opponent.stats && _h2h.opponent.stats.h2h && _h2h.opponent.stats.h2h.losses) || 0);
+    var rawT = (typeof _h2h.opponent.ties === 'number') ? _h2h.opponent.ties : ((_h2h.opponent.stats && _h2h.opponent.stats.h2h && _h2h.opponent.stats.h2h.ties) || 0);
+    var rawM = (typeof _h2h.opponent.matches === 'number') ? _h2h.opponent.matches : ((_h2h.opponent.stats && _h2h.opponent.stats.h2h && typeof _h2h.opponent.stats.h2h.matches === 'number') ? _h2h.opponent.stats.h2h.matches : (rawW + rawL + rawT));
+    var oppIsWin = (outcome === 'loss');
+    var oppIsLoss = (outcome === 'win');
+    var oppIsTie = (outcome === 'tie');
+    oppW = rawW + (oppIsWin ? 1 : 0);
+    oppL = rawL + (oppIsLoss ? 1 : 0);
+    oppT = rawT + (oppIsTie ? 1 : 0);
+    oppMatches = rawM + 1;
+  } else {
+    oppW = (outcome === 'loss' ? 1 : 0);
+    oppL = (outcome === 'win' ? 1 : 0);
+    oppT = (outcome === 'tie' ? 1 : 0);
+    oppMatches = 1;
+  }
 
   // Avatar HTML — use real avatars (no borders/glows per spec)
   function avaHtml(svg, face, cls) {
@@ -7232,7 +7426,11 @@ function renderH2HResults() {
   }
 
   var html = '';
-  
+  if (outcome === 'loss') {
+    html += '<div class="h2h-card-loss">';
+  } else if (outcome === 'win') {
+    html += '<div class="h2h-card-win">';
+  }
 
   html += headlineHtml;
   html += '<div class="avarow">';
@@ -7250,7 +7448,7 @@ function renderH2HResults() {
   html += '<div class="statrow">';
   html += '<div class="statval left">' + yourPostRating + deltaSpan(_h2h.ratingDelta) + '</div>';
   html += '<div class="statlbl">Rating</div>';
-  html += '<div class="statval right">' + (oppPriorRating + oppDelta) + deltaSpan(oppDelta) + '</div>';
+  html += '<div class="statval right">' + oppPostRating + deltaSpan(oppDelta) + '</div>';
   html += '</div>';
   html += '<div class="statrow">';
   html += '<div class="statval left">' + yourMatches + '</div>';
@@ -7277,33 +7475,70 @@ function renderH2HResults() {
   html += '<button class="btn" id="h2h-btn-back">Back</button>';
   html += '</div>';
 
+  if (outcome === 'loss') {
+    html += '</div>'; // close .h2h-card-loss
+  } else if (outcome === 'win') {
+    html += '</div>'; // close .h2h-card-win
+  }
+
   root.innerHTML = html;
 
   // Wire buttons
   var bStats = document.getElementById('h2h-btn-stats');
   if (bStats) bStats.addEventListener('click', function() {
     AudioMgr.bubble();
+    leaveH2HResultsScreen();
     go('s-results');
   });
 
   var bRematch = document.getElementById('h2h-btn-rematch');
-  if (bRematch) bRematch.addEventListener('click', function() {
+  if (bRematch) bRematch.addEventListener('click', async function() {
     AudioMgr.bubble();
-    _h2h.rematchYou = true;
-    _h2h.isRematch = true;
-    updateH2HRematchUi();
-    if (_h2h.isOnlineMatch) {
-      setTimeout(function() {
-        startH2HQueue();
-      }, 400);
-    } else {
-      _h2h.rematchOpp = true;
+
+    // If opponent has already left the endgame stats screen: do not let either button pulse!
+    if (_h2h.oppLeftResults) {
       updateH2HRematchUi();
-      setTimeout(function() {
-        // Rematch against bot skips redundant waiting and opens setup with mirrored choices!
-        H2H.transition('matched');
-        startH2HSetupScreen();
-      }, 350);
+      return;
+    }
+
+    if (_h2h.isOnlineMatch) {
+      var profile = window.activeProfile || {};
+      if (window.h2hStore && profile && profile.id && _h2h.matchId) {
+        var res = await window.h2hStore.syncRematch(_h2h.matchId, profile.id, 'request');
+        handleRematchSyncResponse(res);
+      }
+    } else {
+      // Bot match
+      if (_h2h.rematchPulsing && _h2h.rematchOpp) {
+        // Bot had initiated rematch; player accepts!
+        _h2h.rematchYou = true;
+        _h2h.isRematch = true;
+        updateH2HRematchUi();
+        if (typeof AudioMgr !== 'undefined' && AudioMgr.bubble) AudioMgr.bubble();
+        setTimeout(function() {
+          H2H.transition('matched');
+          startH2HSetupScreen();
+        }, 350);
+      } else {
+        // Player presses Rematch: both buttons pulse!
+        _h2h.rematchYou = true;
+        _h2h.rematchPulsing = true;
+        updateH2HRematchUi();
+
+        // Bot responds after a realistic delay (800ms - 1300ms)
+        if (_h2h.oppRematchTimer) clearTimeout(_h2h.oppRematchTimer);
+        _h2h.oppRematchTimer = setTimeout(function() {
+          if (currentScreen !== 's-h2h-results') return;
+          _h2h.rematchOpp = true;
+          _h2h.isRematch = true;
+          updateH2HRematchUi();
+          if (typeof AudioMgr !== 'undefined' && AudioMgr.pop) AudioMgr.pop();
+          setTimeout(function() {
+            H2H.transition('matched');
+            startH2HSetupScreen();
+          }, 350);
+        }, 850 + Math.random() * 450);
+      }
     }
   });
 
@@ -7312,6 +7547,7 @@ function renderH2HResults() {
     AudioMgr.bubble();
     _h2h.isRematch = false;
     window._lastH2HSetup = null;
+    leaveH2HResultsScreen();
     startH2HQueue();
   });
 
@@ -7320,7 +7556,7 @@ function renderH2HResults() {
     AudioMgr.bubble();
     _h2h.isRematch = false;
     window._lastH2HSetup = null;
-    if (_h2h.oppRematchTimer) { clearTimeout(_h2h.oppRematchTimer); _h2h.oppRematchTimer = null; }
+    leaveH2HResultsScreen();
     H2H.transition('idle');
     go('s-setup');
   });
@@ -7328,31 +7564,144 @@ function renderH2HResults() {
   updateH2HRematchUi();
 }
 
-function updateH2HRematchUi() {
-  var btn = document.getElementById('h2h-btn-rematch');
-  if (!btn) return;
-  btn.classList.remove('rematch-you', 'rematch-opp');
+function initH2HResultsScreen() {
+  _h2h.rematchYou = false;
+  _h2h.rematchOpp = false;
+  _h2h.rematchPulsing = false;
+  _h2h.oppLeftResults = false;
+
+  if (_h2h.resultsPollTimer) {
+    clearInterval(_h2h.resultsPollTimer);
+    _h2h.resultsPollTimer = null;
+  }
+  if (_h2h.oppRematchTimer) {
+    clearTimeout(_h2h.oppRematchTimer);
+    _h2h.oppRematchTimer = null;
+  }
+
+  var profile = window.activeProfile || {};
+
   if (_h2h.isOnlineMatch) {
-    if (_h2h.rematchYou) {
-      btn.classList.add('rematch-you');
-      btn.textContent = 'Re-queuing…';
-    } else {
-      btn.textContent = 'Rematch';
+    if (window.h2hStore && profile && profile.id && _h2h.matchId) {
+      window.h2hStore.syncRematch(_h2h.matchId, profile.id, 'stay').then(handleRematchSyncResponse);
+      _h2h.resultsPollTimer = setInterval(function() {
+        if (currentScreen !== 's-h2h-results') {
+          if (_h2h.resultsPollTimer) { clearInterval(_h2h.resultsPollTimer); _h2h.resultsPollTimer = null; }
+          return;
+        }
+        window.h2hStore.syncRematch(_h2h.matchId, profile.id, 'stay').then(handleRematchSyncResponse);
+      }, 800);
+    }
+  } else {
+    // Bot match: bot stays active on endgame screen for 22 seconds, then leaves
+    _h2h.oppLeftResults = false;
+    _h2h.oppRematchTimer = setTimeout(function() {
+      if (currentScreen === 's-h2h-results' && !_h2h.rematchPulsing && !_h2h.rematchYou) {
+        _h2h.oppLeftResults = true;
+        updateH2HRematchUi();
+      }
+    }, 22000);
+  }
+  updateH2HRematchUi();
+}
+
+function handleRematchSyncResponse(res) {
+  if (!res || currentScreen !== 's-h2h-results') return;
+
+  if (res.status === 'rematch_accepted' && res.rematch_match_id) {
+    if (_h2h.resultsPollTimer) {
+      clearInterval(_h2h.resultsPollTimer);
+      _h2h.resultsPollTimer = null;
+    }
+    _h2h.matchId = res.rematch_match_id;
+    _h2h.isRematch = true;
+    _h2h.rematchYou = true;
+    _h2h.rematchOpp = true;
+    _h2h.rematchPulsing = true;
+    updateH2HRematchUi();
+    if (typeof AudioMgr !== 'undefined' && AudioMgr.bubble) AudioMgr.bubble();
+    setTimeout(function() {
+      H2H.transition('matched');
+      startH2HSetupScreen();
+    }, 350);
+    return;
+  }
+
+  if (res.status === 'opponent_left' || res.opp_available === false) {
+    _h2h.oppLeftResults = true;
+    _h2h.rematchPulsing = false;
+    updateH2HRematchUi();
+    return;
+  }
+
+  if (res.status === 'pulsing' || (res.opp_requested && res.opp_available) || (res.you_requested && res.opp_available)) {
+    var wasPulsing = _h2h.rematchPulsing;
+    _h2h.rematchPulsing = true;
+    _h2h.rematchOpp = !!res.opp_requested;
+    _h2h.rematchYou = !!res.you_requested;
+    _h2h.oppLeftResults = false;
+    updateH2HRematchUi();
+    if (!wasPulsing && res.opp_requested && !res.you_requested) {
+      if (typeof AudioMgr !== 'undefined' && AudioMgr.pop) AudioMgr.pop();
     }
     return;
   }
-  if (_h2h.rematchOpp && !_h2h.rematchYou) {
-    btn.classList.add('rematch-opp');
-    btn.textContent = 'Rematch?';
-  } else if (_h2h.rematchYou && !_h2h.rematchOpp) {
-    btn.classList.add('rematch-you');
-    btn.textContent = 'Waiting…';
-  } else if (_h2h.rematchYou && _h2h.rematchOpp) {
-    btn.classList.add('rematch-you');
-    btn.textContent = 'Starting…';
-  } else {
-    btn.textContent = 'Rematch';
+
+  _h2h.oppLeftResults = false;
+  _h2h.rematchPulsing = false;
+  _h2h.rematchOpp = false;
+  _h2h.rematchYou = false;
+  updateH2HRematchUi();
+}
+
+function leaveH2HResultsScreen() {
+  if (_h2h.resultsPollTimer) {
+    clearInterval(_h2h.resultsPollTimer);
+    _h2h.resultsPollTimer = null;
   }
+  if (_h2h.oppRematchTimer) {
+    clearTimeout(_h2h.oppRematchTimer);
+    _h2h.oppRematchTimer = null;
+  }
+  _h2h.rematchPulsing = false;
+  _h2h.oppLeftResults = true;
+  var profile = window.activeProfile || {};
+  if (_h2h.isOnlineMatch && window.h2hStore && profile && profile.id && _h2h.matchId) {
+    window.h2hStore.leaveResults(_h2h.matchId, profile.id);
+  }
+}
+
+function updateH2HRematchUi() {
+  var btn = document.getElementById('h2h-btn-rematch');
+  if (!btn) return;
+  btn.classList.remove('rematch-you', 'rematch-opp', 'rematch-pulsing', 'rematch-left', 'rematch-disabled');
+
+  if (_h2h.oppLeftResults) {
+    btn.classList.add('rematch-left');
+    btn.textContent = 'Opponent Left';
+    btn.disabled = true;
+    return;
+  }
+
+  btn.disabled = false;
+
+  if (_h2h.rematchYou && _h2h.rematchOpp) {
+    btn.classList.add('rematch-pulsing');
+    btn.textContent = 'Starting…';
+    return;
+  }
+
+  if (_h2h.rematchPulsing) {
+    btn.classList.add('rematch-pulsing');
+    if (_h2h.rematchYou && !_h2h.rematchOpp) {
+      btn.textContent = 'Waiting…';
+    } else if (_h2h.rematchOpp && !_h2h.rematchYou) {
+      btn.textContent = 'Rematch? ⚡';
+    }
+    return;
+  }
+
+  btn.textContent = 'Rematch';
 }
 
 function initGameScreen() {
@@ -7446,6 +7795,11 @@ function initGameScreen() {
     activeMountains: new Set(pool.filter(function(c){ return c.type === 'mountain'; }).map(function(c){ return c.targetId; }))
   });
 
+  const qCard = document.querySelector('#s-game .q-card');
+  if (qCard && (!document.getElementById('q-cat') || !document.getElementById('q-text'))) {
+    qCard.innerHTML = '<div class="q-cat" id="q-cat"></div><div class="q-text" id="q-text"></div>';
+  }
+
   updateGameUI();
   showQuestion();
   hideFeedback();
@@ -7475,9 +7829,9 @@ function gameTick() {
       return;
     }
     updateGameUI();
-    // In online matches, sync gameplay score and get opponent score in real-time
+    // In online matches, sync gameplay score and check for opponent finish/disconnect
     if (_h2h.isOnlineMatch && window.h2hStore && window.activeProfile && window.activeProfile.id && _h2h.matchId) {
-      window.h2hStore.syncGameplay(_h2h.matchId, window.activeProfile.id, _h2h.yourScore)
+      window.h2hStore.syncGameplay(_h2h.matchId, window.activeProfile.id, _h2h.yourScore, null, null, !!_h2h.youFinished)
         .then(function(syncRes) {
           if (syncRes && typeof syncRes.opp_score === 'number') {
             if (syncRes.opp_score !== _h2h.oppScore) {
@@ -7488,6 +7842,14 @@ function gameTick() {
                 oppEl.animate([{transform:'scale(1.0)'},{transform:'scale(1.25)'},{transform:'scale(1.0)'}], {duration:280});
               }
             }
+            if (typeof syncRes.opp_correct === 'number') _h2h.oppCorrect = syncRes.opp_correct;
+            if (typeof syncRes.opp_wrong === 'number') _h2h.oppWrong = syncRes.opp_wrong;
+
+            // Opponent finished detection in online match
+            if (syncRes.opp_finished && !_h2h.oppFinished) {
+              handleH2HOpponentFinished(syncRes.opp_finished_sec_ago);
+            }
+
             if (syncRes.opp_disconnected && !_h2h._oppDiscAlerted) {
               _h2h._oppDiscAlerted = true;
               showToast('Opponent disconnected! Finishing match…', 2500);
@@ -7549,12 +7911,22 @@ function updateGameUI() {
       const t = _game.timeRemaining;
       const m = Math.floor(t / 60);
       const s = t % 60;
-      clk.textContent = m + ':' + String(s).padStart(2, '0');
-      // Color sync with prog bar thresholds
-      if (t > _game.config.duration * 0.33) clk.style.color = '#5bf0a0';
-      else if (t > _game.config.duration * 0.11) clk.style.color = '#ffa040';
-      else clk.style.color = '#ff6060';
+      if (_h2h.finishCountdown != null) {
+        clk.textContent = t + 's';
+        clk.classList.add('h2h-clock-urgent');
+      } else {
+        clk.textContent = m + ':' + String(s).padStart(2, '0');
+        clk.classList.remove('h2h-clock-urgent');
+        // Color sync with prog bar thresholds
+        if (t > _game.config.duration * 0.33) clk.style.color = '#5bf0a0';
+        else if (t > _game.config.duration * 0.11) clk.style.color = '#ffa040';
+        else clk.style.color = '#ff6060';
+      }
     }
+    const bClock = document.getElementById('h2h-banner-clock');
+    if (bClock) bClock.textContent = _game.timeRemaining + 's';
+    const wClock = document.getElementById('h2h-wait-countdown-num');
+    if (wClock) wClock.textContent = _game.timeRemaining + 's';
     const qBadge = document.getElementById('h2h-q-badge');
     if (qBadge) {
       const qNum = Math.min((_game.cardsAnswered || 0) + 1, _game.totalCards || 10);
@@ -7580,6 +7952,13 @@ function updateTimerDisplay() {
 function showQuestion() {
   if (!_game || !_game.currentQ) return;
   const q = _game.currentQ;
+
+  // Self-heal: ensure question card has proper element structure if overwritten by previous match's waiting view
+  const qCard = document.querySelector('#s-game .q-card');
+  if (qCard && (!document.getElementById('q-cat') || !document.getElementById('q-text') || qCard.querySelector('.h2h-waiting-view'))) {
+    qCard.innerHTML = '<div class="q-cat" id="q-cat"></div><div class="q-count" id="q-count" style="display:none;"></div><div class="q-back" id="q-back" title="Previous card" style="display:none;">←</div><div class="q-text" id="q-text"></div>';
+  }
+
   const catEl = document.getElementById('q-cat');
   const textEl = document.getElementById('q-text');
   const catInfo = CAT_DISPLAY[q.cat] || { icon:'❓', label:'QUIZ', color:'var(--blue-lt)' };
@@ -7808,6 +8187,8 @@ function handleGameClick(lon, lat, event) {
                 oppEl.animate([{transform:'scale(1.0)'},{transform:'scale(1.25)'},{transform:'scale(1.0)'}], {duration:280});
               }
             }
+            if (syncRes && typeof syncRes.opp_correct === 'number') _h2h.oppCorrect = syncRes.opp_correct;
+            if (syncRes && typeof syncRes.opp_wrong === 'number') _h2h.oppWrong = syncRes.opp_wrong;
           });
       }
     } else {
@@ -7849,6 +8230,8 @@ function handleGameClick(lon, lat, event) {
                 oppEl.animate([{transform:'scale(1.0)'},{transform:'scale(1.25)'},{transform:'scale(1.0)'}], {duration:280});
               }
             }
+            if (syncRes && typeof syncRes.opp_correct === 'number') _h2h.oppCorrect = syncRes.opp_correct;
+            if (syncRes && typeof syncRes.opp_wrong === 'number') _h2h.oppWrong = syncRes.opp_wrong;
           });
       }
     }
@@ -7966,7 +8349,14 @@ function advanceToNextCard() {
 
   if (_game.currentQ) _game.history.push(_game.currentQ);
   const { card, deck: nextDeck } = drawCard(_game.deck);
-  if (!card) { endGame(); return; }
+  if (!card) {
+    if (_game.config.mode === 'h2h') {
+      handleH2HYouFinished();
+      return;
+    }
+    endGame();
+    return;
+  }
 
   _game.deck = nextDeck;
   _game.currentQ = card;
@@ -8060,10 +8450,15 @@ function endGame() {
       // Move q-card back to be a direct child of the topbar before removing the row
       if (cardRow && topbar) {
         var qc = cardRow.querySelector('.q-card');
-        if (qc) topbar.insertBefore(qc, cardRow);
+        if (qc) {
+          qc.innerHTML = '<div class="q-cat" id="q-cat">COUNTRIES</div><div class="q-count" id="q-count"></div><div class="q-back" id="q-back" title="Previous card">←</div><div class="q-text" id="q-text">Tap the map to answer</div>';
+          topbar.insertBefore(qc, cardRow);
+        }
         cardRow.remove();
       }
       if (clockRow) clockRow.remove();
+      var bCont = document.getElementById('h2h-banner-container');
+      if (bCont) bCont.remove();
       // Old single-overlay HUD (in case anyone still has the previous build cached)
       var hud = document.getElementById('h2h-hud');
       if (hud) hud.remove();
@@ -9693,39 +10088,87 @@ function renderResults() {
     const deltaStr = (delta > 0 ? '+' : '') + delta;
     const deltaColor = delta > 0 ? 'var(--correct)' : delta < 0 ? '#ff6b6b' : 'var(--dim)';
     const starsEarned = h.starsEarned || 0;
+
+    const oppDelta = (typeof h.opponentRatingDelta === 'number') ? h.opponentRatingDelta : -delta;
+    const oppDeltaStr = (oppDelta > 0 ? '+' : '') + oppDelta;
+    const oppDeltaColor = oppDelta > 0 ? 'var(--correct)' : oppDelta < 0 ? '#ff6b6b' : 'var(--dim)';
+
+    const oppCorrect = (typeof h.opponentCorrect === 'number') ? h.opponentCorrect : 0;
+    const oppWrong = (typeof h.opponentWrong === 'number') ? h.opponentWrong : 0;
+    const oppTotal = oppCorrect + oppWrong;
+    const oppPct = oppTotal > 0 ? Math.round(oppCorrect / oppTotal * 100) : 0;
+    const oppRingColor = oppPct >= 80 ? 'var(--correct)' : oppPct >= 50 ? 'var(--yellow)' : 'var(--wrong)';
+
+    const oppHandleName = escHtml(h.opponentHandle || 'Opponent');
+
     html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0;">
       <div style="padding:10px;background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;text-align:center;">
-        <div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">🎯 Rating</div>
-        <div style="display:flex;align-items:baseline;justify-content:center;gap:8px;">
-          <span style="font-family:'Space Mono',monospace;font-size:22px;color:var(--correct);">${(h.ratingAfter || 0).toLocaleString()}</span>
-          <span style="font-size:13px;color:${deltaColor};font-weight:700;">${deltaStr}</span>
+        <div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">🎯 You Rating</div>
+        <div style="display:flex;align-items:baseline;justify-content:center;gap:6px;">
+          <span style="font-family:'Space Mono',monospace;font-size:20px;color:var(--correct);">${(h.ratingAfter || 0).toLocaleString()}</span>
+          <span style="font-size:12px;color:${deltaColor};font-weight:700;">${deltaStr}</span>
         </div>
       </div>
       <div style="padding:10px;background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;text-align:center;">
-        <div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">⭐ Stars Earned</div>
-        <div style="font-family:'Space Mono',monospace;font-size:22px;color:${STAR_COLOR};">+${starsEarned}</div>
+        <div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">🎯 ${oppHandleName} Rating</div>
+        <div style="display:flex;align-items:baseline;justify-content:center;gap:6px;">
+          <span style="font-family:'Space Mono',monospace;font-size:20px;color:var(--correct);">${(h.opponentRatingAfter || 1200).toLocaleString()}</span>
+          <span style="font-size:12px;color:${oppDeltaColor};font-weight:700;">${oppDeltaStr}</span>
+        </div>
+      </div>
+    </div>`;
+
+    html += `<div style="margin:8px 0;background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;overflow:hidden;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;background:rgba(91,143,255,.08);padding:6px 12px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;">
+        <div style="color:var(--correct);">You</div>
+        <div style="text-align:right;color:#ffe135;">${oppHandleName}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 80px 1fr;align-items:center;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px;">
+        <div style="font-family:'Space Mono',monospace;font-size:16px;font-weight:700;color:var(--correct);">${_formatH2HScore(h.yourScore != null ? h.yourScore : gr.score)}</div>
+        <div style="text-align:center;color:var(--dim);font-size:10px;text-transform:uppercase;">Score</div>
+        <div style="text-align:right;font-family:'Space Mono',monospace;font-size:16px;font-weight:700;color:#ffe135;">${_formatH2HScore(h.oppScore != null ? h.oppScore : 0)}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 80px 1fr;align-items:center;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px;">
+        <div style="font-weight:700;color:${ringColor};">${pct}%</div>
+        <div style="text-align:center;color:var(--dim);font-size:10px;text-transform:uppercase;">Accuracy</div>
+        <div style="text-align:right;font-weight:700;color:${oppRingColor};">${oppPct}%</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 80px 1fr;align-items:center;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px;">
+        <div style="font-family:'Space Mono',monospace;color:var(--text);">${gr.correct}</div>
+        <div style="text-align:center;color:var(--dim);font-size:10px;text-transform:uppercase;">Correct</div>
+        <div style="text-align:right;font-family:'Space Mono',monospace;color:var(--text);">${oppCorrect}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 80px 1fr;align-items:center;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px;">
+        <div style="font-family:'Space Mono',monospace;color:var(--text);">${gr.wrong}</div>
+        <div style="text-align:center;color:var(--dim);font-size:10px;text-transform:uppercase;">Wrong</div>
+        <div style="text-align:right;font-family:'Space Mono',monospace;color:var(--text);">${oppWrong}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 80px 1fr;align-items:center;padding:8px 12px;font-size:12px;">
+        <div style="font-family:'Space Mono',monospace;color:var(--text);">${(h.opponentMatches != null && typeof (h.opponentWins) === 'number') ? (h.opponentWins + 'W - ' + (h.opponentLosses || 0) + 'L - ' + (h.opponentTies || 0) + 'T') : '—'}</div>
+        <div style="text-align:center;color:var(--dim);font-size:10px;text-transform:uppercase;">Opp Record</div>
+        <div style="text-align:right;font-family:'Space Mono',monospace;color:var(--text);">${(h.opponentMatches != null) ? h.opponentMatches + ' matches' : '—'}</div>
+      </div>
+    </div>`;
+  } else {
+    html += `<div class="stats-row" style="grid-template-columns:repeat(4,1fr);">
+      <div class="stat-card">
+        <div class="stat-val" style="color:${ringColor};">${pct}%</div>
+        <div class="stat-lbl">Accuracy</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">${gr.correct}</div>
+        <div class="stat-lbl">Correct</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">${gr.wrong}</div>
+        <div class="stat-lbl">Wrong</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">${gr.streak}</div>
+        <div class="stat-lbl">Best Streak</div>
       </div>
     </div>`;
   }
-
-  html += `<div class="stats-row" style="grid-template-columns:repeat(4,1fr);">
-    <div class="stat-card">
-      <div class="stat-val" style="color:${ringColor};">${pct}%</div>
-      <div class="stat-lbl">Accuracy</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-val">${gr.correct}</div>
-      <div class="stat-lbl">Correct</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-val">${gr.wrong}</div>
-      <div class="stat-lbl">Wrong</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-val">${gr.streak}</div>
-      <div class="stat-lbl">Best Streak</div>
-    </div>
-  </div>`;
 
   html += `<div class="stats-row" style="margin-top:8px;">
     <div class="stat-card">

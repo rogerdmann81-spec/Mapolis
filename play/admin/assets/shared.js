@@ -1220,6 +1220,40 @@ const h2hStore = {
     } catch (e) {
       return null;
     }
+  },
+
+  async syncRematch(matchId, playerId, action = 'stay') {
+    if (!isSupabaseConfigured() || !matchId || !playerId) return null;
+    try {
+      const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/h2h_rematch_sync', {
+        method: 'POST',
+        headers: authedHeaders(),
+        body: JSON.stringify({
+          p_match_id: matchId,
+          p_player_id: playerId,
+          p_action: action
+        })
+      });
+      if (!resp.ok) return null;
+      return await resp.json();
+    } catch (e) {
+      return null;
+    }
+  },
+
+  async leaveResults(matchId, playerId) {
+    if (!isSupabaseConfigured() || !matchId || !playerId) return null;
+    try {
+      await fetch(SUPABASE_URL + '/rest/v1/rpc/h2h_rematch_sync', {
+        method: 'POST',
+        headers: authedHeaders(),
+        body: JSON.stringify({
+          p_match_id: matchId,
+          p_player_id: playerId,
+          p_action: 'leave'
+        })
+      });
+    } catch (e) {}
   }
 };
 

@@ -453,7 +453,7 @@ function renderAdmin() {
     + '<div style="font-family:\'Fredoka One\',sans-serif;font-size:20px;color:#fff;margin-top:4px;">🔐 Master Panel</div>'
     + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px;">'
     + '<div style="font-size:11px;color:var(--blue-lt);font-weight:700;">' + profiles.length + ' profile' + (profiles.length!==1?'s':'') + ' · ' + (_adminCloudLoaded ? "☁️ Supabase Cloud" : "local cache") + '</div>'
-    + '<button onclick="triggerManualSync(this)" style="background:rgba(59,110,248,.18);border:1px solid rgba(91,143,255,.3);border-radius:6px;padding:3px 8px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;">🔄 Sync Cloud</button>'
+    + '<div style="display:flex;gap:6px;"><button onclick="adminCleanupTestProfiles(this)" style="background:rgba(240,64,96,.18);border:1px solid rgba(240,64,96,.3);border-radius:6px;padding:3px 8px;color:#f04060;font-size:11px;font-weight:700;cursor:pointer;" title="Delete all automated test profiles">🧹 Clean Tests</button><button onclick="triggerManualSync(this)" style="background:rgba(59,110,248,.18);border:1px solid rgba(91,143,255,.3);border-radius:6px;padding:3px 8px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;">🔄 Sync Cloud</button></div>'
     + '</div>'
     + '</div>'
     + '<div class="admin-tabs">'
@@ -763,20 +763,61 @@ function adminConfirmDelete() {
   if (modal) modal.style.display = 'flex';
 }
 
-function adminDoDelete() {
+async function adminDoDelete() {
   if (!_adminViewProfile) return;
   var p = _adminViewProfile;
+  var modal = document.getElementById('admin-delete-modal');
+  if (modal) modal.style.display = 'none';
+
+  // 1. Remove from Supabase Cloud with cascading database cleanup
+  if (p.id && window.syncStore && typeof window.syncStore.deleteProfile === 'function') {
+    try {
+      await window.syncStore.deleteProfile(p.id);
+    } catch (err) {
+      console.warn('[adminDoDelete] Cloud deletion notice:', err);
+    }
+  }
+
+  // 2. Remove from local allProfiles
   var idx = (typeof allProfiles !== 'undefined') ? allProfiles.findIndex(function(x){ return x.id===p.id; }) : -1;
-  if (idx === -1) return;
+  if (idx !== -1) {
+    allProfiles.splice(idx, 1);
+  }
+
   if (typeof activeProfile !== 'undefined' && activeProfile && activeProfile.id === p.id) {
     activeProfile = null;
     localStorage.removeItem(typeof ACTIVE_KEY !== 'undefined' ? ACTIVE_KEY : 'nsg_active_id');
   }
-  allProfiles.splice(idx, 1);
   if (typeof saveProfiles === 'function') saveProfiles();
   else { localStorage.setItem('nsg_profiles', JSON.stringify(allProfiles)); }
+
+  if (typeof showToast === 'function') showToast('Profile "' + (p.handle || 'Unnamed') + '" deleted');
   _adminViewProfile = null;
   renderAdmin();
+}
+
+async function adminCleanupTestProfiles(btn) {
+  if (!confirm('Clean up all automated test profiles (Speedy_*, Atlas_*, P1_*, P2_*, Player-*)? Real user profiles will not be touched.')) return;
+  if (btn) {
+    btn.textContent = '🧹 Cleaning...';
+    btn.disabled = true;
+  }
+  try {
+    if (window.syncStore && typeof window.syncStore.cleanupTestProfiles === 'function') {
+      var res = await window.syncStore.cleanupTestProfiles();
+      var count = (res && res.deleted_count != null) ? res.deleted_count : 0;
+      if (typeof showToast === 'function') showToast('Cleaned ' + count + ' test profiles from Supabase! 🧹');
+    }
+  } catch (err) {
+    console.error('Cleanup test profiles error:', err);
+    if (typeof showToast === 'function') showToast('Cleanup error: ' + err.message);
+  }
+  await refreshCloudData();
+  renderAdmin();
+  if (btn) {
+    btn.textContent = '🧹 Clean Tests';
+    btn.disabled = false;
+  }
 }
 
 var _adminPrevActiveProfile = null;

@@ -402,6 +402,46 @@ const syncStore = {
     this.processQueue();
   },
 
+  async deleteProfile(playerId) {
+    if (!playerId) return false;
+    if (isSupabaseConfigured() && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
+      try {
+        await ensureAuthSession();
+        const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/delete_profile', {
+          method: 'POST',
+          headers: authedHeaders(),
+          body: JSON.stringify({ p_player_id: playerId })
+        });
+        if (!resp.ok) {
+          console.warn('[syncStore.deleteProfile] RPC returned status:', resp.status);
+        } else {
+          return true;
+        }
+      } catch (e) {
+        console.warn('[syncStore.deleteProfile] Error calling delete_profile RPC:', e);
+      }
+    }
+    return false;
+  },
+
+  async cleanupTestProfiles() {
+    if (isSupabaseConfigured() && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
+      try {
+        await ensureAuthSession();
+        const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/admin_cleanup_test_profiles', {
+          method: 'POST',
+          headers: authedHeaders()
+        });
+        if (resp.ok) {
+          return await resp.json();
+        }
+      } catch (e) {
+        console.warn('[syncStore.cleanupTestProfiles] Error:', e);
+      }
+    }
+    return null;
+  },
+
   async fetchLeaderboard() {
     if (navigator.onLine && isSupabaseConfigured()) {
       try {
@@ -1139,19 +1179,23 @@ const h2hStore = {
     } catch (e) {}
   },
 
-  async syncSetup(matchId, playerId, continent, features, isReady) {
+  async syncSetup(matchId, playerId, continent, features, isReady, cardSequence = null) {
     if (!isSupabaseConfigured() || !matchId || !playerId) return null;
     try {
+      const payload = {
+        p_match_id: matchId,
+        p_player_id: playerId,
+        p_continent: continent || 'globe',
+        p_features: features || {},
+        p_ready: !!isReady
+      };
+      if (cardSequence && Array.isArray(cardSequence) && cardSequence.length > 0) {
+        payload.p_card_sequence = cardSequence;
+      }
       const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/h2h_sync_setup', {
         method: 'POST',
         headers: authedHeaders(),
-        body: JSON.stringify({
-          p_match_id: matchId,
-          p_player_id: playerId,
-          p_continent: continent || 'globe',
-          p_features: features || {},
-          p_ready: !!isReady
-        })
+        body: JSON.stringify(payload)
       });
       if (!resp.ok) return null;
       return await resp.json();
@@ -1160,7 +1204,7 @@ const h2hStore = {
     }
   },
 
-  async syncGameplay(matchId, playerId, score, cardId = null, correct = null) {
+  async syncGameplay(matchId, playerId, score, cardId = null, correct = null, isFinished = false) {
     if (!isSupabaseConfigured() || !matchId || !playerId) return null;
     try {
       const payload = {
@@ -1171,6 +1215,9 @@ const h2hStore = {
       if (cardId !== null && correct !== null) {
         payload.p_card_id = String(cardId);
         payload.p_correct = !!correct;
+      }
+      if (isFinished) {
+        payload.p_finished = true;
       }
       const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/h2h_sync_gameplay', {
         method: 'POST',
@@ -1220,6 +1267,40 @@ const h2hStore = {
     } catch (e) {
       return null;
     }
+  },
+
+  async syncRematch(matchId, playerId, action = 'stay') {
+    if (!isSupabaseConfigured() || !matchId || !playerId) return null;
+    try {
+      const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/h2h_rematch_sync', {
+        method: 'POST',
+        headers: authedHeaders(),
+        body: JSON.stringify({
+          p_match_id: matchId,
+          p_player_id: playerId,
+          p_action: action
+        })
+      });
+      if (!resp.ok) return null;
+      return await resp.json();
+    } catch (e) {
+      return null;
+    }
+  },
+
+  async leaveResults(matchId, playerId) {
+    if (!isSupabaseConfigured() || !matchId || !playerId) return null;
+    try {
+      await fetch(SUPABASE_URL + '/rest/v1/rpc/h2h_rematch_sync', {
+        method: 'POST',
+        headers: authedHeaders(),
+        body: JSON.stringify({
+          p_match_id: matchId,
+          p_player_id: playerId,
+          p_action: 'leave'
+        })
+      });
+    } catch (e) {}
   }
 };
 

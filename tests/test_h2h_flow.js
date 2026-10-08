@@ -140,6 +140,14 @@ async function runH2HTests() {
   }
   console.log('  ✅ Step 6 Passed: Real-time score sync and fractional scoring verified.');
 
+  // Step 6.5: Verify opponent finish detection & countdown signal
+  await h2hStore.syncGameplay(matchId, p1Id, 2, 'bra', true, true);
+  const p2FinishSync = await h2hStore.syncGameplay(matchId, p2Id, 0.5);
+  if (!p2FinishSync || p2FinishSync.opp_finished !== true) {
+    throw new Error('P2 failed to detect opp_finished signal: ' + JSON.stringify(p2FinishSync));
+  }
+  console.log('  ✅ Step 6.5 Passed: Real-time opponent finish detection and countdown signal verified.');
+
   // 6. Finalize match
   // P1 finishes with 2 points
   const p1Final = await h2hStore.finalizeMatch(matchId, p1Id, 2);
@@ -171,7 +179,7 @@ async function runH2HTests() {
           DELETE FROM match_results WHERE match_id = '${matchId}';
           DELETE FROM matches WHERE id = '${matchId}';
           DELETE FROM competitive_ratings WHERE profile_id IN ('${p1Id}', '${p2Id}');
-          DELETE FROM profiles WHERE id IN ('${p1Id}', '${p2Id}');
+          DELETE FROM profiles WHERE player_id IN ('${p1Id}', '${p2Id}');
         `
       })
     });
