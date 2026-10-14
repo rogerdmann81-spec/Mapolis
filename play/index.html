@@ -6534,7 +6534,7 @@ function makeSoloConfigForH2HPlayer(selection, tierCeiling) {
 }
 
 function buildH2HDeck(sel1, sel2, tierCeiling, matchId) {
-  var prng = createH2HPRNG(matchId || 'h2h_match');
+  var prng = createH2HPRNG(matchId || h2h_match);
   var targetCount = 10;
 
   // CANONICAL SELECTION ORDER: Sort selections so caller argument order NEVER alters pool composition
@@ -6543,16 +6543,17 @@ function buildH2HDeck(sel1, sel2, tierCeiling, matchId) {
   var p1Sel = (str1.localeCompare(str2) <= 0) ? sel1 : sel2;
   var p2Sel = (str1.localeCompare(str2) <= 0) ? sel2 : sel1;
 
-  // 1. Run solo mode algorithm for both players' selections
+  // 1. Run solo mode algorithm for both players selections
   var p1Cfg = makeSoloConfigForH2HPlayer(p1Sel, tierCeiling);
   var p2Cfg = makeSoloConfigForH2HPlayer(p2Sel, tierCeiling);
-  var cd1 = (typeof getCombinedContinentData === 'function') ? getCombinedContinentData(p1Cfg.continent) : null;
-  var cd2 = (typeof getCombinedContinentData === 'function') ? getCombinedContinentData(p2Cfg.continent) : null;
+
+  var cd1 = (typeof getCombinedContinentData === function) ? getCombinedContinentData(p1Cfg.continent) : null;
+  var cd2 = (typeof getCombinedContinentData === function) ? getCombinedContinentData(p2Cfg.continent) : null;
 
   var p1Pool = (cd1 ? buildPool(p1Cfg, cd1) : []) || [];
   var p2Pool = (cd2 ? buildPool(p2Cfg, cd2) : []) || [];
 
-  // 2. Combine cards, careful not to duplicate cards
+  // 2. Combine cards, deduplicating by card id
   var h2hDeckPool = [];
   var seenCardIds = {};
   function addCardToDeckPool(card) {
@@ -6561,15 +6562,14 @@ function buildH2HDeck(sel1, sel2, tierCeiling, matchId) {
       h2hDeckPool.push(card);
     }
   }
-
   p1Pool.forEach(addCardToDeckPool);
   p2Pool.forEach(addCardToDeckPool);
 
-  // CANONICAL POOL SORT: Sort combined pool by card.id to guarantee 100% identical starting order on all devices
+  // Canonical pool sort: Sort combined pool by card.id to guarantee 100% identical starting order
   h2hDeckPool.sort(function(a, b) { return a.id.localeCompare(b.id); });
 
-  // 3. First pull out 5 country cards
-  var countryCards = h2hDeckPool.filter(function(c) { return c.cat === 'countries'; });
+  // 3. First pull out up to 5 country cards
+  var countryCards = h2hDeckPool.filter(function(c) { return c.cat === countries; });
   countryCards = seededShuffleH2H(countryCards, prng);
 
   var gameDeck = [];
@@ -6580,22 +6580,28 @@ function buildH2HDeck(sel1, sel2, tierCeiling, matchId) {
     pickedIds[cc.id] = true;
   }
 
-  // If fewer than 5 country cards in pool, step up tier ceiling so 5 countries are guaranteed
+  // Determine fallback continent (STRICTLY prioritize the mutually agreed or chosen continent, NEVER globe unless both picked globe)
+  var fallbackCont = (p1Cfg.continent && p1Cfg.continent !== globe)
+    ? p1Cfg.continent
+    : ((p2Cfg.continent && p2Cfg.continent !== globe) ? p2Cfg.continent : globe);
+  var fallbackCd = ((typeof getCombinedContinentData === function) ? getCombinedContinentData(fallbackCont) : null) || cd1 || cd2;
+
+  // If fewer than 5 country cards in pool, step up tier ceiling inside fallbackCont so 5 countries are guaranteed
   if (gameDeck.length < 5) {
-    var fallbackCont = (p1Cfg.continent !== 'globe') ? p1Cfg.continent : ((p2Cfg.continent !== 'globe') ? p2Cfg.continent : 'globe');
-    var fallbackCd = ((typeof getCombinedContinentData === 'function') ? getCombinedContinentData(fallbackCont) : null) || cd1 || cd2;
-    var fallbackCountries = buildPool({
-      continent: fallbackCont,
-      tierCeiling: 13,
-      categories: { countries: true }
-    }, fallbackCd);
-    fallbackCountries.sort(function(a, b) { return a.id.localeCompare(b.id); });
-    fallbackCountries = seededShuffleH2H(fallbackCountries, prng);
-    for (var fi = 0; fi < fallbackCountries.length && gameDeck.length < 5; fi++) {
-      var fc = fallbackCountries[fi];
-      if (!pickedIds[fc.id]) {
-        gameDeck.push(fc);
-        pickedIds[fc.id] = true;
+    for (var stepTier = Math.max(2, (typeof tierCeiling === number ? tierCeiling : 1) + 1); stepTier <= 13 && gameDeck.length < 5; stepTier++) {
+      var steppedCountries = buildPool({
+        continent: fallbackCont,
+        tierCeiling: stepTier,
+        categories: { countries: true }
+      }, fallbackCd);
+      steppedCountries.sort(function(a, b) { return a.id.localeCompare(b.id); });
+      steppedCountries = seededShuffleH2H(steppedCountries, prng);
+      for (var si = 0; si < steppedCountries.length && gameDeck.length < 5; si++) {
+        var sc = steppedCountries[si];
+        if (!pickedIds[sc.id]) {
+          gameDeck.push(sc);
+          pickedIds[sc.id] = true;
+        }
       }
     }
   }
@@ -6609,25 +6615,50 @@ function buildH2HDeck(sel1, sel2, tierCeiling, matchId) {
     pickedIds[rc.id] = true;
   }
 
-  // Fallback pad if pool was smaller than 10 total
+  // 5. Fallback pad: If pool is still smaller than 10 total:
+  // Step up country tiers within the chosen continent (fallbackCont) first!
   if (gameDeck.length < targetCount) {
-    var padCountries = (buildPool({
-      continent: 'globe',
-      tierCeiling: (typeof tierCeiling === 'number') ? tierCeiling : 13,
-      categories: { countries: true }
-    }, (typeof getCombinedContinentData === 'function') ? getCombinedContinentData('globe') : cd1) || []);
-    padCountries.sort(function(a, b) { return a.id.localeCompare(b.id); });
-    padCountries = seededShuffleH2H(padCountries, prng);
-    for (var pi = 0; pi < padCountries.length && gameDeck.length < targetCount; pi++) {
-      var pc = padCountries[pi];
-      if (!pickedIds[pc.id]) {
-        gameDeck.push(pc);
-        pickedIds[pc.id] = true;
+    for (var padTier = Math.max(2, (typeof tierCeiling === number ? tierCeiling : 1) + 1); padTier <= 13 && gameDeck.length < targetCount; padTier++) {
+      var padStepCountries = buildPool({
+        continent: fallbackCont,
+        tierCeiling: padTier,
+        categories: { countries: true }
+      }, fallbackCd);
+      padStepCountries.sort(function(a, b) { return a.id.localeCompare(b.id); });
+      padStepCountries = seededShuffleH2H(padStepCountries, prng);
+      for (var psi = 0; psi < padStepCountries.length && gameDeck.length < targetCount; psi++) {
+        var psc = padStepCountries[psi];
+        if (!pickedIds[psc.id]) {
+          gameDeck.push(psc);
+          pickedIds[psc.id] = true;
+        }
       }
     }
   }
 
-  // 5. Final deterministic shuffle so both players get identical questions in the same sequence
+  // 6. Absolute last resort (only if the continent itself physically has fewer than 10 countries across ALL tiers 1-13, like Oceania):
+  // Draw additional features from that continent (e.g. capitals, rivers, mountains), still within fallbackCont!
+  if (gameDeck.length < targetCount) {
+    var contFeatures = buildPool({
+      continent: fallbackCont,
+      tierCeiling: 13,
+      categories: { countries: true, capitals: true, flags: true, landforms: true, water: true, cities: true },
+      waterSubs: { rivers: true, lakes: true, seas: true, oceans: true, gulfs: true, straits: true },
+      landformSubs: { mountains: true, peninsulas: true, islands: true, archipelagos: true },
+      citySubs: { cities: true, heritage: true }
+    }, fallbackCd);
+    contFeatures.sort(function(a, b) { return a.id.localeCompare(b.id); });
+    contFeatures = seededShuffleH2H(contFeatures, prng);
+    for (var cfi = 0; cfi < contFeatures.length && gameDeck.length < targetCount; cfi++) {
+      var cfc = contFeatures[cfi];
+      if (!pickedIds[cfc.id]) {
+        gameDeck.push(cfc);
+        pickedIds[cfc.id] = true;
+      }
+    }
+  }
+
+  // 7. Final deterministic shuffle so both players get identical questions in the same sequence
   return seededShuffleH2H(gameDeck, prng);
 }
 
@@ -6675,9 +6706,13 @@ function launchReconciledMatch() {
   var lowerGrade = Math.min(yourGrade, oppGrade);
   var tierCeiling = (typeof getTierCeiling === 'function') ? getTierCeiling(lowerGrade, 'medium') : lowerGrade;
 
-  var p1Sel = { continent: (_h2hSetup && _h2hSetup.yourContinent) || 'globe', features: (_h2hSetup && _h2hSetup.yourFeatures) || {} };
-  var p2Sel = { continent: (_h2hSetup && _h2hSetup.oppContinent) || null, features: (_h2hSetup && _h2hSetup.oppFeatures) || {} };
-  var deck = buildH2HDeck(p1Sel, p2Sel, tierCeiling, _h2h.matchId);
+  var deck = (_h2h.sharedDeck && Array.isArray(_h2h.sharedDeck) && _h2h.sharedDeck.length >= 10)
+    ? _h2h.sharedDeck
+    : (function() {
+        var p1Sel = { continent: (_h2hSetup && _h2hSetup.yourContinent) || globe, features: (_h2hSetup && _h2hSetup.yourFeatures) || {} };
+        var p2Sel = { continent: (_h2hSetup && _h2hSetup.oppContinent) || null, features: (_h2hSetup && _h2hSetup.oppFeatures) || {} };
+        return buildH2HDeck(p1Sel, p2Sel, tierCeiling, _h2h.matchId);
+      })();
   _h2h.sharedDeck = deck;
 
   // Persist authoritative deck to Supabase for online matches
@@ -6997,7 +7032,7 @@ function startH2HCountdown(initiator, elapsedSecAgo) {
   if (!_game || _game.done || _h2h.state === 'finished') return;
   if (_h2h.finishCountdown != null) return; // already active
 
-  var COUNTDOWN_MAX = 10;
+  var COUNTDOWN_MAX = 15;
   var currentRemaining = _game.timeRemaining;
   var targetSeconds = COUNTDOWN_MAX;
   if (typeof elapsedSecAgo === 'number' && elapsedSecAgo > 0) {

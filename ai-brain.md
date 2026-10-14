@@ -1264,3 +1264,22 @@ Branch: pre-beta4
   2. In `showQuestion()`, hardened element selection by searching inside `qCard` (`(qCard && qCard.querySelector('#q-cat')) || document.getElementById('q-cat')`) to guarantee resilience even if queried during layout shifts.
   3. Synchronized updates across `index.html` and `play/index.html`.
   4. Verified with standalone DOM simulation and full test suites.
+
+
+### Task 47: H2H Deck Completeness Guarantee, Continent Containment, and Sudden-Death Alignment
+- **Branch**: pre-beta5
+- **Problem**:
+  1. Matches played with lower-tier/beginner accounts (Tier 1) launched with only 5 cards in the deck instead of 10. When the 5 cards finished, rounds ended abruptly before 10 questions were reached.
+  2. In smaller continents (e.g. South America, Oceania, North America), the fallback deck padding drew cards from 'globe', causing countries from other continents (e.g., Europe, Asia, Africa) to appear in a continent-specific match.
+  3. The sudden-death match clock reduction (COUNTDOWN_MAX) was tightened to 10s, which didn't provide enough time for trailing players to answer remaining cards.
+  4. In online matches, if Player 2 launched without receiving Player 1's shared deck, they re-ran the local generator rather than strictly reusing the peer-synchronized deck.
+- **Root Cause**:
+  1. In `buildH2HDeck()`, step 3 pulled up to 5 countries, but step 5's fallback pad queried `tierCeiling: tierCeiling`. Because Globe only has 5 countries at Tier 1 and default feature selections had no additional sub-categories, 0 additional cards were found, returning a deck of only 5 cards (`_game.totalCards = 5`).
+  2. Step 5's fallback hardcoded `continent: 'globe'` instead of stepping up tiers within the mutually chosen continent (`fallbackCont`).
+  3. `launchReconciledMatch()` generated a brand new deck on both clients rather than checking if `_h2h.sharedDeck` was already synchronized from the peer via Supabase RPC `h2h_sync_setup`.
+- **Fix**:
+  1. **Strict 10-Card Guarantee Across All Tiers**: In `buildH2HDeck()`, if country count or deck length is under 10, incrementally step up country tiers (from `tierCeiling + 1` up to `13`) strictly inside `fallbackCont` until 10 cards are acquired. If a small continent has fewer than 10 countries across all 13 tiers (e.g. Oceania), draw additional geographic features (capitals, rivers, mountains) still strictly inside `fallbackCont`. Tested and verified 100% of all continents across all tiers 1-13 produce exactly 10 cards.
+  2. **Strict Continent Boundary Containment**: Completely eliminated the `continent: 'globe'` leak. Fallback padding is strictly contained within `fallbackCont`.
+  3. **Peer-Synchronized Deck Priority**: In `launchReconciledMatch()`, if `_h2h.sharedDeck` is already present and valid (`>= 10` cards) from `h2h_sync_setup`, reuse it directly instead of re-rolling independent decks.
+  4. **Sudden-Death Clock Aligned to 15s**: Set `COUNTDOWN_MAX = 15` so the trailing player has sufficient time to complete their questions.
+  5. **Synchronized Mirrors**: Synchronized updates across `play/index.html`, `index.html`, and committed to remote branch `pre-beta5`. Deployed to production `play.mapolis.app` with zero Netlify credits.
