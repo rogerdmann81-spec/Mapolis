@@ -1783,18 +1783,13 @@ function openRestoreProfileModal() {
 
   panel.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <h2 style="font-family:'Fredoka One',sans-serif;font-size:20px;color:#fff;margin:0;">Sign In</h2>
+      <h2 id="restore-modal-title" style="font-family:'Fredoka One',sans-serif;font-size:20px;color:#fff;margin:0;">Sign In</h2>
       <button id="restore-close" style="background:none;color:var(--dim);font-size:20px;padding:4px 8px;border:none;cursor:pointer;">×</button>
-    </div>
-
-    <div style="display:flex;gap:6px;margin-bottom:14px;">
-      <button id="restore-tab-pw" class="restore-tab restore-tab-active" style="flex:1;padding:10px;background:var(--bg-panel);color:#fff;font-weight:700;font-size:12px;border:1px solid var(--blue-lt);border-radius:10px;cursor:pointer;">Username + Password</button>
-      <button id="restore-tab-email" class="restore-tab" style="flex:1;padding:10px;background:var(--bg-panel);color:var(--dim);font-weight:700;font-size:12px;border:1px solid var(--border);border-radius:10px;cursor:pointer;">Recovery Email</button>
     </div>
 
     <div id="restore-panel-pw">
       <div style="font-size:11px;color:var(--dim);margin-bottom:8px;line-height:1.4;">
-        Enter the username and password you set when creating your profile.
+        Enter your username and password to sign into your profile.
       </div>
       <input class="field-in" type="text" id="restore-handle-input" placeholder="Your username" maxlength="20" autocomplete="off" spellcheck="false" style="margin-bottom:6px;">
       <input class="field-in" type="password" id="restore-pw-input" placeholder="Your password" autocomplete="current-password">
@@ -1806,11 +1801,16 @@ function openRestoreProfileModal() {
 
     <div id="restore-panel-email" style="display:none;">
       <div style="font-size:11px;color:var(--dim);margin-bottom:8px;line-height:1.4;">
-        Enter the parent or guardian email that was used when this profile was created.
+        Enter the recovery email address tied to your account (or your parent/guardian's email). We'll send your username(s) and a secure password reset link.
       </div>
-      <input class="field-in" type="email" id="restore-email-input" placeholder="parent@example.com" maxlength="254" autocomplete="off" spellcheck="false">
-      <button type="button" id="restore-email-submit" class="btn-primary" style="width:100%;margin-top:10px;">Sign In</button>
-
+      <input class="field-in" type="email" id="restore-email-input" placeholder="you@example.com" maxlength="254" autocomplete="off" spellcheck="false">
+      <button type="button" id="restore-email-submit" class="btn-primary" style="width:100%;margin-top:10px;">Send Recovery Link</button>
+      <div id="restore-email-feedback" style="display:none;font-size:11px;color:#10b981;margin-top:10px;text-align:center;line-height:1.4;">
+        Recovery link sent! If an account is registered with that email, check your inbox.
+      </div>
+      <div style="text-align:center;margin-top:12px;">
+        <button type="button" id="restore-back-to-pw" style="background:none;border:none;color:var(--blue-lt);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">← Back to Sign In</button>
+      </div>
     </div>
 
     <div style="font-size:10px;color:var(--dim);margin-top:14px;padding-top:12px;border-top:1px solid var(--border);line-height:1.4;">
@@ -1829,24 +1829,22 @@ function openRestoreProfileModal() {
   document.getElementById('restore-close').addEventListener('click', close);
   overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
 
-  function switchTab(which) {
-    var tp = document.getElementById('restore-tab-pw');
-    var te = document.getElementById('restore-tab-email');
+  function showRestoreView(which) {
+    var titleEl = document.getElementById('restore-modal-title');
     var pp = document.getElementById('restore-panel-pw');
     var pe = document.getElementById('restore-panel-email');
-    if (which === 'pw') {
-      tp.classList.add('restore-tab-active'); tp.style.color = '#fff'; tp.style.borderColor = 'var(--blue-lt)';
-      te.classList.remove('restore-tab-active'); te.style.color = 'var(--dim)'; te.style.borderColor = 'var(--border)';
-      pp.style.display = 'block'; pe.style.display = 'none';
+    if (which === 'email') {
+      if (titleEl) titleEl.textContent = 'Account Recovery';
+      if (pp) pp.style.display = 'none';
+      if (pe) pe.style.display = 'block';
     } else {
-      te.classList.add('restore-tab-active'); te.style.color = '#fff'; te.style.borderColor = 'var(--blue-lt)';
-      tp.classList.remove('restore-tab-active'); tp.style.color = 'var(--dim)'; tp.style.borderColor = 'var(--border)';
-      pe.style.display = 'block'; pp.style.display = 'none';
+      if (titleEl) titleEl.textContent = 'Sign In';
+      if (pp) pp.style.display = 'block';
+      if (pe) pe.style.display = 'none';
     }
   }
-  document.getElementById('restore-tab-pw').addEventListener('click', function() { switchTab('pw'); });
-  document.getElementById('restore-tab-email').addEventListener('click', function() { switchTab('email'); });
-  document.getElementById('restore-forgot-btn')?.addEventListener('click', function() { switchTab('email'); });
+  document.getElementById('restore-forgot-btn')?.addEventListener('click', function() { showRestoreView('email'); });
+  document.getElementById('restore-back-to-pw')?.addEventListener('click', function() { showRestoreView('pw'); });
 
   // ── Handle + Password restore ──
   document.getElementById('restore-pw-submit').addEventListener('click', async function(e) {
@@ -5730,31 +5728,18 @@ function startH2HQueue() {
     }, 600);
   }
 
-  // Queue runs for 60 seconds searching for opponents in Supabase.
-  // Window widens progressively: ±40 -> ±90 -> ±160 -> ±260.
-  // If no peer is matched within 60 seconds, bot fallback pairs seamlessly.
-  var QUEUE_DURATION_MS = 60000;
+  // Continuous matchmaking search without forced timeout
   var queueStartedAt = Date.now();
 
-  // Progress countdown updater
   if (_h2h.queueProgressTimer) clearInterval(_h2h.queueProgressTimer);
   _h2h.queueProgressTimer = setInterval(function() {
     var elapsed = Date.now() - queueStartedAt;
-    var remaining = Math.max(0, Math.ceil((QUEUE_DURATION_MS - elapsed) / 1000));
     var win = H2HStub.ratingWindowAt(elapsed);
     var subEl = document.getElementById('h2h-queue-sub');
-    var timerEl = document.getElementById('h2h-queue-sec');
     if (subEl) {
-      if (remaining > 0) {
-        subEl.innerHTML = 'Searching for challenger (±' + win + ' ELO) · <span style="color:#ffe135;font-weight:700;">' + remaining + 's</span>';
-      } else {
-        subEl.innerHTML = 'Opponent discovered! Launching setup…';
-      }
+      subEl.innerHTML = 'Searching for challenger (±' + win + ' ELO)';
     }
-    if (timerEl) {
-      timerEl.textContent = remaining + 's';
-    }
-  }, 250);
+  }, 1000);
 
   // Connect to Supabase match queue with caller's real profile stats
   if (window.h2hStore && profile.id) {
@@ -5789,73 +5774,83 @@ function startH2HQueue() {
     });
   }
 
-  _h2h.queueTimer = setTimeout(function(){
-    if (_h2h.queueProgressTimer) { clearInterval(_h2h.queueProgressTimer); _h2h.queueProgressTimer = null; }
-    if (_h2h.pollTimer) { clearInterval(_h2h.pollTimer); _h2h.pollTimer = null; }
-    if (window.h2hStore && profile.id) {
-      window.h2hStore.leaveQueue(profile.id);
-    }
-    _h2h.isOnlineMatch = false;
-    _h2h.matchId = 'bot_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+  // Matchmaking continues until an opponent is found, back is tapped, or Play Bot is selected
+  _h2h.queueTimer = null;
+}
 
-    // If real public profiles exist in the database, pair against a real profile ghost
-    var realGhost = (_candidateOpponents && _candidateOpponents.length > 0)
-      ? _candidateOpponents[Math.floor(Math.random() * _candidateOpponents.length)]
-      : null;
+function launchH2HBotMatch() {
+  if (_h2h.queueProgressTimer) { clearInterval(_h2h.queueProgressTimer); _h2h.queueProgressTimer = null; }
+  if (_h2h.pollTimer) { clearInterval(_h2h.pollTimer); _h2h.pollTimer = null; }
+  if (_h2h.queueCountersTimer) { clearInterval(_h2h.queueCountersTimer); _h2h.queueCountersTimer = null; }
 
-    if (realGhost) {
-      var ghostSvg = realGhost.avatar_svg || null;
-      var ghostFace = realGhost.avatar_face || '🧑';
-      var ghostStats = realGhost.stats || {};
-      var ghostRating = (ghostStats.h2h && typeof ghostStats.h2h.rating === 'number')
-        ? ghostStats.h2h.rating
-        : ((typeof realGhost.cr === 'number' && realGhost.cr > 0) ? realGhost.cr : Math.max(900, Math.min(2100, _h2h.you.rating + rint(-60, 60))));
-      var ghostWins = (ghostStats.h2h && typeof ghostStats.h2h.wins === 'number')
-        ? ghostStats.h2h.wins
-        : ((ghostStats && typeof ghostStats.totalCorrect === 'number' && ghostStats.totalCorrect > 0) ? Math.floor(ghostStats.totalCorrect / 10) : 0);
-      var ghostLosses = (ghostStats.h2h && typeof ghostStats.h2h.losses === 'number')
-        ? ghostStats.h2h.losses
-        : 0;
-      var ghostTies = (ghostStats.h2h && typeof ghostStats.h2h.ties === 'number')
-        ? ghostStats.h2h.ties
-        : 0;
-      var ghostGrade = (typeof estimateGrade === 'function')
-        ? estimateGrade({ birthYear: realGhost.birth_year, stats: ghostStats })
-        : yourGrade;
+  var profile = window.activeProfile;
+  if (window.h2hStore && profile && profile.id) {
+    window.h2hStore.leaveQueue(profile.id);
+  }
 
-      var ghostMatches = (ghostStats.h2h && typeof ghostStats.h2h.matches === 'number')
-        ? ghostStats.h2h.matches
-        : (ghostWins + ghostLosses + ghostTies);
+  _h2h.isOnlineMatch = false;
+  _h2h.matchId = 'bot_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
 
-      _h2h.opponent = {
-        id: realGhost.player_id,
-        handle: realGhost.handle || 'Challenger',
-        avatar: ghostSvg || ghostFace,
-        avatarFace: ghostFace,
-        avatarSvg: ghostSvg,
-        rating: ghostRating,
-        matches: ghostMatches,
-        wins: ghostWins,
-        losses: ghostLosses,
-        ties: ghostTies,
-        stats: ghostStats,
-        country: realGhost.country || '',
-        grade: ghostGrade,
-        tier: getTierCeiling(ghostGrade, 'medium'),
-        isBot: true
-      };
-    } else {
-      var elapsed = Date.now() - queueStartedAt;
-      var win = H2HStub.ratingWindowAt(elapsed);
-      _h2h.opponent = H2HStub.makeOpponent(_h2h.you.rating, yourGrade, win);
-    }
+  var yourGradeRaw = (profile && typeof estimateGrade === 'function') ? estimateGrade(profile) : 5;
+  var yourGrade = Math.max(1, Math.min(13, Math.floor(yourGradeRaw)));
 
-    H2H.transition('matched');
-    startH2HSetupScreen();
-  }, QUEUE_DURATION_MS);
+  var realGhost = (_candidateOpponents && _candidateOpponents.length > 0)
+    ? _candidateOpponents[Math.floor(Math.random() * _candidateOpponents.length)]
+    : null;
+
+  if (realGhost) {
+    var ghostSvg = realGhost.avatar_svg || null;
+    var ghostFace = realGhost.avatar_face || '🧑';
+    var ghostStats = realGhost.stats || {};
+    var ghostRating = (ghostStats.h2h && typeof ghostStats.h2h.rating === 'number')
+      ? ghostStats.h2h.rating
+      : ((typeof realGhost.cr === 'number' && realGhost.cr > 0) ? realGhost.cr : Math.max(900, Math.min(2100, _h2h.you.rating + rint(-60, 60))));
+    var ghostWins = (ghostStats.h2h && typeof ghostStats.h2h.wins === 'number')
+      ? ghostStats.h2h.wins
+      : ((ghostStats && typeof ghostStats.totalCorrect === 'number' && ghostStats.totalCorrect > 0) ? Math.floor(ghostStats.totalCorrect / 10) : 0);
+    var ghostLosses = (ghostStats.h2h && typeof ghostStats.h2h.losses === 'number')
+      ? ghostStats.h2h.losses
+      : 0;
+    var ghostTies = (ghostStats.h2h && typeof ghostStats.h2h.ties === 'number')
+      ? ghostStats.h2h.ties
+      : 0;
+    var ghostGrade = (typeof estimateGrade === 'function')
+      ? estimateGrade({ birthYear: realGhost.birth_year, stats: ghostStats })
+      : yourGrade;
+    var ghostMatches = (ghostStats.h2h && typeof ghostStats.h2h.matches === 'number')
+      ? ghostStats.h2h.matches
+      : (ghostWins + ghostLosses + ghostTies);
+
+    _h2h.opponent = {
+      id: realGhost.player_id,
+      handle: realGhost.handle || 'Challenger',
+      avatar: ghostSvg || ghostFace,
+      avatarFace: ghostFace,
+      avatarSvg: ghostSvg,
+      rating: ghostRating,
+      matches: ghostMatches,
+      wins: ghostWins,
+      losses: ghostLosses,
+      ties: ghostTies,
+      stats: ghostStats,
+      country: realGhost.country || '',
+      grade: ghostGrade,
+      tier: getTierCeiling(ghostGrade, 'medium'),
+      isBot: true
+    };
+  } else {
+    _h2h.opponent = H2HStub.makeOpponent(_h2h.you.rating, yourGrade, 80);
+    _h2h.opponent.isBot = true;
+  }
+
+  H2H.transition('matched');
+  startH2HSetupScreen();
 }
 
 function cancelH2HQueue() {
+  if (_h2h.queueProgressTimer) { clearInterval(_h2h.queueProgressTimer); _h2h.queueProgressTimer = null; }
+  if (_h2h.pollTimer) { clearInterval(_h2h.pollTimer); _h2h.pollTimer = null; }
+  if (_h2h.queueCountersTimer) { clearInterval(_h2h.queueCountersTimer); _h2h.queueCountersTimer = null; }
   resetH2HState();
   if (window.h2hStore && window.activeProfile && window.activeProfile.id) {
     window.h2hStore.leaveQueue(window.activeProfile.id);
@@ -5921,16 +5916,17 @@ function renderH2HQueue() {
   html += '<div class="frame">';
   html += '<div class="stars" id="h2h-stars-bg"></div>';
   html += '<div class="q-title" id="h2h-queue-title"><span class="qt-base">Finding an opponent</span><span class="qt-dot">.</span><span class="qt-dot">.</span><span class="qt-dot">.</span></div>';
-  html += '<div class="q-sub" id="h2h-queue-sub">Searching for challenger (±40 ELO) · <span style="color:#ffe135;font-weight:700;">60s</span></div>';
+  html += '<div class="q-sub" id="h2h-queue-sub">Searching for an online challenger...</div>';
   html += '<div class="globe-wrap"><div class="ring2"></div><div class="ring"></div><div id="h2h-globe-mount" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;"></div></div>';
   html += '<div class="q-stats">';
   html += '<div class="q-stat"><div class="q-stat-num" id="h2h-online">1</div><div class="q-stat-lbl">Active Profiles</div></div>';
   html += '<div class="q-divider"></div>';
-  html += '<div class="q-stat"><div class="q-stat-num" id="h2h-queue-sec" style="color:#ffe135;">60s</div><div class="q-stat-lbl">Search Timer</div></div>';
-  html += '<div class="q-divider"></div>';
   html += '<div class="q-stat"><div class="q-stat-num" id="h2h-queue-count">1</div><div class="q-stat-lbl">In queue</div></div>';
   html += '</div>';
-  html += '<button class="q-back" id="h2h-queue-cancel">Cancel</button>';
+  html += '<div class="q-actions" style="display:flex;gap:12px;margin-top:28px;z-index:2;width:100%;max-width:330px;justify-content:center;">';
+  html += '<button class="q-back" id="h2h-queue-cancel" style="flex:1;margin-top:0;display:flex;align-items:center;justify-content:center;gap:6px;">← Back</button>';
+  html += '<button class="q-bot-btn" id="h2h-queue-bot" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;">🤖 Play Bot</button>';
+  html += '</div>';
   html += '<div class="q-foot">Gnapoley · Mapolis</div>';
   html += '</div>';
 
@@ -5963,9 +5959,11 @@ function renderH2HQueue() {
     fetchRealH2HQueueStats();
   }, 4000);
 
-  // Cancel button
-  var cancelBtn = document.getElementById('h2h-queue-cancel');
+  // Back / cancel button and Play Bot button
+  var cancelBtn = document.getElementById('h2h-queue-cancel') || document.getElementById('h2h-queue-back');
   if (cancelBtn) cancelBtn.addEventListener('click', function() { AudioMgr.bubble(); cancelH2HQueue(); });
+  var botBtn = document.getElementById('h2h-queue-bot');
+  if (botBtn) botBtn.addEventListener('click', function() { AudioMgr.bubble(); launchH2HBotMatch(); });
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -7340,7 +7338,9 @@ function finishH2HMatch() {
 
   var yourR = _h2h.you.rating;
   var oppR = (_h2h.opponent && typeof _h2h.opponent.rating === 'number') ? _h2h.opponent.rating : 1200;
-  _h2h.ratingDelta = H2HStub.calcRatingDelta(yourR, oppR, outcomeScore);
+  var isBotMatch = !_h2h.isOnlineMatch || (_h2h.opponent && _h2h.opponent.isBot) || (_h2h.matchId && String(_h2h.matchId).startsWith('bot_'));
+  // Zero Elo adjustment on bot/practice matches
+  _h2h.ratingDelta = isBotMatch ? 0 : H2HStub.calcRatingDelta(yourR, oppR, outcomeScore);
 
   // Compute opponent immediate post-match career stats
   var oppPriorRating = oppR;
@@ -7376,15 +7376,17 @@ function finishH2HMatch() {
     _h2h.opponent.postLosses = oppPriorL + (oppIsLoss ? 1 : 0);
     _h2h.opponent.postTies = oppPriorT + (oppIsTie ? 1 : 0);
     _h2h.opponent.postMatches = oppPriorMatches + 1;
-    _h2h.opponent.ratingDelta = -_h2h.ratingDelta;
-    _h2h.opponent.postRating = Math.max(0, oppPriorRating - _h2h.ratingDelta);
+    _h2h.opponent.ratingDelta = isBotMatch ? 0 : -_h2h.ratingDelta;
+    _h2h.opponent.postRating = isBotMatch ? oppPriorRating : Math.max(0, oppPriorRating - _h2h.ratingDelta);
   }
 
   // Persist to profile
   var profile = window.activeProfile;
   if (profile && profile.stats && profile.stats.h2h) {
     var h = profile.stats.h2h;
-    h.rating = Math.max(0, h.rating + _h2h.ratingDelta);
+    if (!isBotMatch) {
+      h.rating = Math.max(0, h.rating + _h2h.ratingDelta);
+    }
     h.matches = (h.matches || 0) + 1;
     if (_h2h.outcome === 'win')  { h.wins   = (h.wins   || 0) + 1; h.currentStreak = (h.currentStreak || 0) + 1; }
     if (_h2h.outcome === 'loss') { h.losses = (h.losses || 0) + 1; h.currentStreak = 0; }

@@ -1917,6 +1917,29 @@ body.impersonating .screen { padding-bottom: 54px !important; }
 #h2h-queue-root .q-divider{width:1px;height:36px;background:rgba(255,255,255,0.18)}
 #h2h-queue-root .q-back{margin-top:32px;background:transparent;border:1px solid rgba(255,255,255,0.3);color:#cfe3f5;padding:12px 32px;border-radius:999px;font-size:13px;cursor:pointer;z-index:2;font-weight:500;font-family:inherit}
 #h2h-queue-root .q-back:hover{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.5)}
+
+#h2h-queue-root .q-bot-btn {
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  border: none;
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  z-index: 2;
+  font-family: inherit;
+  transition: transform 0.15s, background 0.15s, box-shadow 0.15s;
+  box-shadow: 0 4px 14px rgba(37,99,235,0.35);
+}
+#h2h-queue-root .q-bot-btn:hover {
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  box-shadow: 0 6px 18px rgba(37,99,235,0.45);
+}
+#h2h-queue-root .q-bot-btn:active {
+  transform: scale(0.97);
+}
+
 #h2h-queue-root .q-foot{margin-top:16px;font-size:10px;color:#6a8ebf;letter-spacing:1px;text-transform:uppercase;z-index:2}
 
 

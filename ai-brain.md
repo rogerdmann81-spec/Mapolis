@@ -1355,3 +1355,32 @@ Branch: pre-beta4
   3. Verified that the profile sync engine automatically persists the recovery email into Supabase `profiles.parent_email`.
   4. Validated with AST parser (`acorn`) for zero syntax errors.
   5. Synchronized mirrors across `play/index.html` and `index.html`.
+
+
+### Task 52: Sign-In Tab Cleanup, H2H Queue Control (No Timer, Back & Bot Buttons), and Zero Elo on Bot Matches
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5
+- **Problems & User Feedback**:
+  1. In the Sign In modal, the tabs ("Username + Password" / "Recovery Email") added unnecessary visual clutter; the standard "Forgot username or password?" underlined link is familiar and sufficient.
+  2. On the H2H matchmaking queue page, players felt locked into an involuntary 60s countdown timer. The user requested no timer, an explicit **Back** button, and an explicit **Play Bot** button.
+  3. In bot matches, players' Elo ratings should not be adjusted.
+- **Resolution**:
+  1. **Sign-In Modal Cleanup**:
+     - Stripped out both top tabs from the Sign In modal in `play/index.html` and `index.html`.
+     - Standardized clean username/password sign-in view.
+     - Blue underlined "Forgot username or password?" link flips cleanly to the email recovery view, with a "← Back to Sign In" navigation option.
+  2. **H2H Queue Page Redesign**:
+     - Removed the 60s countdown timer box and automated bot timeout from `playH2H()`. Matchmaking continues searching for real online peers indefinitely until the user takes action.
+     - Replaced the single cancel button with two clear action buttons:
+       - **← Back** (`#h2h-queue-cancel`): Cleans up matchmaking polling and intervals, deregisters from Supabase queue, and navigates back to setup lobby.
+       - **🤖 Play Bot** (`#h2h-queue-bot`): Instantly triggers `launchH2HBotMatch()` to practice against a bot opponent on demand.
+     - Added dedicated button styling (`.q-bot-btn`) in `styles.css` and `play/styles.css`.
+  3. **Zero Elo Adjustment on Bot Matches**:
+     - In `finishH2HMatch()`, enforced `isBotMatch = !_h2h.isOnlineMatch || opp.isBot || matchId.startsWith('bot_')`.
+     - When `isBotMatch` is true, strictly set `_h2h.ratingDelta = 0` and bypassed player Elo modification.
+     - Opponent rating delta is set to 0 and post-rating remains unchanged.
+     - On the results card, displayed `Rating (Practice)` with `±0`.
+  4. **Verification**:
+     - Ran full automated JSDOM integration tests verifying modal view switching, queue button rendering without timer, and `finishH2HMatch()` 0 rating delta on bot matches.
+     - Validated with AST parser (`acorn`) for zero syntax errors.
+     - Synchronized across `play/index.html`, `index.html`, `styles.css`, and `play/styles.css`.
