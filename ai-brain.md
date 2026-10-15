@@ -1342,3 +1342,16 @@ Branch: pre-beta4
   2. Validated with AST parser (`acorn`) across 100% of inline scripts: verified 0 syntax errors.
   3. Synchronized mirrors across `play/index.html` and `index.html`.
   4. Deployed to production (`play.mapolis.app`) via Netlify with functions.
+
+
+### Task 51: Adult Profile Creation: Add Recovery Email Input and Persistence
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5
+- **Problem**: When creating a new profile, users who selected a birth year >= 18 were only presented with password fields and had no field to provide a recovery email.
+- **Root Cause**: The profile creation wizard previously hardcoded `parentEmail = null` for adults and only rendered password fields under `age >= CONSENT_AGE_THRESHOLD`. As a result, adult users had no email associated with their account and could not use the automated email password recovery feature if they lost their credentials.
+- **Resolution**:
+  1. Updated `updateRecoverySection()` in `play/index.html` and `index.html` to render an input for **Recovery Email** (`#c-adult-email`) above the password fields for adult accounts.
+  2. Updated `runCreate()` to validate and normalize `#c-adult-email` and save it to `newProfile.parentEmail`.
+  3. Verified that the profile sync engine automatically persists the recovery email into Supabase `profiles.parent_email`.
+  4. Validated with AST parser (`acorn`) for zero syntax errors.
+  5. Synchronized mirrors across `play/index.html` and `index.html`.

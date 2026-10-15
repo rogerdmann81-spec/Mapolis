@@ -2394,13 +2394,15 @@ function renderCreateStep() {
       section.style.display = 'block';
 
       if (age >= CONSENT_AGE_THRESHOLD) {
-        // Adult path: mandatory password for profile recovery
+        // Adult path: recovery email + password
         section.innerHTML = `
+          <div class="field-lbl">Recovery Email <span style="color:var(--dim);font-weight:400;">(recommended)</span></div>
+          <input class="field-in" type="email" id="c-adult-email" placeholder="you@example.com" maxlength="254" autocomplete="email" spellcheck="false" style="margin-bottom:8px;">
           <div class="field-lbl">Password</div>
           <input class="field-in" type="password" id="c-password" placeholder="Min 8 characters" autocomplete="new-password" style="margin-bottom:6px;">
           <input class="field-in" type="password" id="c-password-confirm" placeholder="Confirm password" autocomplete="new-password">
           <div style="font-size:10px;color:var(--dim);margin-top:6px;line-height:1.4;">
-            🔑 If you clear your browser, your username + password can sign you back into your profile.
+            🔑 We'll use your recovery email and password to help you sign in on any device and recover your account if you forget your password.
           </div>
         `;
       } else {
@@ -2460,7 +2462,18 @@ function renderCreateStep() {
       let parentEmail = null;
 
       if (age !== null && age >= CONSENT_AGE_THRESHOLD) {
-        // Adult — mandatory password for profile recovery
+        // Adult — optional recovery email + mandatory password
+        const emailEl = document.getElementById('c-adult-email');
+        const rawEmail = emailEl ? emailEl.value.trim() : '';
+        if (rawEmail) {
+          if (!isValidEmailShape(rawEmail)) {
+            showToast("That doesn't look like a valid email");
+            if (emailEl) { emailEl.focus(); emailEl.select && emailEl.select(); }
+            return;
+          }
+          parentEmail = normalizeEmail(rawEmail);
+        }
+
         const pwEl = document.getElementById('c-password');
         const pwConfEl = document.getElementById('c-password-confirm');
         const rawPw = pwEl ? pwEl.value : '';
