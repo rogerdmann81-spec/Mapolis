@@ -1324,3 +1324,21 @@ Branch: pre-beta4
      - Tested token generation, verification, and password consumption round-trip in Supabase.
      - Verified single-use token invalidation.
      - Verified mirrored consistency across `play/index.html` and `index.html`.
+
+
+### Task 50: Fix Load Screen Hang Caused by Syntax Error in H2H Deck Builder
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5
+- **Problem**: The game remained permanently frozen on the initial loading curtain.
+- **Root Cause**:
+  In `buildH2HDeck()`, a set of typeof checks and string comparisons were missing quotes:
+  - `typeof getCombinedContinentData === function` (unquoted reserved keyword `function`)
+  - `typeof tierCeiling === number` (unquoted `number`)
+  - `c.cat === countries` (unquoted `countries`)
+  - `p1Cfg.continent !== globe` (unquoted `globe`)
+  Because `function` is a reserved keyword in JavaScript, the browser engine threw a fatal syntax error (`Unexpected token function`) when parsing the main script block. This caused all subsequent execution—including `initApp()` and the safety timeout `dismissPageCurtain()`—to never execute, leaving the curtain stuck.
+- **Resolution**:
+  1. Restored proper string quotes across all 9 affected lines (`'function'`, `'number'`, `'countries'`, `'globe'`).
+  2. Validated with AST parser (`acorn`) across 100% of inline scripts: verified 0 syntax errors.
+  3. Synchronized mirrors across `play/index.html` and `index.html`.
+  4. Deployed to production (`play.mapolis.app`) via Netlify with functions.

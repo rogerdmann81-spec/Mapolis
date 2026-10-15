@@ -6647,8 +6647,8 @@ function buildH2HDeck(sel1, sel2, tierCeiling, matchId) {
   var p1Cfg = makeSoloConfigForH2HPlayer(p1Sel, tierCeiling);
   var p2Cfg = makeSoloConfigForH2HPlayer(p2Sel, tierCeiling);
 
-  var cd1 = (typeof getCombinedContinentData === function) ? getCombinedContinentData(p1Cfg.continent) : null;
-  var cd2 = (typeof getCombinedContinentData === function) ? getCombinedContinentData(p2Cfg.continent) : null;
+  var cd1 = (typeof getCombinedContinentData === 'function') ? getCombinedContinentData(p1Cfg.continent) : null;
+  var cd2 = (typeof getCombinedContinentData === 'function') ? getCombinedContinentData(p2Cfg.continent) : null;
 
   var p1Pool = (cd1 ? buildPool(p1Cfg, cd1) : []) || [];
   var p2Pool = (cd2 ? buildPool(p2Cfg, cd2) : []) || [];
@@ -6669,7 +6669,7 @@ function buildH2HDeck(sel1, sel2, tierCeiling, matchId) {
   h2hDeckPool.sort(function(a, b) { return a.id.localeCompare(b.id); });
 
   // 3. First pull out up to 5 country cards
-  var countryCards = h2hDeckPool.filter(function(c) { return c.cat === countries; });
+  var countryCards = h2hDeckPool.filter(function(c) { return c.cat === 'countries'; });
   countryCards = seededShuffleH2H(countryCards, prng);
 
   var gameDeck = [];
@@ -6681,14 +6681,14 @@ function buildH2HDeck(sel1, sel2, tierCeiling, matchId) {
   }
 
   // Determine fallback continent (STRICTLY prioritize the mutually agreed or chosen continent, NEVER globe unless both picked globe)
-  var fallbackCont = (p1Cfg.continent && p1Cfg.continent !== globe)
+  var fallbackCont = (p1Cfg.continent && p1Cfg.continent !== 'globe')
     ? p1Cfg.continent
-    : ((p2Cfg.continent && p2Cfg.continent !== globe) ? p2Cfg.continent : globe);
-  var fallbackCd = ((typeof getCombinedContinentData === function) ? getCombinedContinentData(fallbackCont) : null) || cd1 || cd2;
+    : ((p2Cfg.continent && p2Cfg.continent !== 'globe') ? p2Cfg.continent : 'globe');
+  var fallbackCd = ((typeof getCombinedContinentData === 'function') ? getCombinedContinentData(fallbackCont) : null) || cd1 || cd2;
 
   // If fewer than 5 country cards in pool, step up tier ceiling inside fallbackCont so 5 countries are guaranteed
   if (gameDeck.length < 5) {
-    for (var stepTier = Math.max(2, (typeof tierCeiling === number ? tierCeiling : 1) + 1); stepTier <= 13 && gameDeck.length < 5; stepTier++) {
+    for (var stepTier = Math.max(2, (typeof tierCeiling === 'number' ? tierCeiling : 1) + 1); stepTier <= 13 && gameDeck.length < 5; stepTier++) {
       var steppedCountries = buildPool({
         continent: fallbackCont,
         tierCeiling: stepTier,
@@ -6718,7 +6718,7 @@ function buildH2HDeck(sel1, sel2, tierCeiling, matchId) {
   // 5. Fallback pad: If pool is still smaller than 10 total:
   // Step up country tiers within the chosen continent (fallbackCont) first!
   if (gameDeck.length < targetCount) {
-    for (var padTier = Math.max(2, (typeof tierCeiling === number ? tierCeiling : 1) + 1); padTier <= 13 && gameDeck.length < targetCount; padTier++) {
+    for (var padTier = Math.max(2, (typeof tierCeiling === 'number' ? tierCeiling : 1) + 1); padTier <= 13 && gameDeck.length < targetCount; padTier++) {
       var padStepCountries = buildPool({
         continent: fallbackCont,
         tierCeiling: padTier,
