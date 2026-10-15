@@ -994,6 +994,8 @@ function triggerScreenRefresh(screenId) {
   if (!screenId) return;
   if (screenId !== 's-title' && typeof updateAvatarBars === 'function') {
     updateAvatarBars();
+  checkRecoveryHash();
+  window.addEventListener("hashchange", checkRecoveryHash);
   }
   if (screenId === 's-profile' && typeof renderProfile === 'function') {
     renderProfile();
@@ -1787,7 +1789,7 @@ function openRestoreProfileModal() {
 
     <div style="display:flex;gap:6px;margin-bottom:14px;">
       <button id="restore-tab-pw" class="restore-tab restore-tab-active" style="flex:1;padding:10px;background:var(--bg-panel);color:#fff;font-weight:700;font-size:12px;border:1px solid var(--blue-lt);border-radius:10px;cursor:pointer;">Username + Password</button>
-      <button id="restore-tab-email" class="restore-tab" style="flex:1;padding:10px;background:var(--bg-panel);color:var(--dim);font-weight:700;font-size:12px;border:1px solid var(--border);border-radius:10px;cursor:pointer;">Parent Email</button>
+      <button id="restore-tab-email" class="restore-tab" style="flex:1;padding:10px;background:var(--bg-panel);color:var(--dim);font-weight:700;font-size:12px;border:1px solid var(--border);border-radius:10px;cursor:pointer;">Recovery Email</button>
     </div>
 
     <div id="restore-panel-pw">
@@ -1796,7 +1798,10 @@ function openRestoreProfileModal() {
       </div>
       <input class="field-in" type="text" id="restore-handle-input" placeholder="Your username" maxlength="20" autocomplete="off" spellcheck="false" style="margin-bottom:6px;">
       <input class="field-in" type="password" id="restore-pw-input" placeholder="Your password" autocomplete="current-password">
-      <button type="button" id="restore-pw-submit" class="btn-primary" style="width:100%;margin-top:10px;">Sign In</button>
+      <div style="text-align:right;margin-top:6px;margin-bottom:8px;">
+        <button type="button" id="restore-forgot-btn" style="background:none;border:none;color:var(--blue-lt);font-size:11px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">Forgot username or password?</button>
+      </div>
+      <button type="button" id="restore-pw-submit" class="btn-primary" style="width:100%;">Sign In</button>
     </div>
 
     <div id="restore-panel-email" style="display:none;">
@@ -1841,6 +1846,7 @@ function openRestoreProfileModal() {
   }
   document.getElementById('restore-tab-pw').addEventListener('click', function() { switchTab('pw'); });
   document.getElementById('restore-tab-email').addEventListener('click', function() { switchTab('email'); });
+  document.getElementById('restore-forgot-btn')?.addEventListener('click', function() { switchTab('email'); });
 
   // ── Handle + Password restore ──
   document.getElementById('restore-pw-submit').addEventListener('click', async function(e) {
@@ -1949,110 +1955,204 @@ function openRestoreProfileModal() {
     }
   });
 
-  // ── Parent email restore ──
-  // TODO(phase-b-9): Post-backend this will trigger a real verification
-  // email with a one-time token (PHASE_B_BLUEPRINT Section 9). Pre-
-  // backend we just match against the stored parent_email field.
+  // ── Recovery email dispatch ──
   document.getElementById('restore-email-submit').addEventListener('click', async function(e) {
     if (e) e.preventDefault();
     var btn = document.getElementById('restore-email-submit');
-    var raw = document.getElementById('restore-email-input').value;
+    var raw = (document.getElementById('restore-email-input').value || '').trim();
     if (!isValidEmailShape(raw)) {
       showToast("That doesn't look like a valid email");
       return;
     }
     var norm = normalizeEmail(raw);
-    var origBtnText = btn ? btn.textContent : 'Sign In';
-    if (btn) { btn.disabled = true; btn.textContent = 'Signing in...'; }
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+    }
 
-    var match = null;
     try {
-      if (isSupabaseConfigured()) {
-        try {
-          if (typeof ensureAuthSession === 'function') {
-            await ensureAuthSession();
-          } else if (typeof signInAnonymous === 'function') {
-            const curSess = typeof _getSession === 'function' ? _getSession() : null;
-            if (!curSess || !curSess.access_token) {
-              await signInAnonymous().catch(function(e) { console.warn('[restore_profile_by_email] signInAnonymous fallback:', e); });
-            }
-          }
-          const baseUrl = (typeof SUPABASE_URL === 'string' ? SUPABASE_URL : '').replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
-          const resp = await fetch(baseUrl + '/rest/v1/rpc/restore_profile_by_email', {
-            method: 'POST',
-            headers: authedHeaders(),
-            body: JSON.stringify({ p_parent_email: norm })
-          });
-          if (!resp.ok) {
-            const errText = await resp.text();
-            console.error('[restore_profile_by_email] backend error:', errText, resp.status);
-            let userMsg = 'No profile matches that parent email';
-            try {
-              const parsed = JSON.parse(errText);
-              const msg = (parsed && (parsed.message || parsed.error || parsed.hint || '')) || '';
-              if (msg.toLowerCase().includes('frozen')) {
-                userMsg = 'That profile has been frozen by an administrator';
-              } else if (msg.toLowerCase().includes('not authenticated')) {
-                userMsg = 'Authentication error — please refresh the page and try again';
-              } else if (msg.toLowerCase().includes('email not found') || msg.toLowerCase().includes('not found')) {
-                userMsg = 'No profile matches that parent email';
-              } else if (resp.status >= 500) {
-                userMsg = 'Server error during sign in — please try again in a moment';
-              }
-            } catch (parseErr) {
-              if (errText.includes('frozen')) userMsg = 'That profile has been frozen by an administrator';
-            }
-            showToast(userMsg);
-            return;
-          }
-          const data = await resp.json();
-          if (data) {
-            var rowData = Array.isArray(data) ? data[0] : data;
-            if (typeof rowData === 'string') {
-              try { rowData = JSON.parse(rowData); } catch(e) {}
-            }
-            var sessEmail = typeof _getSession === 'function' ? _getSession() : null;
-            if (!rowData) { showToast('Profile data missing'); return; }
-            var currUidEmail = sessEmail && sessEmail.user ? sessEmail.user.id : rowData.auth_uid;
-            match = syncStore._mapRowToProfile(rowData, currUidEmail);
-            var existingIdx = allProfiles.findIndex(p => p.id === match.id);
-            if (existingIdx >= 0) allProfiles[existingIdx] = match;
-            else allProfiles.push(match);
-            saveProfiles();
-          }
-        } catch (err) {
-          console.error("[restore_profile_by_email] Fetch error:", err);
-          showToast('Network error while signing in — check your connection');
-          return;
+      var resp = await fetch('/api/request-recovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: norm })
+      });
+      await resp.json().catch(function() { return {}; });
+    } catch (err) {
+      console.warn('[recovery] network error:', err);
+    }
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Recovery link sent';
+      btn.style.background = '#059669';
+    }
+    var fb = document.getElementById('restore-email-feedback');
+    if (fb) fb.style.display = 'block';
+    showToast('Recovery link sent');
+  });
+}
+
+async function openResetPasswordModal(token) {
+  if (!token) return;
+  var existing = document.getElementById('reset-password-overlay');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'reset-password-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+  var panel = document.createElement('div');
+  panel.style.cssText = 'background:var(--bg-dark);border:1px solid var(--border);border-radius:18px;padding:24px;max-width:380px;width:100%;box-shadow:0 10px 25px rgba(0,0,0,.5);text-align:center;';
+  panel.innerHTML = `
+    <div style="font-size:24px;margin-bottom:8px;">⏳</div>
+    <div style="color:#fff;font-weight:700;font-size:15px;margin-bottom:6px;">Verifying recovery link...</div>
+    <div style="color:var(--dim);font-size:12px;">Please wait a moment.</div>
+  `;
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  function closeReset() {
+    var el = document.getElementById('reset-password-overlay');
+    if (el) el.remove();
+    if (window.location.hash.includes('recover') || window.location.hash.includes('reset')) {
+      try { history.replaceState(null, '', window.location.pathname); } catch (e) { window.location.hash = ''; }
+    }
+  }
+
+  if (typeof ensureAuthSession === 'function') {
+    await ensureAuthSession();
+  } else if (typeof signInAnonymous === 'function') {
+    var curSess = typeof _getSession === 'function' ? _getSession() : null;
+    if (!curSess || !curSess.access_token) {
+      await signInAnonymous().catch(function(e) { console.warn('[reset] signInAnonymous fallback:', e); });
+    }
+  }
+
+  var baseUrl = (typeof SUPABASE_URL === 'string' ? SUPABASE_URL : '').replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+  var verifyData = null;
+  try {
+    var resp = await fetch(baseUrl + '/rest/v1/rpc/verify_recovery_token', {
+      method: 'POST',
+      headers: authedHeaders(),
+      body: JSON.stringify({ p_token: token })
+    });
+    verifyData = await resp.json();
+    if (typeof verifyData === 'string') {
+      try { verifyData = JSON.parse(verifyData); } catch (e) {}
+    }
+  } catch (err) {
+    console.error('[reset] Verify token error:', err);
+  }
+
+  if (!verifyData || !verifyData.valid) {
+    panel.innerHTML = `
+      <div style="font-size:28px;margin-bottom:8px;">⚠️</div>
+      <h2 style="font-family:'Fredoka One',sans-serif;font-size:18px;color:#ef4444;margin:0 0 8px 0;">Link Expired or Invalid</h2>
+      <p style="font-size:12px;color:var(--dim);line-height:1.5;margin-bottom:16px;">
+        This password recovery link has already been used or has expired (links expire after 15 minutes).
+      </p>
+      <button id="reset-close-invalid" class="btn-primary" style="width:100%;">Back to Mapolis</button>
+    `;
+    document.getElementById('reset-close-invalid')?.addEventListener('click', closeReset);
+    return;
+  }
+
+  var handle = verifyData.handle || 'Player';
+  panel.innerHTML = `
+    <div style="text-align:left;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h2 style="font-family:'Fredoka One',sans-serif;font-size:20px;color:#fff;margin:0;">Set New Password</h2>
+        <button id="reset-close-btn" style="background:none;color:var(--dim);font-size:20px;border:none;cursor:pointer;padding:4px 8px;">×</button>
+      </div>
+      <div style="background:rgba(37,99,235,0.15);border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:10px 14px;margin-bottom:14px;">
+        <span style="font-size:11px;color:var(--dim);display:block;">Account:</span>
+        <strong style="font-size:15px;color:#60a5fa;">${escHtml(handle)}</strong>
+      </div>
+      <div style="font-size:11px;color:var(--dim);margin-bottom:10px;line-height:1.4;">
+        Enter a new password for this account (at least 8 characters).
+      </div>
+      <input class="field-in" type="password" id="reset-new-pw" placeholder="New password" autocomplete="new-password" style="margin-bottom:8px;">
+      <input class="field-in" type="password" id="reset-conf-pw" placeholder="Confirm new password" autocomplete="new-password">
+      <button type="button" id="reset-submit-btn" class="btn-primary" style="width:100%;margin-top:14px;">Save New Password & Sign In</button>
+    </div>
+  `;
+
+  document.getElementById('reset-close-btn')?.addEventListener('click', closeReset);
+
+  document.getElementById('reset-submit-btn')?.addEventListener('click', async function(e) {
+    if (e) e.preventDefault();
+    var pw1 = (document.getElementById('reset-new-pw')?.value || '');
+    var pw2 = (document.getElementById('reset-conf-pw')?.value || '');
+    if (!pw1 || !pw2) { showToast('Please enter and confirm your new password'); return; }
+    if (pw1 !== pw2) { showToast("Passwords don't match — try again"); return; }
+    if (pw1.length < 8) { showToast('Password must be at least 8 characters'); return; }
+
+    var submitBtn = document.getElementById('reset-submit-btn');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving...'; }
+
+    try {
+      var hash = await hashPassword(pw1);
+      var curSess = typeof _getSession === 'function' ? _getSession() : null;
+      var authUid = (curSess && curSess.user && curSess.user.id) || null;
+
+      var compResp = await fetch(baseUrl + '/rest/v1/rpc/complete_recovery', {
+        method: 'POST',
+        headers: authedHeaders(),
+        body: JSON.stringify({
+          p_token: token,
+          p_new_password_hash: hash,
+          p_auth_uid: authUid
+        })
+      });
+
+      if (!compResp.ok) {
+        var errText = await compResp.text();
+        console.error('[reset] complete_recovery error:', errText);
+        showToast('Failed to update password — please request a fresh link');
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Save New Password & Sign In'; }
+        return;
+      }
+
+      var rowData = await compResp.json();
+      if (typeof rowData === 'string') {
+        try { rowData = JSON.parse(rowData); } catch (e) {}
+      }
+      if (Array.isArray(rowData)) rowData = rowData[0];
+
+      if (rowData && typeof syncStore !== 'undefined' && typeof syncStore._mapRowToProfile === 'function') {
+        var updatedProfile = syncStore._mapRowToProfile(rowData, authUid || rowData.auth_uid);
+        var existingIdx = allProfiles.findIndex(function(p) { return p.id === updatedProfile.id; });
+        if (existingIdx >= 0) {
+          allProfiles[existingIdx] = updatedProfile;
+        } else {
+          allProfiles.push(updatedProfile);
+          existingIdx = allProfiles.length - 1;
         }
-      } else {
-        for (var i = 0; i < allProfiles.length; i++) {
-          if (allProfiles[i].parentEmail && normalizeEmail(allProfiles[i].parentEmail) === norm) {
-            match = allProfiles[i]; break;
-          }
-        }
-        if (!match) {
-          showToast('No profile matches that parent email on this device');
-          return;
-        }
-        if (match.frozen) {
-          showToast('That profile has been frozen by an administrator');
-          return;
+        saveProfiles();
+        if (typeof renderProfileCards === 'function') renderProfileCards();
+        if (typeof selectProfile === 'function' && existingIdx >= 0) {
+          selectProfile(existingIdx);
         }
       }
 
-      if (!match) { showToast('Profile not found.'); return; }
-      activeProfile = match;
-      try { localStorage.setItem(ACTIVE_KEY, activeProfile.id); } catch (e) {}
-      updateAvatarBars();
-      close();
-      showToast('Welcome back, ' + match.handle + '!');
-      go('s-setup');
-    } finally {
-      if (btn) { btn.disabled = false; btn.textContent = origBtnText; }
+      showToast('Password updated! Welcome back, ' + handle);
+      closeReset();
+    } catch (err) {
+      console.error('[reset] Exception:', err);
+      showToast('Error saving password — check your connection');
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Save New Password & Sign In'; }
     }
   });
 }
+
+function checkRecoveryHash() {
+  var hash = window.location.hash || '';
+  var match = hash.match(/#(?:recover|reset)\?token=([a-f0-9]+)/i);
+  if (match && match[1]) {
+    openResetPasswordModal(match[1]);
+  }
+}
+
 
 async function selectProfile(index) {
 

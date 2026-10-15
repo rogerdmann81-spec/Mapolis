@@ -1283,3 +1283,44 @@ Branch: pre-beta4
   3. **Peer-Synchronized Deck Priority**: In `launchReconciledMatch()`, if `_h2h.sharedDeck` is already present and valid (`>= 10` cards) from `h2h_sync_setup`, reuse it directly instead of re-rolling independent decks.
   4. **Sudden-Death Clock Aligned to 15s**: Set `COUNTDOWN_MAX = 15` so the trailing player has sufficient time to complete their questions.
   5. **Synchronized Mirrors**: Synchronized updates across `play/index.html`, `index.html`, and committed to remote branch `pre-beta5`. Deployed to production `play.mapolis.app` with zero Netlify credits.
+
+
+### Task 48: Custom Domain Outbound Email Infrastructure & Resend API Verification
+- **Status**: ✅ Complete
+- **Components**: Porkbun DNS API, Resend Email API, mapolis.app Domain Authentication
+- **What Was Accomplished**:
+  1. Connected to Porkbun DNS API using stored API keys (Porkbun-api and Porkbun-secret-api).
+  2. Injected 4 required DNS authentication records into Porkbun DNS for mapolis.app:
+     - TXT resend._domainkey (DKIM 1024-bit key)
+     - MX send (Priority 10 -> feedback-smtp.us-east-1.amazonses.com)
+     - TXT send (SPF -> v=spf1 include:amazonses.com ~all)
+     - CNAME rsend (send.forge.rmta.net)
+  3. Preserved existing root MX records (fwd1.porkbun.com, fwd2.porkbun.com) so incoming email forwarding from privacy@, security@, and support@mapolis.app to Gmail remains 100% uninterrupted.
+  4. Verified domain status on Resend (status: verified).
+  5. Dispatched a live test email from Mapolis Support <support@mapolis.app> to RogerD.Mann81@gmail.com via Resend API (Message ID: 01a13d28-c97c-727c-a13c-670f553680c2).
+  6. Verified delivery status: delivered with zero spam flags.
+
+
+### Task 49: COPPA/FERPA-Compliant Automated Password & Username Recovery with Resend API
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5
+- **What Was Built**:
+  1. **Database Infrastructure (Supabase)**:
+     - Deployed table `recovery_tokens` with `token` (unique cryptographic hex), `player_id`, `email`, `expires_at` (15 min), and `used` boolean.
+     - Deployed security definer RPC `verify_recovery_token(p_token)` that validates token freshness, unused status, and resolves the account handle.
+     - Deployed security definer RPC `complete_recovery(p_token, p_new_password_hash, p_auth_uid)` that updates `password_hash`, stamps `recovery_created_at`, re-claims `auth_uid`, and consumes the token.
+  2. **Automated Recovery Dispatcher (`netlify/functions/request-recovery.js` & `server.js`)**:
+     - Queries matching profiles by recovery email (case-insensitive).
+     - Generates 15-minute expiring tokens for each account found under that email.
+     - Assembles multi-account email layout clearly distinguishing siblings/accounts (with individual reset buttons per player handle).
+     - Dispatches email via Resend API from `Mapolis Support <support@mapolis.app>` with automatic BCC to `support@mapolis.app` (forwarding to admin Gmail).
+     - Constant response: always returns "Recovery link sent" to protect user privacy without leaking account existence.
+  3. **Game Client UI (`play/index.html` & `index.html`)**:
+     - Updated Sign-In modal: neutral "Recovery Email" tab (appropriate for kids, parents, adults, educators).
+     - Added "Forgot username or password?" button to the password panel.
+     - Submit button and toast display: "Recovery link sent".
+     - Hash-based modal (`#recover?token=...` or `#reset?token=...`): verifies token, presents clean "Set New Password for [Handle]" dialog, hashes password with Web Crypto SHA-256, and logs player directly into their profile.
+  4. **Verification**:
+     - Tested token generation, verification, and password consumption round-trip in Supabase.
+     - Verified single-use token invalidation.
+     - Verified mirrored consistency across `play/index.html` and `index.html`.

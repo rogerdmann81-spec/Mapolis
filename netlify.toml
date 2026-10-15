@@ -8,6 +8,11 @@
   publish = "."
 
 [[redirects]]
+  from = "/api/request-recovery"
+  to = "/.netlify/functions/request-recovery"
+  status = 200
+
+[[redirects]]
   from = "/admin"
   to = "/admin/index.html"
   status = 200
