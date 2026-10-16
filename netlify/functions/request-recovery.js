@@ -50,6 +50,8 @@ async function handleRecovery(body, origin) {
   if (!baseUrl.endsWith('/play')) {
     baseUrl += '/play';
   }
+  // Ensure trailing slash so Netlify serves 200 directly without 301 redirect
+  baseUrl += '/';
 
   // 2. Generate token for each profile and save to recovery_tokens table
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
@@ -81,7 +83,7 @@ async function handleRecovery(body, origin) {
         continue;
       }
 
-      const resetUrl = `${baseUrl}/#recover?token=${token}`;
+      const resetUrl = `${baseUrl}?token=${token}#recover`;
       accountCards.push({
         handle: prof.handle,
         resetUrl: resetUrl

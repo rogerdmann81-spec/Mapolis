@@ -1403,3 +1403,26 @@ Branch: pre-beta4
   3. **Verification**:
      - Validated 100% of inline scripts with AST parser (`acorn`) for zero syntax errors.
      - Verified synchronized mirrors across `play/index.html` and `index.html`.
+
+
+### Task 54: Fix Email Recovery Deep-Link Resolution and Direct Password Reset Modal
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5
+- **Problem**: When a user clicked their password reset link in the recovery email, the game opened to the title screen instead of displaying the password reset modal.
+- **Root Causes**:
+  1. **301 Redirect Hash Stripping**: The email dispatcher generated reset URLs pointing to `/play` without a trailing slash (`/play/#recover?token=...`). Netlify returned an HTTP 301 redirect to `/play/`, which causes standard email clients and mobile browsers to drop the URL fragment (`#...`) during the redirect.
+  2. **Orphaned Token Check on Launch**: `checkRecoveryHash()` was previously buried inside an avatar refresh helper under an `if (screenId !== 's-title')` condition. Since the game always initializes on `s-title`, the recovery handler was never invoked on initial page load.
+  3. **Fragment vs Query Fragility**: Previous token parsing only checked `window.location.hash` for a specific regex pattern and failed if webmail clients appended or converted parameters into query strings (`?token=...`).
+- **Resolution**:
+  1. **Dispatcher URL Hardening (`netlify/functions/request-recovery.js` & `server.js`)**:
+     - Enforced trailing slash on `baseUrl` (`https://play.mapolis.app/play/`) so Netlify serves HTTP 200 directly with zero redirects.
+     - Formatted reset link with both query parameter and hash: `https://play.mapolis.app/play/?token=${token}#recover`.
+  2. **Comprehensive URL Token Extractor (`extractRecoveryToken` & `checkRecoveryToken`)**:
+     - Inspects both `window.location.search` (`?token=...`, `?recover=...`, `?t=...`) and `window.location.hash` (`#recover?token=...`, `#reset?token=...`, `#token=...`).
+     - Added automatic triggers on initial script execution, `initApp()`, `DOMContentLoaded`, `hashchange`, and `popstate`.
+  3. **Password Reset Modal & Authentication Flow (`openResetPasswordModal`)**:
+     - Elevated overlay z-index to `100000` so it sits safely above page curtains and canvas layers.
+     - Calls Supabase `verify_recovery_token` to dynamically resolve the username.
+     - Presents clean "Set New Password for [Handle]" form with validation (min 8 chars, match check).
+     - Upon submit, generates SHA-256 Web Crypto hash, calls `complete_recovery` RPC to update password in database and mark token as used.
+     - Automatically claims profile ownership for current device session, saves to `allProfiles` and `activeProfile`, shows success toast, and logs directly into the game setup screen.
