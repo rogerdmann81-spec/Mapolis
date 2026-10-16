@@ -7372,10 +7372,10 @@ function finishH2HMatch() {
     _h2h.opponent.priorTies = oppPriorT;
     _h2h.opponent.priorMatches = oppPriorMatches;
 
-    _h2h.opponent.postWins = oppPriorW + (oppIsWin ? 1 : 0);
-    _h2h.opponent.postLosses = oppPriorL + (oppIsLoss ? 1 : 0);
-    _h2h.opponent.postTies = oppPriorT + (oppIsTie ? 1 : 0);
-    _h2h.opponent.postMatches = oppPriorMatches + 1;
+    _h2h.opponent.postWins = isBotMatch ? oppPriorW : (oppPriorW + (oppIsWin ? 1 : 0));
+    _h2h.opponent.postLosses = isBotMatch ? oppPriorL : (oppPriorL + (oppIsLoss ? 1 : 0));
+    _h2h.opponent.postTies = isBotMatch ? oppPriorT : (oppPriorT + (oppIsTie ? 1 : 0));
+    _h2h.opponent.postMatches = isBotMatch ? oppPriorMatches : (oppPriorMatches + 1);
     _h2h.opponent.ratingDelta = isBotMatch ? 0 : -_h2h.ratingDelta;
     _h2h.opponent.postRating = isBotMatch ? oppPriorRating : Math.max(0, oppPriorRating - _h2h.ratingDelta);
   }
@@ -7384,14 +7384,16 @@ function finishH2HMatch() {
   var profile = window.activeProfile;
   if (profile && profile.stats && profile.stats.h2h) {
     var h = profile.stats.h2h;
+    // Strictly preclude rating and win/loss/match records for bot matches
     if (!isBotMatch) {
       h.rating = Math.max(0, h.rating + _h2h.ratingDelta);
+      h.matches = (h.matches || 0) + 1;
+      if (_h2h.outcome === 'win')  { h.wins   = (h.wins   || 0) + 1; h.currentStreak = (h.currentStreak || 0) + 1; }
+      if (_h2h.outcome === 'loss') { h.losses = (h.losses || 0) + 1; h.currentStreak = 0; }
+      if (_h2h.outcome === 'tie')  { h.ties   = (h.ties   || 0) + 1; }
+      if (h.currentStreak > (h.bestStreak || 0)) h.bestStreak = h.currentStreak;
     }
-    h.matches = (h.matches || 0) + 1;
-    if (_h2h.outcome === 'win')  { h.wins   = (h.wins   || 0) + 1; h.currentStreak = (h.currentStreak || 0) + 1; }
-    if (_h2h.outcome === 'loss') { h.losses = (h.losses || 0) + 1; h.currentStreak = 0; }
-    if (_h2h.outcome === 'tie')  { h.ties   = (h.ties   || 0) + 1; }
-    if (h.currentStreak > (h.bestStreak || 0)) h.bestStreak = h.currentStreak;
+
     // Bank the stars earned during the match
     if (h2hStarsEarned > 0) {
       profile.stats.cr = (profile.stats.cr || 0) + h2hStarsEarned;
@@ -7402,8 +7404,9 @@ function finishH2HMatch() {
     if (!profile.stats.processedSessions) profile.stats.processedSessions = {};
     profile.stats.processedSessions[h2hSessId] = {
       crGain: h2hStarsEarned,
-      h2hMatches: 1,
+      h2hMatches: isBotMatch ? 0 : 1,
       outcome: _h2h.outcome,
+      isBot: !!isBotMatch,
       ts: new Date().toISOString()
     };
     profile.updatedAt = new Date().toISOString();
@@ -7546,7 +7549,12 @@ function renderH2HResults() {
 
   // Real opponent career stats (never synthetic formulas)
   var oppW, oppL, oppT, oppMatches;
-  if (_h2h.opponent && typeof _h2h.opponent.postWins === 'number') {
+  if (isBotMatch) {
+    oppW = (_h2h.opponent && typeof _h2h.opponent.wins === 'number') ? _h2h.opponent.wins : ((_h2h.opponent && _h2h.opponent.stats && _h2h.opponent.stats.h2h && _h2h.opponent.stats.h2h.wins) || 0);
+    oppL = (_h2h.opponent && typeof _h2h.opponent.losses === 'number') ? _h2h.opponent.losses : ((_h2h.opponent && _h2h.opponent.stats && _h2h.opponent.stats.h2h && _h2h.opponent.stats.h2h.losses) || 0);
+    oppT = (_h2h.opponent && typeof _h2h.opponent.ties === 'number') ? _h2h.opponent.ties : ((_h2h.opponent && _h2h.opponent.stats && _h2h.opponent.stats.h2h && _h2h.opponent.stats.h2h.ties) || 0);
+    oppMatches = (_h2h.opponent && typeof _h2h.opponent.matches === 'number') ? _h2h.opponent.matches : (oppW + oppL + oppT);
+  } else if (_h2h.opponent && typeof _h2h.opponent.postWins === 'number') {
     oppW = _h2h.opponent.postWins;
     oppL = _h2h.opponent.postLosses || 0;
     oppT = _h2h.opponent.postTies || 0;
@@ -7576,11 +7584,15 @@ function renderH2HResults() {
     return '<div class="ava ' + cls + '" style="background:#2a3a6a;font-size:32px">' + face + '</div>';
   }
 
+  var isBotMatch = !_h2h.isOnlineMatch || (_h2h.opponent && _h2h.opponent.isBot) || (_h2h.matchId && String(_h2h.matchId).startsWith('bot_'));
   var html = '';
   if (outcome === 'loss') {
     html += '<div class="h2h-card-loss">';
   } else if (outcome === 'win') {
     html += '<div class="h2h-card-win">';
+  }
+  if (isBotMatch) {
+    html += '<div style="font-size:11px;color:#a8c8e0;letter-spacing:1px;text-transform:uppercase;font-weight:700;margin-bottom:8px;text-align:center;">🤖 Practice Match (Unranked)</div>';
   }
 
   html += headlineHtml;
@@ -7598,17 +7610,17 @@ function renderH2HResults() {
   html += '<div class="stats">';
   html += '<div class="statrow">';
   html += '<div class="statval left">' + yourPostRating + deltaSpan(_h2h.ratingDelta) + '</div>';
-  html += '<div class="statlbl">Rating</div>';
+  html += '<div class="statlbl">' + (isBotMatch ? 'Rating (Practice)' : 'Rating') + '</div>';
   html += '<div class="statval right">' + oppPostRating + deltaSpan(oppDelta) + '</div>';
   html += '</div>';
   html += '<div class="statrow">';
   html += '<div class="statval left">' + yourMatches + '</div>';
-  html += '<div class="statlbl">Matches</div>';
+  html += '<div class="statlbl">' + (isBotMatch ? 'Matches (Career)' : 'Matches') + '</div>';
   html += '<div class="statval right">' + oppMatches + '</div>';
   html += '</div>';
   html += '<div class="statrow">';
   html += '<div class="wlt"><div class="wlthdr">W</div><div class="wlthdr">L</div><div class="wlthdr">T</div><div class="wltval">' + yourW + '</div><div class="wltval">' + yourL + '</div><div class="wltval">' + yourT + '</div></div>';
-  html += '<div class="statlbl">Record</div>';
+  html += '<div class="statlbl">' + (isBotMatch ? 'Record (Career)' : 'Record') + '</div>';
   html += '<div class="wlt right"><div class="wlthdr">W</div><div class="wlthdr">L</div><div class="wlthdr">T</div><div class="wltval">' + oppW + '</div><div class="wltval">' + oppL + '</div><div class="wltval">' + oppT + '</div></div>';
   html += '</div>';
   html += '</div>';

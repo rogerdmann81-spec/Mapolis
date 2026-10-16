@@ -1384,3 +1384,22 @@ Branch: pre-beta4
      - Ran full automated JSDOM integration tests verifying modal view switching, queue button rendering without timer, and `finishH2HMatch()` 0 rating delta on bot matches.
      - Validated with AST parser (`acorn`) for zero syntax errors.
      - Synchronized across `play/index.html`, `index.html`, `styles.css`, and `play/styles.css`.
+
+
+### Task 53: Preclude Win/Loss, Matches, and Streaks on H2H Bot Games
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5
+- **Goal**: In addition to freezing Elo on bot matches (Task 52), also completely preclude win/loss stats, total matches, and streaks so that bot games function strictly as unranked practice matches.
+- **What Was Built**:
+  1. **Profile Persistence (`finishH2HMatch` in `play/index.html` & `index.html`)**:
+     - Wrapped all career record updates (`h.matches`, `h.wins`, `h.losses`, `h.ties`, `h.currentStreak`, `h.bestStreak`) inside `if (!isBotMatch)`.
+     - When playing against a bot (`isBotMatch = true`), the player's career W/L/T record and match count remain completely untouched.
+     - Stars earned during gameplay are still credited to `profile.stats.cr` as normal.
+     - Marked session in `processedSessions` with `isBot: true` and `h2hMatches: 0`.
+  2. **Opponent Career Stats & Results Card (`renderH2HResults`)**:
+     - Ghost bot opponent career wins/losses/matches are also kept static (not incremented).
+     - Results card now features an unranked badge: `🤖 Practice Match (Unranked)`.
+     - Stat labels are clearly designated: `Rating (Practice)`, `Matches (Career)`, and `Record (Career)`, reflecting that career stats were preserved without alteration.
+  3. **Verification**:
+     - Validated 100% of inline scripts with AST parser (`acorn`) for zero syntax errors.
+     - Verified synchronized mirrors across `play/index.html` and `index.html`.
