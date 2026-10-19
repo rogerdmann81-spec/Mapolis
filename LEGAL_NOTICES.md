@@ -3,7 +3,7 @@
 Version: 1.0.0
 Date: October 2026
 Entity: Gnapoley LLC
-Repository: Mapolis (Branch: pre-beta3)
+Repository: Mapolis (Branch: pre-beta5)
 Status: Verified & Audited
 
 ---

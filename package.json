@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node server.js",
     "build": "node build-env.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node -e 'const acorn=require(\"acorn\"),fs=require(\"fs\"),h=fs.readFileSync(\"play/index.html\",\"utf8\"),r=/<script(?![^>]*src=)[^>]*>([\\s\\S]*?)<\\/script>/gi;let m;while((m=r.exec(h))!==null){acorn.parse(m[1],{ecmaVersion:\"latest\"})};console.log(\"All scripts syntax valid!\")'"
   },
   "dependencies": {
     "acorn": "^8.18.0",

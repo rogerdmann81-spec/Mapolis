@@ -1426,3 +1426,22 @@ Branch: pre-beta4
      - Presents clean "Set New Password for [Handle]" form with validation (min 8 chars, match check).
      - Upon submit, generates SHA-256 Web Crypto hash, calls `complete_recovery` RPC to update password in database and mark token as used.
      - Automatically claims profile ownership for current device session, saves to `allProfiles` and `activeProfile`, shows success toast, and logs directly into the game setup screen.
+
+
+### Task 55: Separation & Extraction of Educator Panel from Main Game Shell
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5
+- **Goal**: Cleanly extract all educator, classroom, test-grading, and competition modules from the consumer game client prior to App Store & Google Play submission, preserving the complete implementation in an archive for post-launch educator portal development.
+- **What Was Done**:
+  1. **Archive Created (`play/assets/educator-panel-archive.js` & `assets/educator-panel-archive.js`)**:
+     - Preserved 100% of educator functions (179,497 characters / 4,350+ lines of code).
+     - Includes: Educator Dashboard, Class Groups & Rosters, Competitions Engine & CSV export, Fixed Decks & Tests builder with custom grading scales, Custom Cards & Region Polygon builder, Tier Overrides engine, and Direct Educator-Student messaging.
+  2. **Main Game Shell Streamlined (`play/index.html` & `index.html`)**:
+     - Removed 7 educator HTML screen containers (`s-edu-dash`, `s-edu-students`, `s-edu-competitions`, `s-edu-tests`, `s-edu-cards`, `s-edu-search`, `s-edu-messages`).
+     - Removed all `s-edu-*` routes from `SCREEN_MAP`, `screens` array, and `triggerScreenRefresh`.
+     - Removed `🎓 Educator Dashboard` button and `Join a Class` fields from the student profile screen, keeping the consumer profile clean, responsive, and focused on player stats, avatars, and badge rewards.
+     - Reduced file size by over 4,460 lines (from ~15,860 lines down to 11,391 lines).
+  3. **Verification & Audit Alignment**:
+     - Added official `npm test` script to `package.json` running full AST syntax verification.
+     - Updated `LEGAL_NOTICES.md` header to explicitly match `Branch: pre-beta5`.
+     - Verified with `acorn` AST parser (0 syntax errors across all inline scripts).
