@@ -1803,7 +1803,7 @@ function openRestoreProfileModal() {
 
     var match = null;
     try {
-      if (isSupabaseConfigured()) {
+      if (typeof isSupabaseConfigured === 'function' && isSupabaseConfigured()) {
         try {
           if (typeof ensureAuthSession === 'function') {
             await ensureAuthSession();
@@ -2757,13 +2757,13 @@ function purchaseAvatarPack(profile, typeKey, catKey) {
 
 var cF="avataaars",sel={},col={},cT="_face",cache=new Map();
 
-function ld(fk){var s=FS[fk];sel=Object.assign({},s.def.s);col=Object.assign({},s.def.c);}
+function ld(fk){if(typeof FS==='undefined'||!FS||!FS[fk])return;var s=FS[fk];sel=Object.assign({},s.def.s);col=Object.assign({},s.def.c);}
 
-ld(cF);
+if(typeof FS!=='undefined'&&FS&&FS[cF]){ld(cF);}
 
-function gc(){return FS[cF].cats();}
+function gc(){if(typeof FS==='undefined'||!FS||!FS[cF])return [];return FS[cF].cats();}
 
-function bld(st,fk){return FS[fk||cF].svg(st);}
+function bld(st,fk){if(typeof FS==='undefined'||!FS)return '';var sh=FS[fk||cF];return sh?sh.svg(st):'';}
 
 function url(svg){return "data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg);}
 
@@ -5558,6 +5558,8 @@ function resetH2HState() {
   if (prog) { prog.style.width = '100%'; prog.style.background = ''; }
 }
 
+var _candidateOpponents = [];
+
 function startH2HQueue() {
   var profile = window.activeProfile;
   if (!profile) { showToast('No profile loaded', 1500); return; }
@@ -5616,7 +5618,7 @@ function startH2HQueue() {
   var candidateDeck = buildH2HDeck({ continent: 'globe' }, { continent: 'globe' }, tierCeiling, 'queue_' + Date.now());
 
   // Pre-fetch public profiles for realistic matchmaking fallback if needed
-  var _candidateOpponents = [];
+  _candidateOpponents = [];
   try {
     var cachedLb = localStorage.getItem(LEADERBOARD_CACHE_KEY);
     if (cachedLb) {
@@ -5781,73 +5783,96 @@ function startH2HQueue() {
 }
 
 function launchH2HBotMatch() {
-  if (_h2h.queueProgressTimer) { clearInterval(_h2h.queueProgressTimer); _h2h.queueProgressTimer = null; }
-  if (_h2h.pollTimer) { clearInterval(_h2h.pollTimer); _h2h.pollTimer = null; }
-  if (_h2h.queueCountersTimer) { clearInterval(_h2h.queueCountersTimer); _h2h.queueCountersTimer = null; }
+  try {
+    if (typeof _h2h === 'undefined' || !_h2h) {
+      _h2h = { state: 'idle' };
+    }
+    if (_h2h.queueProgressTimer) { clearInterval(_h2h.queueProgressTimer); _h2h.queueProgressTimer = null; }
+    if (_h2h.pollTimer) { clearInterval(_h2h.pollTimer); _h2h.pollTimer = null; }
+    if (_h2h.queueCountersTimer) { clearInterval(_h2h.queueCountersTimer); _h2h.queueCountersTimer = null; }
 
-  var profile = window.activeProfile;
-  if (window.h2hStore && profile && profile.id) {
-    window.h2hStore.leaveQueue(profile.id);
+    var profile = window.activeProfile || (typeof activeProfile !== 'undefined' ? activeProfile : null);
+    if (window.h2hStore && profile && profile.id) {
+      try { window.h2hStore.leaveQueue(profile.id); } catch(e){}
+    }
+
+    _h2h.isOnlineMatch = false;
+    _h2h.matchId = 'bot_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+
+    if (!_h2h.you) {
+      var pStats = (profile && profile.stats && profile.stats.h2h) ? profile.stats.h2h : { rating: 1200, matches: 0, wins: 0, losses: 0, ties: 0 };
+      _h2h.you = JSON.parse(JSON.stringify(pStats));
+    }
+    var yourRating = (_h2h.you && typeof _h2h.you.rating === 'number') ? _h2h.you.rating : 1200;
+
+    var yourGradeRaw = (profile && typeof estimateGrade === 'function') ? estimateGrade(profile) : 5;
+    var yourGrade = Math.max(1, Math.min(13, Math.floor(yourGradeRaw)));
+
+    var candidates = (typeof _candidateOpponents !== 'undefined' && Array.isArray(_candidateOpponents)) ? _candidateOpponents : [];
+    var realGhost = (candidates.length > 0)
+      ? candidates[Math.floor(Math.random() * candidates.length)]
+      : null;
+
+    if (realGhost) {
+      var ghostSvg = realGhost.avatar_svg || null;
+      var ghostFace = realGhost.avatar_face || '🧑';
+      var ghostStats = realGhost.stats || {};
+      var ghostRating = (ghostStats.h2h && typeof ghostStats.h2h.rating === 'number')
+        ? ghostStats.h2h.rating
+        : ((typeof realGhost.cr === 'number' && realGhost.cr > 0) ? realGhost.cr : Math.max(900, Math.min(2100, yourRating + rint(-60, 60))));
+      var ghostWins = (ghostStats.h2h && typeof ghostStats.h2h.wins === 'number')
+        ? ghostStats.h2h.wins
+        : ((ghostStats && typeof ghostStats.totalCorrect === 'number' && ghostStats.totalCorrect > 0) ? Math.floor(ghostStats.totalCorrect / 10) : 0);
+      var ghostLosses = (ghostStats.h2h && typeof ghostStats.h2h.losses === 'number')
+        ? ghostStats.h2h.losses
+        : 0;
+      var ghostTies = (ghostStats.h2h && typeof ghostStats.h2h.ties === 'number')
+        ? ghostStats.h2h.ties
+        : 0;
+      var ghostGrade = (typeof estimateGrade === 'function')
+        ? estimateGrade({ birthYear: realGhost.birth_year, stats: ghostStats })
+        : yourGrade;
+      var ghostMatches = (ghostStats.h2h && typeof ghostStats.h2h.matches === 'number')
+        ? ghostStats.h2h.matches
+        : (ghostWins + ghostLosses + ghostTies);
+
+      _h2h.opponent = {
+        id: realGhost.player_id,
+        handle: realGhost.handle || 'Challenger',
+        avatar: ghostSvg || ghostFace,
+        avatarFace: ghostFace,
+        avatarSvg: ghostSvg,
+        rating: ghostRating,
+        matches: ghostMatches,
+        wins: ghostWins,
+        losses: ghostLosses,
+        ties: ghostTies,
+        stats: ghostStats,
+        country: realGhost.country || '',
+        grade: ghostGrade,
+        tier: getTierCeiling(ghostGrade, 'medium'),
+        isBot: true
+      };
+    } else {
+      _h2h.opponent = H2HStub.makeOpponent(yourRating, yourGrade, 80);
+      _h2h.opponent.isBot = true;
+    }
+
+    H2H.transition('matched');
+    startH2HSetupScreen();
+  } catch (err) {
+    console.error('[h2h] Error in launchH2HBotMatch:', err);
+    try {
+      H2H.transition('matched');
+      startH2HSetupScreen();
+    } catch(e) {
+      console.error('[h2h] Critical failure starting setup screen:', e);
+    }
   }
-
-  _h2h.isOnlineMatch = false;
-  _h2h.matchId = 'bot_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
-
-  var yourGradeRaw = (profile && typeof estimateGrade === 'function') ? estimateGrade(profile) : 5;
-  var yourGrade = Math.max(1, Math.min(13, Math.floor(yourGradeRaw)));
-
-  var realGhost = (_candidateOpponents && _candidateOpponents.length > 0)
-    ? _candidateOpponents[Math.floor(Math.random() * _candidateOpponents.length)]
-    : null;
-
-  if (realGhost) {
-    var ghostSvg = realGhost.avatar_svg || null;
-    var ghostFace = realGhost.avatar_face || '🧑';
-    var ghostStats = realGhost.stats || {};
-    var ghostRating = (ghostStats.h2h && typeof ghostStats.h2h.rating === 'number')
-      ? ghostStats.h2h.rating
-      : ((typeof realGhost.cr === 'number' && realGhost.cr > 0) ? realGhost.cr : Math.max(900, Math.min(2100, _h2h.you.rating + rint(-60, 60))));
-    var ghostWins = (ghostStats.h2h && typeof ghostStats.h2h.wins === 'number')
-      ? ghostStats.h2h.wins
-      : ((ghostStats && typeof ghostStats.totalCorrect === 'number' && ghostStats.totalCorrect > 0) ? Math.floor(ghostStats.totalCorrect / 10) : 0);
-    var ghostLosses = (ghostStats.h2h && typeof ghostStats.h2h.losses === 'number')
-      ? ghostStats.h2h.losses
-      : 0;
-    var ghostTies = (ghostStats.h2h && typeof ghostStats.h2h.ties === 'number')
-      ? ghostStats.h2h.ties
-      : 0;
-    var ghostGrade = (typeof estimateGrade === 'function')
-      ? estimateGrade({ birthYear: realGhost.birth_year, stats: ghostStats })
-      : yourGrade;
-    var ghostMatches = (ghostStats.h2h && typeof ghostStats.h2h.matches === 'number')
-      ? ghostStats.h2h.matches
-      : (ghostWins + ghostLosses + ghostTies);
-
-    _h2h.opponent = {
-      id: realGhost.player_id,
-      handle: realGhost.handle || 'Challenger',
-      avatar: ghostSvg || ghostFace,
-      avatarFace: ghostFace,
-      avatarSvg: ghostSvg,
-      rating: ghostRating,
-      matches: ghostMatches,
-      wins: ghostWins,
-      losses: ghostLosses,
-      ties: ghostTies,
-      stats: ghostStats,
-      country: realGhost.country || '',
-      grade: ghostGrade,
-      tier: getTierCeiling(ghostGrade, 'medium'),
-      isBot: true
-    };
-  } else {
-    _h2h.opponent = H2HStub.makeOpponent(_h2h.you.rating, yourGrade, 80);
-    _h2h.opponent.isBot = true;
-  }
-
-  H2H.transition('matched');
-  startH2HSetupScreen();
 }
+
+window.launchH2HBotMatch = launchH2HBotMatch;
+window.startH2HSetupScreen = startH2HSetupScreen;
 
 function cancelH2HQueue() {
   if (_h2h.queueProgressTimer) { clearInterval(_h2h.queueProgressTimer); _h2h.queueProgressTimer = null; }
@@ -5965,7 +5990,7 @@ function renderH2HQueue() {
   var cancelBtn = document.getElementById('h2h-queue-cancel') || document.getElementById('h2h-queue-back');
   if (cancelBtn) cancelBtn.addEventListener('click', function() { AudioMgr.bubble(); cancelH2HQueue(); });
   var botBtn = document.getElementById('h2h-queue-bot');
-  if (botBtn) botBtn.addEventListener('click', function() { AudioMgr.bubble(); launchH2HBotMatch(); });
+  if (botBtn) botBtn.addEventListener('click', function() { try { if (typeof AudioMgr !== 'undefined' && AudioMgr.bubble) AudioMgr.bubble(); } catch(e){} launchH2HBotMatch(); });
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -6263,6 +6288,25 @@ function startH2HSetupScreen() {
   go('s-h2h-setup');
 }
 
+function leaveH2HSetupScreen() {
+  if (typeof _h2hSetup !== 'undefined' && _h2hSetup) {
+    if (_h2hSetup.botStep1Timer) { clearTimeout(_h2hSetup.botStep1Timer); _h2hSetup.botStep1Timer = null; }
+    if (_h2hSetup.botStep2Timer) { clearTimeout(_h2hSetup.botStep2Timer); _h2hSetup.botStep2Timer = null; }
+    if (_h2hSetup.botStep3Timer) { clearTimeout(_h2hSetup.botStep3Timer); _h2hSetup.botStep3Timer = null; }
+    if (_h2hSetup.timer) { clearInterval(_h2hSetup.timer); _h2hSetup.timer = null; }
+    if (_h2hSetup.pollTimer) { clearInterval(_h2hSetup.pollTimer); _h2hSetup.pollTimer = null; }
+    if (_h2hSetup.launchCountdown) { clearInterval(_h2hSetup.launchCountdown); _h2hSetup.launchCountdown = null; }
+    if (_h2hSetup.channel) { try { _h2hSetup.channel.unsubscribe(); } catch(e){} }
+  }
+  resetH2HState();
+  if (window.h2hStore && window.activeProfile && window.activeProfile.id) {
+    try { window.h2hStore.leaveQueue(window.activeProfile.id); } catch(e){}
+  }
+  H2H.transition('idle');
+  go('s-setup');
+}
+window.leaveH2HSetupScreen = leaveH2HSetupScreen;
+
 function broadcastH2HSetupState() {
   if (_h2hSetup && typeof _h2hSetup.syncOnlineSetup === 'function') {
     _h2hSetup.syncOnlineSetup(true);
@@ -6523,6 +6567,7 @@ function renderH2HSetupUI() {
 
   // 6. Action Bar
   html += '<div class="h2h-s-action">';
+  html += '  <button class="h2h-s-btn-leave" id="h2h-s-btn-leave" style="padding:10px 14px;border-radius:12px;background:rgba(255,255,255,0.08);color:#a8c8e0;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;border:none;cursor:pointer;">← Leave</button>';
   if (_h2hSetup.youReady) {
     html += '  <button class="h2h-s-btn-ready is-ready" id="h2h-s-btn-ready">';
     html += '    <span>✓</span><span>YOU ARE READY</span>';
@@ -6569,7 +6614,14 @@ function renderH2HSetupUI() {
     });
   });
 
-  var readyBtn = document.getElementById('h2h-s-btn-ready');
+  var leaveBtn = document.getElementById('h2h-s-btn-leave');
+  if (leaveBtn) {
+    leaveBtn.addEventListener('click', function() {
+      try { if (typeof AudioMgr !== 'undefined' && AudioMgr.bubble) AudioMgr.bubble(); } catch(e){}
+      leaveH2HSetupScreen();
+    });
+  }
+    var readyBtn = document.getElementById('h2h-s-btn-ready');
   if (readyBtn) {
     readyBtn.addEventListener('click', function() {
       AudioMgr.bubble();
@@ -9690,7 +9742,7 @@ window.addEventListener('offline', () => {
 
 (function initSync() {
 
-  if (navigator.onLine && isSupabaseConfigured()) {
+  if (navigator.onLine && typeof isSupabaseConfigured === 'function' && isSupabaseConfigured()) {
 
     setTimeout(() => syncStore.processQueue(), 2000);
 

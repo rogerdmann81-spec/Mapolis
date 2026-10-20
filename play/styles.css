@@ -2554,3 +2554,7 @@ body.impersonating .screen { padding-bottom: 54px !important; }
 #globe-picker-root .gp-lb{margin-top:18px;background:transparent;border:1px solid rgba(255,255,255,.22);color:#cfe3f5;padding:11px 26px;border-radius:999px;font-size:12px;cursor:pointer;z-index:2;font-weight:500;font-family:inherit}
 #globe-picker-root .gp-lb:hover{background:rgba(255,255,255,.08)}
 #globe-picker-root .gp-foot{margin-top:14px;font-size:10px;color:#6a8ebf;letter-spacing:1px;text-transform:uppercase;z-index:2}
+.h2h-s-btn-leave:hover {
+  background: rgba(255, 255, 255, 0.16) !important;
+  color: #ffffff !important;
+}

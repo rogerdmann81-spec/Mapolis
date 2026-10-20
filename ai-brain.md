@@ -1445,3 +1445,26 @@ Branch: pre-beta4
      - Added official `npm test` script to `package.json` running full AST syntax verification.
      - Updated `LEGAL_NOTICES.md` header to explicitly match `Branch: pre-beta5`.
      - Verified with `acorn` AST parser (0 syntax errors across all inline scripts).
+
+
+### Task 56: Fix Bot Battle Button in H2H Queue & Enable Zero-Credit Static Deploy
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5
+- **Problem**:
+  1. Clicking "🤖 Play Bot" in the H2H matchmaking queue screen did not navigate to the H2H configuration / lobby screen (`s-h2h-setup`).
+  2. Over half of the monthly Netlify credits were consumed within a few days into the billing cycle.
+- **Root Causes**:
+  1. **ReferenceError in Matchmaking**: `_candidateOpponents` was declared with `var` inside `startH2HQueue()`. When the user clicked "🤖 Play Bot", `launchH2HBotMatch()` evaluated `(_candidateOpponents && _candidateOpponents.length > 0)`, throwing an unhandled `ReferenceError: _candidateOpponents is not defined` that synchronously halted execution before `startH2HSetupScreen()` and `go('s-h2h-setup')` could be reached.
+  2. **Potential Null Dereference**: `_h2h.you.rating` was directly read in `launchH2HBotMatch()` without a null guard for cases where `_h2h.you` had not been initialized.
+  3. **Netlify Credit Consumption**:
+     - Netlify continuous integration was active (`stop_builds: False`) on the repository, triggering cloud build VMs on every commit.
+     - `netlify.toml` specified `command = "npm run build"`, causing `@netlify/build` to execute build runners rather than uploading pre-built static files directly to Netlify CDN edge.
+- **Resolution**:
+  1. **H2H Bot Match Launcher Hardening (`play/index.html` & `index.html`)**:
+     - Hoisted `var _candidateOpponents = [];` to script module scope, populated from localStorage cache and Supabase leaderboard.
+     - Added robust fallback logic in `launchH2HBotMatch()`: auto-populates `_h2h.you` and `yourRating` from active profile, guards candidate ghost lookups, and catches any transient errors while still guaranteeing transition to `s-h2h-setup`.
+     - Attached `window.launchH2HBotMatch` and `window.startH2HSetupScreen` to global window.
+     - Added safe guards for `ld(cF)`, `gc()`, `bld()`, and `isSupabaseConfigured()`.
+     - Added clean `← Leave` button to the H2H setup screen (`#h2h-s-btn-leave`) wired to `leaveH2HSetupScreen()` to cancel bot setup timers and return to `s-setup`.
+  2. **Netlify Credit Conservation**:
+     - Cleaned up build workflows to utilize pre-built static file publishing, bypassing heavy Netlify build container minutes.
