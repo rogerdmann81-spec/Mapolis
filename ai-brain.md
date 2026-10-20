@@ -1,3 +1,19 @@
+# 🚨 STRICT PRODUCTION DEPLOYMENT RULE (ZERO NETLIFY CREDITS)
+**CRITICAL REQUIREMENT**: Never trigger remote Netlify cloud builds or run build plugins that consume Netlify build minutes/credits.
+Netlify cloud builds have been paused (`stop_builds: true`) on the `mapolis-play` site to prevent automatic credit burn on git commits.
+
+### How to Deploy in the Future with Zero Credits
+When you want to deploy updates to Netlify production, use:
+
+```bash
+npx netlify deploy --dir . --functions netlify/functions --prod --no-build
+```
+
+* **`--no-build`**: Tells Netlify CLI not to run any build plugins or build tasks.
+* **Direct Edge CDN Upload**: This performs a direct file upload to Netlify’s High-Performance Edge CDN with **0 build minutes and 0 credit cost**.
+
+---
+
 MAPOLIS (currently working in "modularization" branch) - AI BRAIN & SOURCE OF TRUTH
 1. Project Overview
 Name: Mapolis
@@ -1468,3 +1484,14 @@ Branch: pre-beta4
      - Added clean `← Leave` button to the H2H setup screen (`#h2h-s-btn-leave`) wired to `leaveH2HSetupScreen()` to cancel bot setup timers and return to `s-setup`.
   2. **Netlify Credit Conservation**:
      - Cleaned up build workflows to utilize pre-built static file publishing, bypassing heavy Netlify build container minutes.
+
+### How to Deploy in the Future with Zero Credits
+When you want to deploy updates to Netlify production, use:
+
+```bash
+npx netlify deploy --dir . --functions netlify/functions --prod --no-build
+```
+
+* **`--no-build`**: Tells Netlify CLI not to run any build plugins or build tasks.
+* This performs a direct file upload to Netlify’s High-Performance Edge CDN with **0 build minutes and 0 credit cost**.
+
