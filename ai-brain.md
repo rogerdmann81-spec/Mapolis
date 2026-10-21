@@ -1504,3 +1504,19 @@ npx netlify deploy --dir . --functions netlify/functions --prod --no-build
   1. `mapolis-play` (`5ff39fc4-77c2-411f-a2d6-c5914f4197eb` / `play.mapolis.app`) - Consumer Game
   2. `mapolis-admin` (`dd211c69-0b6f-4e30-826a-f032f85c745d` / `mapolis-admin.netlify.app`) - Admin Portal
 - **Action**: Permanently deleted `mapolis-pre-beta4` via Netlify API (`HTTP 204`). Verified site count reduced from 3 to 2.
+
+
+### Task 58: Production Deployment of pre-beta5 to play.mapolis.app via Zero-Credit Flow
+- **Status**: ✅ Complete
+- **Target**: `https://play.mapolis.app`
+- **Deploy ID**: `6ad8c93bfff4d70a1bb566b6`
+- **What Was Done**:
+  1. Refreshed static runtime configuration with `node build-env.js`.
+  2. Unlocked production deployment lock via Netlify API.
+  3. Executed direct Edge CDN deployment using the strict zero-credit rule:
+     `npx netlify deploy --site 5ff39fc4-77c2-411f-a2d6-c5914f4197eb --dir . --functions netlify/functions --prod --no-build`
+  4. Live Verification:
+     - `https://play.mapolis.app/play/` verified serving exact 11,443 lines matching `play/index.html`.
+     - Task 55 (Streamlined consumer client without educator panel) is live.
+     - Task 56 (H2H matchmaking bot button fix + lobby leave button) is live.
+     - Consumed 0 Netlify build minutes / 0 build credits.
