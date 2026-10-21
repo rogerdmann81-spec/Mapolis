@@ -1495,3 +1495,12 @@ npx netlify deploy --dir . --functions netlify/functions --prod --no-build
 * **`--no-build`**: Tells Netlify CLI not to run any build plugins or build tasks.
 * This performs a direct file upload to Netlify’s High-Performance Edge CDN with **0 build minutes and 0 credit cost**.
 
+
+
+### Task 57: Cleanup Stale Netlify Projects & Confirm Dual-Site Architecture
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5
+- **Goal**: Delete the obsolete `mapolis-pre-beta4` site on Netlify (`5bb58061-3f14-463f-99d3-6f7c9fb5b843`), leaving only the two required environments:
+  1. `mapolis-play` (`5ff39fc4-77c2-411f-a2d6-c5914f4197eb` / `play.mapolis.app`) - Consumer Game
+  2. `mapolis-admin` (`dd211c69-0b6f-4e30-826a-f032f85c745d` / `mapolis-admin.netlify.app`) - Admin Portal
+- **Action**: Permanently deleted `mapolis-pre-beta4` via Netlify API (`HTTP 204`). Verified site count reduced from 3 to 2.
