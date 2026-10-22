@@ -1520,3 +1520,27 @@ npx netlify deploy --dir . --functions netlify/functions --prod --no-build
      - Task 55 (Streamlined consumer client without educator panel) is live.
      - Task 56 (H2H matchmaking bot button fix + lobby leave button) is live.
      - Consumed 0 Netlify build minutes / 0 build credits.
+
+
+### Task 59: PWA Offline Asset Pre-Caching & Classroom Tablet Resilience
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5
+- **Goal**: Ensure classroom tablets with flaky or intermittent school Wi-Fi can play solo mode without connection drops by implementing a robust Service Worker that pre-caches `countries-50m.json`, `map-data.js`, and `avatar-assets.js` alongside the core game shell.
+- **What Was Done**:
+  1. **Service Worker (`sw.js` & `play/sw.js`)**:
+     - Pre-caches `countries-50m.json` (756 KB TopoJSON), `map-data.js` (1.9 MB dataset), and `avatar-assets.js` (1.26 MB SVG library) on `install` event.
+     - Implemented Cache-First strategy with automatic relative fallback matching for core geography datasets, so `fetch('/data/countries-50m.json')` returns immediately from CacheStorage even with zero internet connectivity.
+     - Implemented Network-First with Cache fallback for navigation requests.
+     - Network-only with graceful offline fallback response for Supabase API requests.
+     - Automatic cache version cleanup (`mapolis-cache-v1`) and immediate client claiming (`clients.claim()`).
+  2. **Web App Manifest & High-Res App Icons**:
+     - Created compliant `manifest.json` and `play/manifest.json` (`id: '/'`, `display: 'standalone'`, `start_url: '/play/'`, `theme_color: '#060d2e'`).
+     - Generated standard PWA icons: `pwa-192x192.png`, `pwa-512x512.png`, `pwa-maskable-512x512.png`, `apple-touch-icon.png`, and `icon.svg`.
+  3. **UI Indicators & Install Prompt (`play/index.html` & `index.html`)**:
+     - Added `#pwa-offline-badge`: subtle floating status pill ("⚡ Offline Solo Mode Active") that automatically reveals when the tablet loses Wi-Fi connection and hides when restored.
+     - Wired online/offline event listeners with polite toast notifications.
+     - Added `#btn-pwa-install` ("📲 Install App") in the title footer, wired to `beforeinstallprompt` (and guided fallback for iOS Safari).
+  4. **Verification**:
+     - Verified all 24 pre-cache assets return HTTP 200 OK.
+     - Verified AST syntax with `npm test` (0 errors).
+     - Verified with `compile_applet`.
