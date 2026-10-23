@@ -130,8 +130,7 @@
           <button class="title-credits-btn" data-go="s-credits">Credits</button>
           <span class="title-footer-sep">·</span>
           <button class="title-privacy-btn" data-go="s-compliance">Privacy &amp; Safety</button>
-          <span class="title-footer-sep pwa-install-sep" style="display:none;">·</span>
-          <button id="btn-pwa-install" class="title-credits-btn" style="display:none;color:#4ade80;font-weight:700;">📲 Install App</button>
+
         </div>
 
       </div>
@@ -587,7 +586,7 @@
 
 <!-- OFFLINE INDICATOR -->
 
-<div class="offline-bar" id="offline-bar">Offline — scores will sync when connected</div>
+
 
 <script src="avatar-assets.js"></script>
 <script src="map-data.js"></script>
@@ -1173,23 +1172,7 @@ function getTierCeiling(grade, difficulty) {
 
 }
 
-function updateOnlineStatus() {
-
-  const bar = document.getElementById('offline-bar');
-
-  if (!bar) return;
-
-  if (!navigator.onLine) {
-
-    bar.classList.add('show');
-
-  } else {
-
-    bar.classList.remove('show');
-
-  }
-
-}
+function updateOnlineStatus() {}
 
 function initApp() {
 
@@ -11449,102 +11432,23 @@ function showNotesModal() {
 
 
 /* ══════════════════════════════════════════════════════════════════════
-   PWA SERVICE WORKER REGISTRATION & OFFLINE SOLO MODE (pre-beta5)
+   PWA SERVICE WORKER REGISTRATION (Silent Background Pre-Caching)
    ══════════════════════════════════════════════════════════════════════ */
 (function initPWA() {
-  // 1. Service Worker Registration
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
       var swUrl = window.location.pathname.startsWith('/play') ? '/sw.js' : 'sw.js';
       navigator.serviceWorker.register(swUrl, { scope: '/' })
         .then(function(reg) {
-          console.log('[PWA] Service Worker registered with scope:', reg.scope);
+          console.log('[PWA] Service Worker registered silently (scope: ' + reg.scope + ')');
         })
         .catch(function(err) {
           navigator.serviceWorker.register('sw.js')
-            .then(function(r) { console.log('[PWA] Relative Service Worker registered:', r.scope); })
             .catch(function(e) { console.warn('[PWA] Service Worker registration failed:', e); });
         });
     });
   }
-
-  // 2. Offline Status Detection & Visual Indicator
-  function updateOnlineStatus() {
-    var badge = document.getElementById('pwa-offline-badge');
-    var isOffline = !navigator.onLine;
-    if (badge) {
-      badge.style.display = isOffline ? 'inline-flex' : 'none';
-    }
-  }
-
-  window.addEventListener('online', function() {
-    updateOnlineStatus();
-    if (typeof showToast === 'function') {
-      showToast('🟢 Online: Sync restored', 2500);
-    }
-  });
-
-  window.addEventListener('offline', function() {
-    updateOnlineStatus();
-    if (typeof showToast === 'function') {
-      showToast('⚡ Offline Mode: Solo play ready with cached maps & avatars', 4000);
-    }
-  });
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', updateOnlineStatus);
-  } else {
-    updateOnlineStatus();
-  }
-
-  // 3. In-App Install Prompt Handling
-  var _deferredInstallPrompt = null;
-  window.addEventListener('beforeinstallprompt', function(e) {
-    e.preventDefault();
-    _deferredInstallPrompt = e;
-    var btn = document.getElementById('btn-pwa-install');
-    var sep = document.querySelector('.pwa-install-sep');
-    if (btn) btn.style.display = 'inline-block';
-    if (sep) sep.style.display = 'inline';
-  });
-
-  window.addEventListener('load', function() {
-    var installBtn = document.getElementById('btn-pwa-install');
-    if (installBtn) {
-      installBtn.addEventListener('click', async function() {
-        if (_deferredInstallPrompt) {
-          _deferredInstallPrompt.prompt();
-          var choice = await _deferredInstallPrompt.userChoice;
-          if (choice && choice.outcome === 'accepted') {
-            _deferredInstallPrompt = null;
-            installBtn.style.display = 'none';
-            var sep = document.querySelector('.pwa-install-sep');
-            if (sep) sep.style.display = 'none';
-          }
-        } else {
-          if (typeof showToast === 'function') {
-            showToast('iOS: Tap Safari Share ⎋ > Add to Home Screen', 4500);
-          }
-        }
-      });
-    }
-  });
-
-  window.addEventListener('appinstalled', function() {
-    _deferredInstallPrompt = null;
-    var btn = document.getElementById('btn-pwa-install');
-    var sep = document.querySelector('.pwa-install-sep');
-    if (btn) btn.style.display = 'none';
-    if (sep) sep.style.display = 'none';
-    if (typeof showToast === 'function') {
-      showToast('Mapolis installed to Home Screen! 🚀', 3000);
-    }
-  });
 })();
 </script>
-<!-- PWA Offline Badge -->
-<div id="pwa-offline-badge" style="display:none;position:fixed;bottom:16px;left:16px;z-index:99998;background:rgba(6,13,46,0.95);border:1px solid rgba(255,215,0,0.5);border-radius:24px;padding:6px 14px;color:#ffd700;font-family:'Nunito',sans-serif;font-size:12px;font-weight:800;letter-spacing:0.02em;box-shadow:0 6px 20px rgba(0,0,0,0.6);backdrop-filter:blur(6px);align-items:center;gap:8px;pointer-events:none;">
-  <span style="width:8px;height:8px;border-radius:50%;background:#ffaa00;box-shadow:0 0 8px #ffaa00;display:inline-block;"></span>
-  <span>⚡ Offline Solo Mode Active</span>
-</div>
-</body></html>
+</body>
+</html>

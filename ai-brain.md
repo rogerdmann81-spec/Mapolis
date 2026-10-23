@@ -1544,3 +1544,17 @@ npx netlify deploy --dir . --functions netlify/functions --prod --no-build
      - Verified all 24 pre-cache assets return HTTP 200 OK.
      - Verified AST syntax with `npm test` (0 errors).
      - Verified with `compile_applet`.
+
+
+### Task 60: Remove All Offline UI Indicators & Install Button
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5
+- **Goal**: Cleanly eliminate all offline UI popups (the top header bar, the bottom floating pill/button, and offline/online toasts), as well as any in-app install buttons, so that offline play and Service Worker pre-caching run 100% silently in the background without UI interruption.
+- **What Was Done**:
+  1. Removed the top `<div class="offline-bar" id="offline-bar">` header bar element from `play/index.html` and `index.html`.
+  2. Neutralized `.offline-bar` styles in `play/styles.css` and `styles.css`.
+  3. Made `updateOnlineStatus()` an empty no-op so offline/online browser events no longer manipulate UI or toggle classes.
+  4. Removed `#pwa-offline-badge` (the bottom floating status button).
+  5. Removed `#btn-pwa-install` and `.pwa-install-sep` from the title footer.
+  6. Simplified `initPWA()` to strictly register `/sw.js` in the background with zero UI interaction, alerts, or toasts.
+  7. Pre-caching of `countries-50m.json`, `map-data.js`, and `avatar-assets.js` continues to function silently in CacheStorage for uninterrupted solo play.
