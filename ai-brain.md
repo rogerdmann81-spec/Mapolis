@@ -1,4 +1,11 @@
 # 🚨 STRICT PRODUCTION DEPLOYMENT RULE (ZERO NETLIFY CREDITS)
+
+## 🚨 MANDATORY DEPLOYMENT POLICY (Effective Oct 23, 2026)
+- **STRICT HALT ON NETLIFY DEPLOYS**: DO NOT run Netlify deploy commands (CLI or API) or update `play.mapolis.app` under any circumstances UNLESS the user explicitly provides written instruction in the current turn to deploy to Netlify.
+- **ZERO CREDIT TESTING**: All ongoing development and feature testing must be conducted exclusively via the Google AI Studio / Cloud Run environments:
+  - **Live Test URL**: https://ais-pre-evasvk5avwiwkany7l4o5q-74602297832.us-east1.run.app/play/
+  - **Dev Test URL**: https://ais-dev-evasvk5avwiwkany7l4o5q-74602297832.us-east1.run.app/play/
+- These environments connect directly to the production Supabase database, run identical code, and consume **ZERO Netlify credits**.
 **CRITICAL REQUIREMENT**: Never trigger remote Netlify cloud builds or run build plugins that consume Netlify build minutes/credits.
 Netlify cloud builds have been paused (`stop_builds: true`) on the `mapolis-play` site to prevent automatic credit burn on git commits.
 
