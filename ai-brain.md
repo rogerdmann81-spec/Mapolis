@@ -1558,3 +1558,16 @@ npx netlify deploy --dir . --functions netlify/functions --prod --no-build
   5. Removed `#btn-pwa-install` and `.pwa-install-sep` from the title footer.
   6. Simplified `initPWA()` to strictly register `/sw.js` in the background with zero UI interaction, alerts, or toasts.
   7. Pre-caching of `countries-50m.json`, `map-data.js`, and `avatar-assets.js` continues to function silently in CacheStorage for uninterrupted solo play.
+
+
+### Task 61: Restore Robot Avatar & Robot Identity for H2H Bot Matches
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5
+- **Issue**: When tapping "🤖 Play Bot" in the Head-to-Head queue, `launchH2HBotMatch` was checking `_candidateOpponents` and pulling real human player profiles from the leaderboard/Supabase (`realGhost`), which assigned the bot a human child's handle and human child avatar (`🧑`).
+- **Resolution**:
+  1. Updated `launchH2HBotMatch` to bypass ghost player borrowing when the player explicitly selects a Bot match.
+  2. Fixed `H2HStub.makeOpponent`:
+     - Now always generates a dedicated robot SVG avatar using `makeAvatarSvg(seed, 'bottts')`.
+     - Explicitly sets `avatarFace: '🤖'` and `avatarSvg: botSvg`.
+     - Sets `handle: 'Bot'`.
+  3. Fixed post-match results screen avatar renderer (`avaHtml`) to properly support opponent SVGs without broken `<img>` tags on emoji fallbacks.

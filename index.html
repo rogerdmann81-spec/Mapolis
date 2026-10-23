@@ -5387,9 +5387,12 @@ var H2HStub = (function(){
     var botWins = Math.round(botMatches * (rating >= 1200 ? 0.58 : 0.42));
     var botLosses = Math.round(botMatches * (rating >= 1200 ? 0.36 : 0.52));
     var botTies = Math.max(0, botMatches - botWins - botLosses);
+    var botSvg = makeAvatarSvg(avatarSeed, 'bottts');
     return {
-      handle: handle,
-      avatar: makeAvatarSvg(avatarSeed, isRealBot ? 'bottts' : null),
+      handle: isRealBot ? 'Bot' : handle,
+      avatar: (isRealBot ? (botSvg || '🤖') : (makeAvatarSvg(avatarSeed, null) || '🧑')),
+      avatarFace: isRealBot ? '🤖' : '🧑',
+      avatarSvg: isRealBot ? botSvg : makeAvatarSvg(avatarSeed, null),
       rating: rating,
       grade: grade,
       tier: 6,
@@ -5796,55 +5799,9 @@ function launchH2HBotMatch() {
     var yourGradeRaw = (profile && typeof estimateGrade === 'function') ? estimateGrade(profile) : 5;
     var yourGrade = Math.max(1, Math.min(13, Math.floor(yourGradeRaw)));
 
-    var candidates = (typeof _candidateOpponents !== 'undefined' && Array.isArray(_candidateOpponents)) ? _candidateOpponents : [];
-    var realGhost = (candidates.length > 0)
-      ? candidates[Math.floor(Math.random() * candidates.length)]
-      : null;
-
-    if (realGhost) {
-      var ghostSvg = realGhost.avatar_svg || null;
-      var ghostFace = realGhost.avatar_face || '🧑';
-      var ghostStats = realGhost.stats || {};
-      var ghostRating = (ghostStats.h2h && typeof ghostStats.h2h.rating === 'number')
-        ? ghostStats.h2h.rating
-        : ((typeof realGhost.cr === 'number' && realGhost.cr > 0) ? realGhost.cr : Math.max(900, Math.min(2100, yourRating + rint(-60, 60))));
-      var ghostWins = (ghostStats.h2h && typeof ghostStats.h2h.wins === 'number')
-        ? ghostStats.h2h.wins
-        : ((ghostStats && typeof ghostStats.totalCorrect === 'number' && ghostStats.totalCorrect > 0) ? Math.floor(ghostStats.totalCorrect / 10) : 0);
-      var ghostLosses = (ghostStats.h2h && typeof ghostStats.h2h.losses === 'number')
-        ? ghostStats.h2h.losses
-        : 0;
-      var ghostTies = (ghostStats.h2h && typeof ghostStats.h2h.ties === 'number')
-        ? ghostStats.h2h.ties
-        : 0;
-      var ghostGrade = (typeof estimateGrade === 'function')
-        ? estimateGrade({ birthYear: realGhost.birth_year, stats: ghostStats })
-        : yourGrade;
-      var ghostMatches = (ghostStats.h2h && typeof ghostStats.h2h.matches === 'number')
-        ? ghostStats.h2h.matches
-        : (ghostWins + ghostLosses + ghostTies);
-
-      _h2h.opponent = {
-        id: realGhost.player_id,
-        handle: realGhost.handle || 'Challenger',
-        avatar: ghostSvg || ghostFace,
-        avatarFace: ghostFace,
-        avatarSvg: ghostSvg,
-        rating: ghostRating,
-        matches: ghostMatches,
-        wins: ghostWins,
-        losses: ghostLosses,
-        ties: ghostTies,
-        stats: ghostStats,
-        country: realGhost.country || '',
-        grade: ghostGrade,
-        tier: getTierCeiling(ghostGrade, 'medium'),
-        isBot: true
-      };
-    } else {
-      _h2h.opponent = H2HStub.makeOpponent(yourRating, yourGrade, 80);
-      _h2h.opponent.isBot = true;
-    }
+    // When playing a Bot, ALWAYS generate a dedicated Robot avatar and Robot profile
+    _h2h.opponent = H2HStub.makeOpponent(yourRating, yourGrade, 80, true);
+    _h2h.opponent.isBot = true;
 
     H2H.transition('matched');
     startH2HSetupScreen();
@@ -7640,7 +7597,9 @@ function renderH2HResults() {
   html += headlineHtml;
   html += '<div class="avarow">';
   html += '<div class="avaslot">' + avaHtml(youSvg, youFace, youAvaCls) + '<div class="you-tag">You</div><div class="uname">' + escapeHtml(youHandle) + '</div></div>';
-  html += '<div class="avaslot">' + (oppAva ? '<div class="ava ' + oppAvaCls + '" style="background:#2a3a6a"><img src="' + oppAva + '" style="width:100%;height:100%;display:block"></div>' : '<div class="ava ' + oppAvaCls + '" style="background:#2a3a6a;font-size:32px">🤖</div>') + '<div class="opp-tag">Opponent</div><div class="uname">' + escapeHtml(oppHandle) + '</div></div>';
+  var oppSvg = (_h2h.opponent && _h2h.opponent.avatarSvg) || (_h2h.opponent && typeof _h2h.opponent.avatar === 'string' && _h2h.opponent.avatar.startsWith('data:image/svg') ? _h2h.opponent.avatar : null);
+  var oppFace = (_h2h.opponent && _h2h.opponent.avatarFace) || ((_h2h.opponent && _h2h.opponent.isBot) ? '🤖' : '⚔️');
+  html += '<div class="avaslot">' + avaHtml(oppSvg, oppFace, oppAvaCls) + '<div class="opp-tag">Opponent</div><div class="uname">' + escapeHtml(oppHandle) + '</div></div>';
   html += '</div>';
 
   html += '<div class="scorerow">';
