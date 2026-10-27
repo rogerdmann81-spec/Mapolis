@@ -34,6 +34,24 @@ const recoveryRoute = async (req, res) => {
 };
 
 app.post('/api/request-recovery', recoveryRoute);
+
+const welcomeNoticeHandler = async (req, res) => {
+  try {
+    const fn = require('./netlify/functions/send-welcome-notice').handler;
+    const event = {
+      httpMethod: 'POST',
+      body: JSON.stringify(req.body),
+      headers: req.headers
+    };
+    const result = await fn(event);
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('[server] Welcome notice route error:', err);
+    res.status(200).json({ ok: true, message: 'Notice processed' });
+  }
+};
+app.post('/api/send-welcome-notice', welcomeNoticeHandler);
+app.post('/.netlify/functions/send-welcome-notice', welcomeNoticeHandler);
 app.post('/.netlify/functions/request-recovery', recoveryRoute);
 
 app.use(express.static(__dirname));

@@ -1578,3 +1578,31 @@ npx netlify deploy --dir . --functions netlify/functions --prod --no-build
      - Explicitly sets `avatarFace: '🤖'` and `avatarSvg: botSvg`.
      - Sets `handle: 'Bot'`.
   3. Fixed post-match results screen avatar renderer (`avaHtml`) to properly support opponent SVGs without broken `<img>` tags on emoji fallbacks.
+
+
+### Task 62: Progressive Parent & Recovery Email Link Flow + Welcome Notice
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5
+- **Goal**: Enable players to optionally link a parent email (if under 18) or a recovery email (if 18+) directly from their Profile and Setup/Region screens as a password recovery safety net without making email mandatory to play. Dispatch a COPPA-compliant parent notice or adult recovery confirmation email upon linkage.
+- **What Was Done**:
+  1. **Account Security Card on Profile Screen (`s-profile`)**:
+     - Computes player age bracket dynamically via `computeAgeFromBirthYear(profile.birthYear)`.
+     - When unlinked:
+       - Minor (<18): Displays `🛡️ Add Parent Email` with subtext: *"A safety net in case you ever forget your username or passcode."*
+       - Adult (18+): Displays `✉️ Add Recovery Email` with subtext: *"Add a recovery email in case you ever forget your password."*
+     - When linked:
+       - Displays green protected badge with masked email (`🛡️ Parent Email Protected (p***t@domain.com)` or `✉️ Recovery Email Protected`) and an "Update" button.
+  2. **Subtle Safety Pill on Choose Region Screen (`s-setup`)**:
+     - Compact, non-intrusive banner (`#gp-safety-pill`) prompting unlinked profiles to protect their progress.
+     - Automatically dismisses once an email is attached.
+  3. **Interactive Linkage Modal (`openRecoveryEmailModal`)**:
+     - Clean, responsive modal with email validation (`isValidEmailShape`), normalization, immediate local profile update, and Supabase synchronization.
+  4. **Welcome / Safety Notice Endpoint (`/api/send-welcome-notice`)**:
+     - Created `netlify/functions/send-welcome-notice.js` and wired route in `_redirects` and `server.js`.
+     - Dispatches tailored HTML emails:
+       - **Under 18 (COPPA Parent Notice)**: Transparency statement detailing what is/isn't collected (zero PII, no GPS, no open chat, no ads), account details, privacy policy link, and a one-click parent opt-out/delete action.
+       - **18+ (Adult Confirmation)**: Confirms recovery address linkage, reassures that credentials (not email) are used for login, and guarantees zero spam.
+     - Dispatches via Resend API (`RESEND_API_KEY || Resendrecoveryapi`) with graceful fallback.
+  5. **Verification**:
+     - AST syntax check passed (`All scripts syntax valid!`).
+     - Applet compiled successfully.
