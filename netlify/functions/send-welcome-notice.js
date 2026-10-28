@@ -1,8 +1,5 @@
 // Netlify Function: Send Welcome / Account Protection Notice (COPPA / FERPA Compliant)
-const cleanSupabaseUrl = (url) => {
-  if (!url) return 'https://tbibeuwpollcrlvowcpg.supabase.co';
-  return url.trim().replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
-};
+// Uses the exact same Resend dispatch flow and verified sender as request-recovery.js
 
 const escapeHtml = (s) => {
   if (!s) return '';
@@ -13,51 +10,46 @@ const escapeHtml = (s) => {
     .replace(/"/g, '&quot;');
 };
 
-exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS'
-      }
-    };
+async function handleWelcomeNotice(body, origin) {
+  const email = (body && body.email ? String(body.email) : '').trim().toLowerCase();
+  const handle = (body && body.handle ? String(body.handle) : 'Player').trim();
+  const isUnder18 = body && (body.isUnder18 === true || (body.birthYear && (new Date().getFullYear() - body.birthYear < 18)));
+  const siteOrigin = origin || body.origin || 'https://play.mapolis.app';
+
+  if (!email || !email.includes('@')) {
+    return { status: 400, data: { ok: false, error: 'Invalid email address' } };
   }
 
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      body: JSON.stringify({ error: 'Method not allowed' })
-    };
-  }
+  const resendApiKey = process.env.RESEND_API_KEY || process.env.Resendrecoveryapi;
 
-  try {
-    const body = JSON.parse(event.body || '{}');
-    const email = (body.email || '').trim().toLowerCase();
-    const handle = (body.handle || 'Player').trim();
-    const isUnder18 = body.isUnder18 === true || (body.birthYear && (new Date().getFullYear() - body.birthYear < 18));
-    const origin = body.origin || 'https://play.mapolis.app';
+  const privacyUrl = `${siteOrigin}/play/#compliance`;
+  const deleteUrl = `${siteOrigin}/play/?action=parent-opt-out&handle=${encodeURIComponent(handle)}&email=${encodeURIComponent(email)}`;
 
-    if (!email || !email.includes('@')) {
-      return {
-        statusCode: 400,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ok: false, error: 'Invalid email address' })
-      };
-    }
+  let subject = '';
+  let html = '';
+  let text = '';
 
-    const resendApiKey = process.env.RESEND_API_KEY || process.env.Resendrecoveryapi;
-    const privacyUrl = `${origin}/play/#compliance`;
-    const deleteUrl = `${origin}/play/?action=parent-opt-out&handle=${encodeURIComponent(handle)}&email=${encodeURIComponent(email)}`;
+  if (isUnder18) {
+    // ── COPPA / FERPA Parent Welcome Notice ──
+    subject = `Important Notice: Your child's Mapolis account (${handle})`;
+    text = `MAPOLIS STUDENT PRIVACY & PARENT NOTICE\n\n` +
+      `Dear Parent or Guardian,\n\n` +
+      `Your email was recently provided as the parent safety contact for a Mapolis player profile:\n` +
+      `• Username: ${handle}\n\n` +
+      `OUR STUDENT PRIVACY COMMITMENTS:\n` +
+      `• Strict Data Minimization: We only store an anonymous username, birth year (for grade-appropriate map questions), country, and game scores.\n` +
+      `• Zero Sensitive PII: We never collect real names, phone numbers, street addresses, or precise GPS location.\n` +
+      `• No Open Messaging: Players cannot chat, send direct messages, or communicate with strangers.\n` +
+      `• No Ads or Tracking: Mapolis never shows third-party behavioral ads, sells student data, or trains AI models on gameplay.\n\n` +
+      `WHY YOUR EMAIL IS LINKED:\n` +
+      `This address acts purely as a safety net. You do not need this email for daily play. However, if your child ever forgets their username or password, you can use our password reset tool to restore access to their stars and badges.\n\n` +
+      `PARENTAL CONTROL & OPT-OUT:\n` +
+      `If you did not authorize this account or would like this profile removed, you can request immediate account deletion here:\n` +
+      `${deleteUrl}\n\n` +
+      `Review our full Privacy & Safety Policy: ${privacyUrl}\n\n` +
+      `Warm regards,\nThe Mapolis Team - mapolis.app`;
 
-    let subject = '';
-    let htmlContent = '';
-
-    if (isUnder18) {
-      // ── COPPA / FERPA Parent Welcome Notice ──
-      subject = `Important Notice: Your child's Mapolis account (${handle})`;
-      htmlContent = `
+    html = `
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
@@ -89,11 +81,11 @@ exports.handler = async (event) => {
       </ul>
 
       <p style="font-size:13px;line-height:1.6;color:#475569;">
-        <strong>Why your email is linked:</strong> This address acts purely as a safety net. If your child ever forgets their username or password, you can use our password reset tool to restore access to their stars and badges.
+        <strong>Why your email is linked:</strong> This address acts purely as a safety net. You do not need this email for daily play. However, if your child ever forgets their username or password, you can use our password reset tool to restore access to their stars and badges.
       </p>
 
       <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 16px;margin:24px 0;">
-        <div style="font-size:12px;font-weight:700;color:#991b1b;margin-bottom:4px;">Parental Control & Opt-Out</div>
+        <div style="font-size:12px;font-weight:700;color:#991b1b;margin-bottom:4px;">Parental Control &amp; Opt-Out</div>
         <div style="font-size:12px;color:#7f1d1d;line-height:1.5;">
           If you did not authorize this account or would like this profile removed, you can request immediate account deletion at any time:
         </div>
@@ -113,11 +105,20 @@ exports.handler = async (event) => {
   </div>
 </body>
 </html>
-      `;
-    } else {
-      // ── Adult Recovery Email Confirmation ──
-      subject = `Mapolis: Recovery email linked for ${handle}`;
-      htmlContent = `
+    `;
+  } else {
+    // ── Adult Recovery Email Confirmation ──
+    subject = `Mapolis: Recovery email linked for ${handle}`;
+    text = `MAPOLIS ACCOUNT SECURITY\n\n` +
+      `Hi ${handle},\n\n` +
+      `You have successfully linked ${email} as the recovery email for your Mapolis account (${handle}).\n\n` +
+      `YOUR SAFETY NET:\n` +
+      `You do not need this email to play or sync on new devices—your username and password are all that's required. However, if you ever forget your password, you can now use this email address to regain access to your career rating, stars, and badges.\n\n` +
+      `We never send marketing emails, third-party ads, or share your address.\n\n` +
+      `Review our Privacy Policy: ${privacyUrl}\n\n` +
+      `Happy exploring,\nThe Mapolis Team - mapolis.app`;
+
+    html = `
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
@@ -157,57 +158,78 @@ exports.handler = async (event) => {
   </div>
 </body>
 </html>
-      `;
+    `;
+  }
+
+  try {
+    const resendRes = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mapolis/1.0'
+      },
+      body: JSON.stringify({
+        from: 'Mapolis Support <support@mapolis.app>',
+        to: [email],
+        bcc: ['support@mapolis.app'],
+        subject: subject,
+        html: html,
+        text: text
+      })
+    });
+
+    if (!resendRes.ok) {
+      const errText = await resendRes.text();
+      console.error('[send-welcome-notice] Resend error:', errText);
+      return { status: 200, data: { ok: true, sent: false, error: errText } };
     }
 
-    // Send via Resend if API key is present
-    if (resendApiKey) {
-      try {
-        const emailResp = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${resendApiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            from: 'Mapolis Support <support@mapolis.app>',
-            to: [email],
-            subject: subject,
-            html: htmlContent
-          })
-        });
+    const data = await resendRes.json();
+    console.log('[send-welcome-notice] Email dispatched successfully to', email, 'ID:', data.id);
+    return { status: 200, data: { ok: true, sent: true, id: data.id } };
+  } catch (err) {
+    console.error('[send-welcome-notice] Exception sending via Resend:', err);
+    return { status: 200, data: { ok: true, sent: false, error: err.message } };
+  }
+}
 
-        if (!emailResp.ok) {
-          const errText = await emailResp.text();
-          console.warn('[send-welcome-notice] Resend response not ok:', emailResp.status, errText);
-        } else {
-          console.log('[send-welcome-notice] Email sent successfully to:', email);
-        }
-      } catch (err) {
-        console.warn('[send-welcome-notice] Resend dispatch exception:', err);
-      }
-    } else {
-      console.log('[send-welcome-notice] No RESEND_API_KEY set; logged email dispatch for:', email);
-    }
-
+exports.handler = async (event, context) => {
+  if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
       headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS'
       },
-      body: JSON.stringify({
-        ok: true,
-        message: 'Welcome notice processed successfully',
-        isUnder18: isUnder18
-      })
-    };
-  } catch (err) {
-    console.error('[send-welcome-notice] Uncaught error:', err);
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: false, error: 'Internal server error' })
+      body: ''
     };
   }
+
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: 'Method Not Allowed' };
+  }
+
+  let body = {};
+  try {
+    body = JSON.parse(event.body || '{}');
+  } catch (e) {
+    body = {};
+  }
+
+  const headers = event.headers || {};
+  const origin = headers.origin || (headers.host ? `https://${headers.host}` : 'https://play.mapolis.app');
+  const result = await handleWelcomeNotice(body, origin);
+
+  return {
+    statusCode: result.status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*'
+    },
+    body: JSON.stringify(result.data)
+  };
 };
+
+exports.handleWelcomeNotice = handleWelcomeNotice;

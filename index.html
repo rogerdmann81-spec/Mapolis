@@ -2559,6 +2559,24 @@ async function finalizeProfile(goToAvatar) {
 
   saveProfiles();
 
+  // If a parent or recovery email was provided during creation, dispatch welcome notice
+  if (newProfile.parentEmail) {
+    var _initAge = newProfile.birthYear ? computeAgeFromBirthYear(newProfile.birthYear) : null;
+    var _initUnder18 = (_initAge === null || _initAge < CONSENT_AGE_THRESHOLD);
+    fetch('/api/send-welcome-notice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: newProfile.parentEmail,
+        handle: newProfile.handle,
+        playerId: newProfile.id,
+        isUnder18: _initUnder18,
+        birthYear: newProfile.birthYear,
+        origin: window.location.origin
+      })
+    }).catch(function(e) { console.warn('[finalizeProfile] Welcome notice failed:', e); });
+  }
+
   activeProfile = newProfile;
   window.activeProfile = newProfile;
 
