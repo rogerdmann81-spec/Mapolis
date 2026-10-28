@@ -170,7 +170,7 @@ exports.handler = async (event) => {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            from: 'Mapolis <safety@play.mapolis.app>',
+            from: 'Mapolis Support <support@mapolis.app>',
             to: [email],
             subject: subject,
             html: htmlContent

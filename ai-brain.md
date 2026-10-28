@@ -1602,7 +1602,7 @@ npx netlify deploy --dir . --functions netlify/functions --prod --no-build
      - Dispatches tailored HTML emails:
        - **Under 18 (COPPA Parent Notice)**: Transparency statement detailing what is/isn't collected (zero PII, no GPS, no open chat, no ads), account details, privacy policy link, and a one-click parent opt-out/delete action.
        - **18+ (Adult Confirmation)**: Confirms recovery address linkage, reassures that credentials (not email) are used for login, and guarantees zero spam.
-     - Dispatches via Resend API (`RESEND_API_KEY || Resendrecoveryapi`) with graceful fallback.
+     - Dispatches via Resend API using verified sender Mapolis Support <support@mapolis.app> (`RESEND_API_KEY || Resendrecoveryapi`) with graceful fallback.
   5. **Verification**:
      - AST syntax check passed (`All scripts syntax valid!`).
      - Applet compiled successfully.
