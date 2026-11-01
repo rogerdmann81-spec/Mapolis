@@ -10483,7 +10483,7 @@ function openRecoveryEmailModal(targetProfile) {
   var icon = isUnder18 ? '🛡️' : '✉️';
   var subtext = isUnder18
     ? 'A safety net in case you ever forget your username or passcode. We will send a welcome notice to your parent confirming your account.'
-    : 'A safety net in case you ever forget your password. We will only use this address for password recovery.';
+    : 'Update recovery email in case you ever forget your username or password.';
   var fieldLabel = isUnder18 ? "Parent's Email Address" : "Recovery Email Address";
   var placeholder = isUnder18 ? 'parent@example.com' : 'you@example.com';
   var btnText = currentEmail ? 'Update Email' : 'Save & Protect Profile';
@@ -10509,11 +10509,11 @@ function openRecoveryEmailModal(targetProfile) {
     <div class="field-lbl" style="font-size:11px;font-weight:700;color:#94a3b8;margin-bottom:6px;">${fieldLabel}</div>
     <input class="field-in" type="email" id="rec-email-input" placeholder="${placeholder}" value="${escHtml(currentEmail)}" autocomplete="email" spellcheck="false" style="width:100%;box-sizing:border-box;padding:12px;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:10px;color:#fff;font-size:14px;">
     <div style="font-size:11px;color:#64748b;margin-top:8px;line-height:1.4;">
-      🔒 <strong>Privacy Guarantee:</strong> No ads, no spam, and never shared with third parties.
+      🔒 <strong>Privacy Guarantee:</strong> We don't share email addresses or any user data.
     </div>
     <div style="display:flex;gap:10px;margin-top:18px;">
       <button id="rec-email-cancel" style="flex:1;background:var(--bg-panel);color:var(--text);border:1px solid var(--border);font-size:13px;font-weight:700;border-radius:var(--pill);padding:10px;cursor:pointer;">Cancel</button>
-      <button id="rec-email-submit" class="btn-primary" style="flex:1.5;background:var(--yellow);color:#111;font-family:'Fredoka One',sans-serif;font-size:14px;border:none;border-radius:var(--pill);padding:10px;cursor:pointer;">${btnText}</button>
+      <button id="rec-email-submit" class="btn-primary" style="flex:1.5;background:var(--yellow);color:#111;font-family:'Fredoka One',sans-serif;font-size:14px;border:none;border-radius:var(--pill);padding:10px;cursor:pointer;">SAVE</button>
     </div>
   `;
 

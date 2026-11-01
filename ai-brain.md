@@ -1606,3 +1606,14 @@ npx netlify deploy --dir . --functions netlify/functions --prod --no-build
   5. **Verification**:
      - AST syntax check passed (`All scripts syntax valid!`).
      - Applet compiled successfully.
+
+
+### Task 63: Link Email Modal Copy Polish
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5 (GitHub commit pending, no production deploy)
+- **Goal**: Polish the copy in the link email modal to eliminate misleading phrasing regarding ads and align with user expectations.
+- **What Was Done**:
+  1. Updated subtext above input field to: *"Update recovery email in case you ever forget your username or password."*
+  2. Updated privacy guarantee note to: *"🔒 **Privacy Guarantee:** We don't share email addresses or any user data."*
+  3. Simplified primary modal action button to read: *"SAVE"*.
+  4. Verified in `play/index.html` and `index.html`.
