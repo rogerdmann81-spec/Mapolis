@@ -1617,3 +1617,17 @@ npx netlify deploy --dir . --functions netlify/functions --prod --no-build
   2. Updated privacy guarantee note to: *"🔒 **Privacy Guarantee:** We don't share email addresses or any user data."*
   3. Simplified primary modal action button to read: *"SAVE"*.
   4. Verified in `play/index.html` and `index.html`.
+
+
+### Task 64: Parent Welcome Email Phrasing Polish
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5 (committed to GitHub, no Netlify production deploy)
+- **Goal**: Rephrase specific sections of the parent welcome email to align with transparency and data policies without overpromising on ad models.
+- **What Was Done**:
+  1. Updated introductory label from *"parent safety contact"* to *"parent email"*.
+  2. Updated PII clause from *"precise GPS location"* to *"player location"*.
+  3. Replaced *"No Ads or Tracking..."* with:
+     *"No Data Sharing: Mapolis never collects or shares behavioral data, never sells any user data including email addresses, or trains AI on gameplay data."*
+  4. Updated recovery explanation to:
+     *"Why your email is linked: This address acts as a safety net, if your child ever forgets their username or password you can recover their account using this email address."*
+  5. Synchronized across both the plain-text and HTML templates in `netlify/functions/send-welcome-notice.js`.

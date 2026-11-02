@@ -34,15 +34,15 @@ async function handleWelcomeNotice(body, origin) {
     subject = `Important Notice: Your child's Mapolis account (${handle})`;
     text = `MAPOLIS STUDENT PRIVACY & PARENT NOTICE\n\n` +
       `Dear Parent or Guardian,\n\n` +
-      `Your email was recently provided as the parent safety contact for a Mapolis player profile:\n` +
+      `Your email was recently provided as the parent email for a Mapolis player profile:\n` +
       `• Username: ${handle}\n\n` +
       `OUR STUDENT PRIVACY COMMITMENTS:\n` +
       `• Strict Data Minimization: We only store an anonymous username, birth year (for grade-appropriate map questions), country, and game scores.\n` +
-      `• Zero Sensitive PII: We never collect real names, phone numbers, street addresses, or precise GPS location.\n` +
+      `• Zero Sensitive PII: We never collect real names, phone numbers, street addresses, or player location.\n` +
       `• No Open Messaging: Players cannot chat, send direct messages, or communicate with strangers.\n` +
-      `• No Ads or Tracking: Mapolis never shows third-party behavioral ads, sells student data, or trains AI models on gameplay.\n\n` +
+      `• No Data Sharing: Mapolis never collects or shares behavioral data, never sells any user data including email addresses, or trains AI on gameplay data.\n\n` +
       `WHY YOUR EMAIL IS LINKED:\n` +
-      `This address acts purely as a safety net. You do not need this email for daily play. However, if your child ever forgets their username or password, you can use our password reset tool to restore access to their stars and badges.\n\n` +
+      `This address acts as a safety net, if your child ever forgets their username or password you can recover their account using this email address.\n\n` +
       `PARENTAL CONTROL & OPT-OUT:\n` +
       `If you did not authorize this account or would like this profile removed, you can request immediate account deletion here:\n` +
       `${deleteUrl}\n\n` +
@@ -64,7 +64,7 @@ async function handleWelcomeNotice(body, origin) {
       <p style="font-size:16px;line-height:1.5;margin-top:0;"><strong>Dear Parent or Guardian,</strong></p>
       
       <p style="font-size:14px;line-height:1.6;color:#334155;">
-        Your email was recently provided as the parent safety contact for a Mapolis player profile:
+        Your email was recently provided as the parent email for a Mapolis player profile:
       </p>
 
       <div style="background:#f1f5f9;border-left:4px solid #3b82f6;border-radius:8px;padding:12px 16px;margin:16px 0;">
@@ -75,13 +75,13 @@ async function handleWelcomeNotice(body, origin) {
       <h3 style="font-size:14px;color:#0f172a;margin:24px 0 8px;text-transform:uppercase;letter-spacing:0.05em;">Our Student Privacy Commitments:</h3>
       <ul style="font-size:13px;line-height:1.6;color:#475569;padding-left:20px;margin:0 0 20px;">
         <li><strong>Strict Data Minimization:</strong> We only store an anonymous username, birth year (to select grade-appropriate map cards), country, and game scores.</li>
-        <li><strong>Zero Sensitive PII:</strong> We never collect real names, phone numbers, street addresses, or precise GPS location.</li>
+        <li><strong>Zero Sensitive PII:</strong> We never collect real names, phone numbers, street addresses, or player location.</li>
         <li><strong>No Open Messaging:</strong> Players cannot chat, send direct messages, or communicate with strangers.</li>
-        <li><strong>No Ads or Tracking:</strong> Mapolis never shows third-party behavioral ads, sells student data, or trains AI models on gameplay.</li>
+        <li><strong>No Data Sharing:</strong> Mapolis never collects or shares behavioral data, never sells any user data including email addresses, or trains AI on gameplay data.</li>
       </ul>
 
       <p style="font-size:13px;line-height:1.6;color:#475569;">
-        <strong>Why your email is linked:</strong> This address acts purely as a safety net. You do not need this email for daily play. However, if your child ever forgets their username or password, you can use our password reset tool to restore access to their stars and badges.
+        <strong>Why your email is linked:</strong> This address acts as a safety net, if your child ever forgets their username or password you can recover their account using this email address.
       </p>
 
       <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 16px;margin:24px 0;">
