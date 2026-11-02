@@ -1,6 +1,8 @@
 // Netlify Function: Send Welcome / Account Protection Notice (COPPA / FERPA Compliant)
 // Uses the exact same Resend dispatch flow and verified sender as request-recovery.js
 
+const crypto = require('crypto');
+
 const escapeHtml = (s) => {
   if (!s) return '';
   return String(s)
@@ -22,8 +24,11 @@ async function handleWelcomeNotice(body, origin) {
 
   const resendApiKey = process.env.RESEND_API_KEY || process.env.Resendrecoveryapi;
 
+  const playerId = (body && body.playerId ? String(body.playerId) : '').trim();
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'mapolis-opt-out-secret';
+  const token = crypto.createHmac('sha256', serviceKey).update(`${email}:${handle}:${playerId}`).digest('hex').slice(0, 24);
   const privacyUrl = `${siteOrigin}/play/#compliance`;
-  const deleteUrl = `${siteOrigin}/play/?action=parent-opt-out&handle=${encodeURIComponent(handle)}&email=${encodeURIComponent(email)}`;
+  const deleteUrl = `${siteOrigin}/play/?action=parent-opt-out&handle=${encodeURIComponent(handle)}&email=${encodeURIComponent(email)}&pid=${encodeURIComponent(playerId)}&token=${token}`;
 
   let subject = '';
   let html = '';

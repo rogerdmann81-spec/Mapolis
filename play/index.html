@@ -1268,9 +1268,10 @@ function initApp() {
   window.addEventListener('online', updateOnlineStatus);
 
   window.addEventListener('offline', updateOnlineStatus);
-  window.addEventListener('hashchange', checkRecoveryToken);
-  window.addEventListener('popstate', checkRecoveryToken);
+  window.addEventListener('hashchange', function() { checkRecoveryToken(); checkParentOptOutAction(); });
+  window.addEventListener('popstate', function() { checkRecoveryToken(); checkParentOptOutAction(); });
   checkRecoveryToken();
+  checkParentOptOutAction();
 
   updateOnlineStatus();
 
@@ -1352,9 +1353,11 @@ document.addEventListener('DOMContentLoaded', function() {
   setTimeout(dismissPageCurtain, 600);
   setTimeout(initApp, 300);
   setTimeout(checkRecoveryToken, 100);
+  setTimeout(checkParentOptOutAction, 120);
 });
 if (typeof window !== 'undefined') {
   setTimeout(checkRecoveryToken, 150);
+  setTimeout(checkParentOptOutAction, 180);
 }
 
 const PROFILES_KEY = 'nsg_profiles';
@@ -2137,6 +2140,173 @@ function checkRecoveryToken() {
     console.log('[recovery] Detected recovery token in URL:', token.slice(0, 8) + '...');
     openResetPasswordModal(token);
     return true;
+  }
+  return false;
+}
+
+
+function openParentOptOutModal(params) {
+  var existing = document.getElementById("parent-opt-out-overlay");
+  if (existing) existing.remove();
+
+  var handle = params.handle || "Player";
+  var email = params.email || "";
+  var pid = params.pid || "";
+  var token = params.token || "";
+
+  var overlay = document.createElement("div");
+  overlay.id = "parent-opt-out-overlay";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(8px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;";
+
+  var panel = document.createElement("div");
+  panel.style.cssText = "background:var(--bg-card, #0c163b);border:1px solid rgba(239,68,68,0.45);border-radius:18px;max-width:440px;width:100%;padding:24px;box-shadow:0 16px 40px rgba(0,0,0,0.7);text-align:left;color:#fff;";
+
+  panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <h2 style="font-family:'Fredoka One',sans-serif;font-size:20px;color:#ef4444;margin:0;display:flex;align-items:center;gap:8px;">
+        <span>🛡️</span>
+        <span>Parental Control & Deletion</span>
+      </h2>
+      <button id="poo-close" style="background:none;color:var(--dim);font-size:22px;padding:2px 8px;border:none;cursor:pointer;">×</button>
+    </div>
+
+    <div id="poo-initial-view">
+      <p style="font-size:13px;color:#cbd5e1;line-height:1.5;margin-top:0;">
+        You received this option because your email was linked as the parent email for this profile:
+      </p>
+
+      <div style="background:#1e293b;border-left:4px solid #ef4444;border-radius:8px;padding:12px 14px;margin:14px 0;">
+        <div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">Target Account</div>
+        <div style="font-size:18px;font-weight:800;color:#fff;margin-top:2px;">${escHtml(handle)}</div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:4px;">Parent Email: <span style="color:#cbd5e1;">${escHtml(email)}</span></div>
+      </div>
+
+      <div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:12px;margin:16px 0;font-size:12px;color:#fca5a5;line-height:1.5;">
+        ⚠️ <strong>Warning:</strong> Deleting this account will permanently erase:
+        <ul style="margin:6px 0 0;padding-left:18px;color:#fecaca;">
+          <li>Username and login credentials</li>
+          <li>Star bank, badges, and unlocked animal avatars</li>
+          <li>All gameplay history and records</li>
+        </ul>
+        This action cannot be undone.
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:20px;">
+        <button id="poo-cancel-btn" style="flex:1;background:var(--bg-panel);color:var(--text);border:1px solid var(--border);font-size:13px;font-weight:700;border-radius:var(--pill);padding:11px;cursor:pointer;">
+          Cancel
+        </button>
+        <button id="poo-delete-btn" style="flex:1.4;background:#dc2626;color:#fff;font-family:'Fredoka One',sans-serif;font-size:13px;border:none;border-radius:var(--pill);padding:11px;cursor:pointer;">
+          Delete Profile &amp; Data
+        </button>
+      </div>
+    </div>
+
+    <div id="poo-success-view" style="display:none;text-align:center;padding:12px 0;">
+      <div style="font-size:42px;margin-bottom:12px;">✅</div>
+      <h3 style="font-family:'Fredoka One',sans-serif;font-size:18px;color:#fff;margin:0 0 10px;">Account Successfully Deleted</h3>
+      <p style="font-size:13px;color:#cbd5e1;line-height:1.5;margin-bottom:20px;" id="poo-success-msg">
+        The player profile and all associated records have been permanently removed from Mapolis.
+      </p>
+      <button id="poo-done-btn" class="btn-primary" style="background:var(--yellow);color:#111;font-family:'Fredoka One',sans-serif;font-size:14px;border:none;border-radius:var(--pill);padding:10px 24px;cursor:pointer;">
+        Return to Game
+      </button>
+    </div>
+  `;
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  function cleanupUrl() {
+    try {
+      if (window.history && window.history.replaceState) {
+        var cleanUrl = window.location.pathname + (window.location.hash || "");
+        window.history.replaceState(null, "", cleanUrl);
+      }
+    } catch (e) {}
+  }
+
+  function close() {
+    overlay.remove();
+    cleanupUrl();
+  }
+
+  document.getElementById("poo-close").addEventListener("click", close);
+  document.getElementById("poo-cancel-btn").addEventListener("click", close);
+  document.getElementById("poo-done-btn").addEventListener("click", function() {
+    close();
+    if (typeof go === "function") go("s-profiles");
+  });
+
+  document.getElementById("poo-delete-btn").addEventListener("click", async function() {
+    var btn = document.getElementById("poo-delete-btn");
+    btn.disabled = true;
+    btn.textContent = "Deleting Account...";
+
+    try {
+      var res = await fetch("/api/parent-opt-out", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          handle: handle,
+          email: email,
+          playerId: pid,
+          token: token
+        })
+      });
+
+      var data = await res.json().catch(function() { return {}; });
+
+      // Clean local storage if this account exists on this device
+      var targetHandle = (handle || "").toLowerCase();
+      var targetPid = pid || "";
+      allProfiles = allProfiles.filter(function(p) {
+        if (targetPid && p.id === targetPid) return false;
+        if (targetHandle && (p.handle || "").toLowerCase() === targetHandle) return false;
+        return true;
+      });
+      saveProfiles();
+
+      if (activeProfile && ((targetPid && activeProfile.id === targetPid) || (targetHandle && (activeProfile.handle || "").toLowerCase() === targetHandle))) {
+        activeProfile = allProfiles[0] || null;
+        if (activeProfile) localStorage.setItem(ACTIVE_KEY, activeProfile.id);
+        else localStorage.removeItem(ACTIVE_KEY);
+      }
+
+      document.getElementById("poo-initial-view").style.display = "none";
+      var sMsg = document.getElementById("poo-success-msg");
+      if (sMsg) {
+        sMsg.textContent = "The profile \"" + handle + "\" and all associated data have been permanently deleted. A confirmation email has been dispatched to " + (email || "your email") + ".";
+      }
+      document.getElementById("poo-success-view").style.display = "block";
+      cleanupUrl();
+
+      if (typeof updateAvatarBars === "function") updateAvatarBars();
+      if (typeof renderProfiles === "function") renderProfiles();
+    } catch (err) {
+      console.error("[parent-opt-out] Deletion failed:", err);
+      showToast("Could not complete deletion. Please try again.");
+      btn.disabled = false;
+      btn.textContent = "Delete Profile & Data";
+    }
+  });
+}
+
+function checkParentOptOutAction() {
+  try {
+    var sp = new URLSearchParams(window.location.search);
+    if (sp.get("action") === "parent-opt-out") {
+      var handle = sp.get("handle") || "";
+      var email = sp.get("email") || "";
+      var pid = sp.get("pid") || "";
+      var token = sp.get("token") || "";
+      if (handle || email || pid) {
+        console.log("[parent-opt-out] Detected parent opt-out request for:", handle, email);
+        openParentOptOutModal({ handle: handle, email: email, pid: pid, token: token });
+        return true;
+      }
+    }
+  } catch (e) {
+    console.warn("[parent-opt-out] Check action exception:", e);
   }
   return false;
 }

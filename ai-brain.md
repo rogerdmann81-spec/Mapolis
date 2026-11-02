@@ -1641,3 +1641,31 @@ npx netlify deploy --dir . --functions netlify/functions --prod --no-build
   1. Updated helper copy in `play/index.html` and `index.html` to read:
      *"If you leave this blank, in the event of a forgotten username or password we can not help you recover your profile data"*
   2. Verified AST syntax and applet compilation.
+
+
+### Task 66: Parental Opt-Out & One-Click Account Deletion Flow (COPPA)
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5 (committed to GitHub, no Netlify production deploy)
+- **Goal**: Complete the end-to-end flow for the "Parental Control & Opt-Out / Delete Profile & Data" button in parent welcome emails.
+- **What Was Done**:
+  1. **Backend Function (`netlify/functions/parent-opt-out.js`)**:
+     - Created endpoint accepting `{ handle, email, playerId, token }`.
+     - Verifies HMAC security token and ensures the requested email matches `parent_email` in Supabase.
+     - Invokes `delete_profile` RPC and deletes matching records from the `profiles` table.
+     - Dispatches a formal deletion confirmation notice to the parent via Resend (`Mapolis Support <support@mapolis.app>`).
+  2. **Routing & Server**:
+     - Added rule to `_redirects`: `/api/parent-opt-out  /.netlify/functions/parent-opt-out  200`.
+     - Wired local development route in `server.js`.
+  3. **Secure Link Generation (`netlify/functions/send-welcome-notice.js`)**:
+     - Updated email template to generate `deleteUrl` including `pid` and cryptographic HMAC token `token`.
+  4. **Client-Side Modal Flow (`play/index.html` & `index.html`)**:
+     - Added `checkParentOptOutAction()` detecting `?action=parent-opt-out` on startup or navigation.
+     - Displays `openParentOptOutModal`:
+       - Shows clear warning of permanent data loss (username, stars, badges, animals, history).
+       - Prompts parent to confirm deletion or cancel.
+       - Calls `/api/parent-opt-out`.
+       - On success, purges the profile from `localStorage` on the device, updates the UI, cleans the URL via `history.replaceState`, and displays a confirmation state.
+  5. **Verification**:
+     - AST test passed (`npm test`).
+     - Applet compilation succeeded.
+     - Tested endpoint locally via curl with validation.

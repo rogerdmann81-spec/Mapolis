@@ -50,6 +50,23 @@ const welcomeNoticeHandler = async (req, res) => {
     res.status(200).json({ ok: true, message: 'Notice processed' });
   }
 };
+const parentOptOutHandler = async (req, res) => {
+  try {
+    const fn = require('./netlify/functions/parent-opt-out').handler;
+    const event = {
+      httpMethod: 'POST',
+      body: JSON.stringify(req.body),
+      headers: req.headers
+    };
+    const result = await fn(event);
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('[server] Parent opt out route error:', err);
+    res.status(500).json({ ok: false, error: 'Internal server error' });
+  }
+};
+app.post('/api/parent-opt-out', parentOptOutHandler);
+app.post('/.netlify/functions/parent-opt-out', parentOptOutHandler);
 app.post('/api/send-welcome-notice', welcomeNoticeHandler);
 app.post('/.netlify/functions/send-welcome-notice', welcomeNoticeHandler);
 app.post('/.netlify/functions/request-recovery', recoveryRoute);

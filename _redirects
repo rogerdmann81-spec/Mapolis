@@ -1,3 +1,4 @@
+/api/parent-opt-out  /.netlify/functions/parent-opt-out  200
 /api/send-welcome-notice  /.netlify/functions/send-welcome-notice  200
 /api/request-recovery  /.netlify/functions/request-recovery  200
 /admin    /admin/index.html   200
