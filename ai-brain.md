@@ -1631,3 +1631,13 @@ npx netlify deploy --dir . --functions netlify/functions --prod --no-build
   4. Updated recovery explanation to:
      *"Why your email is linked: This address acts as a safety net, if your child ever forgets their username or password you can recover their account using this email address."*
   5. Synchronized across both the plain-text and HTML templates in `netlify/functions/send-welcome-notice.js`.
+
+
+### Task 65: Create Profile Screen Under-18 Recovery Notice Update
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5 (committed to GitHub, no Netlify production deploy)
+- **Goal**: Clarify the note under the optional parent email input on the create profile screen when an under-18 birth year is selected.
+- **What Was Done**:
+  1. Updated helper copy in `play/index.html` and `index.html` to read:
+     *"If you leave this blank, in the event of a forgotten username or password we can not help you recover your profile data"*
+  2. Verified AST syntax and applet compilation.
