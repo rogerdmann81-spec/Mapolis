@@ -119,7 +119,7 @@ async function handleWelcomeNotice(body, origin) {
       `You have successfully linked ${email} as the recovery email for your Mapolis account (${handle}).\n\n` +
       `YOUR SAFETY NET:\n` +
       `You do not need this email to play or sync on new devices—your username and password are all that's required. However, if you ever forget your password, you can now use this email address to regain access to your career rating, stars, and badges.\n\n` +
-      `We never send marketing emails, third-party ads, or share your address.\n\n` +
+      `We never send marketing spam, never sell your contact info, and only use this email for account recovery.\n\n` +
       `Review our Privacy Policy: ${privacyUrl}\n\n` +
       `Happy exploring,\nThe Mapolis Team - mapolis.app`;
 
@@ -151,7 +151,7 @@ async function handleWelcomeNotice(body, origin) {
       </p>
 
       <p style="font-size:13px;line-height:1.6;color:#475569;">
-        We never send marketing emails, third-party ads, or share your address.
+        We never send marketing spam, never sell your contact info, and only use this email for account recovery.
       </p>
 
       <p style="font-size:12px;color:#94a3b8;margin:24px 0 0;line-height:1.5;">

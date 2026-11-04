@@ -1669,3 +1669,23 @@ npx netlify deploy --dir . --functions netlify/functions --prod --no-build
      - AST test passed (`npm test`).
      - Applet compilation succeeded.
      - Tested endpoint locally via curl with validation.
+
+
+### Task 67: Ad Language & Monetization Transparency Updates
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5 (committed to GitHub, deployed to zero-credit Netlify draft preview)
+- **Goal**: Polish remaining legacy ad phrasing across the adult recovery email and the in-game Credits & Compliance page to accurately reflect our COPPA contextual ad model and nominal ad-free subscription pass.
+- **What Was Done**:
+  1. **Adult Welcome Email (`netlify/functions/send-welcome-notice.js`)**:
+     - Updated plain-text and HTML copy to:
+       *"We never send marketing spam, never sell your contact info, and only use this email for account recovery."*
+  2. **Credits & Compliance Screen (`play/index.html` & `index.html`)**:
+     - Clarified top commitment for schools vs. consumers:
+       *"Any account linked to a classroom never sees an ad — now or in the future. Consumer play is supported by COPPA-safe contextual ads or an optional nominal ad-free pass."*
+     - Replaced legacy AdMob subheading with:
+       *"Child-Directed Contextual Ads & Ad-Free Option"* and updated description:
+       *"Ads fully stubbed in beta. At public launch: child-directed flags enabled, strictly non-targeted contextual units only, with an optional nominal yearly subscription to remove all ads."*
+  3. **Verification & Deployment**:
+     - AST test passed (`npm test`).
+     - Applet compilation succeeded.
+     - Deployed draft preview without using Netlify build credits.
