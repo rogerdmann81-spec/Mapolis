@@ -1689,3 +1689,15 @@ npx netlify deploy --dir . --functions netlify/functions --prod --no-build
      - AST test passed (`npm test`).
      - Applet compilation succeeded.
      - Deployed draft preview without using Netlify build credits.
+
+
+### Task 68: Clean Sign-In / Restore Modal Footer Note
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5 (committed to GitHub, deployed to zero-credit Netlify draft preview)
+- **Goal**: Remove redundant local-browser profile notice from the account sign-in/restore modal.
+- **What Was Done**:
+  1. Removed the footer note from `play/index.html` and `index.html`:
+     *"Don't have either? Your profile is saved in this browser — if you haven't cleared it, just go back and tap your profile card."*
+  2. AST syntax check passed (`npm test`).
+  3. Applet compiled cleanly.
+  4. Deployed new zero-credit Netlify draft preview without modifying production.
