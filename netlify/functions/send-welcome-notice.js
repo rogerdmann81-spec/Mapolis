@@ -37,11 +37,11 @@ async function handleWelcomeNotice(body, origin) {
   if (isUnder18) {
     // ── COPPA / FERPA Parent Welcome Notice ──
     subject = `Important Notice: Your child's Mapolis account (${handle})`;
-    text = `MAPOLIS STUDENT PRIVACY & PARENT NOTICE\n\n` +
+    text = `MAPOLIS PLAYER PRIVACY & PARENT NOTICE\n\n` +
       `Dear Parent or Guardian,\n\n` +
       `Your email was recently provided as the parent email for a Mapolis player profile:\n` +
       `• Username: ${handle}\n\n` +
-      `OUR STUDENT PRIVACY COMMITMENTS:\n` +
+      `OUR PRIVACY COMMITMENTS:\n` +
       `• Strict Data Minimization: We only store an anonymous username, birth year (for grade-appropriate map questions), country, and game scores.\n` +
       `• Zero Sensitive PII: We never collect real names, phone numbers, street addresses, or player location.\n` +
       `• No Open Messaging: Players cannot chat, send direct messages, or communicate with strangers.\n` +
@@ -77,7 +77,7 @@ async function handleWelcomeNotice(body, origin) {
         <div style="font-size:18px;font-weight:800;color:#0f172a;margin-top:2px;">${escapeHtml(handle)}</div>
       </div>
 
-      <h3 style="font-size:14px;color:#0f172a;margin:24px 0 8px;text-transform:uppercase;letter-spacing:0.05em;">Our Student Privacy Commitments:</h3>
+      <h3 style="font-size:14px;color:#0f172a;margin:24px 0 8px;text-transform:uppercase;letter-spacing:0.05em;">Our Privacy Commitments:</h3>
       <ul style="font-size:13px;line-height:1.6;color:#475569;padding-left:20px;margin:0 0 20px;">
         <li><strong>Strict Data Minimization:</strong> We only store an anonymous username, birth year (to select grade-appropriate map cards), country, and game scores.</li>
         <li><strong>Zero Sensitive PII:</strong> We never collect real names, phone numbers, street addresses, or player location.</li>

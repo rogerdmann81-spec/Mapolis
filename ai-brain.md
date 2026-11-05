@@ -1701,3 +1701,29 @@ npx netlify deploy --dir . --functions netlify/functions --prod --no-build
   2. AST syntax check passed (`npm test`).
   3. Applet compiled cleanly.
   4. Deployed new zero-credit Netlify draft preview without modifying production.
+
+
+### Task 69: Educator, Classroom & Student Language De-Coupling & Archive Sync
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5 (committed to GitHub, deployed to zero-credit Netlify draft preview)
+- **Goal**: Cleanly de-couple educator, teacher, and student terminology from the consumer game experience (modals, profile view, emails, and compliance screen), while fully archiving the messaging architecture for the future dedicated school portal.
+- **What Was Done**:
+  1. **Archive Preservation (`assets/educator-panel-archive.js` & `play/assets/educator-panel-archive.js`)**:
+     - Preserved `STUDENT_MSG_TEMPLATES`, custom group template sanitizers, `getEffectiveTemplatesForStudent`, and educator screen routing hooks so 100% of the school panel architecture is intact for future deployment.
+  2. **Beta Welcome Modal (`play/index.html` & `play/admin/index.html`)**:
+     - Removed "educator panel," reference from beta tester greeting.
+  3. **Consumer Profile View (`play/index.html` & `index.html`)**:
+     - Removed obsolete `btn-profile-messages` conditional button check and listener.
+  4. **Compliance & Privacy Commitments (`s-compliance`)**:
+     - Replaced "Classrooms are sealed" with:
+       *"Profiles are private & isolated: Player accounts cannot see or inspect other players' private data or history. Data minimization and row-level security make this structural."*
+     - Replaced "No open chat" (which mentioned student messages) with:
+       *"No open chat or direct messaging: Players cannot chat, direct message, or communicate with strangers in Mapolis. No personal information can ever slip through."*
+     - Updated FERPA to:
+       *"FERPA [School Portal Ready]: Educational vendor standards and student privacy architecture prepared for future classroom portal deployments."*
+     - Updated CIPA and SOPIPA text to refer to players and youth rather than classroom students.
+  5. **Parent Welcome Notice Email (`netlify/functions/send-welcome-notice.js`)**:
+     - Changed header to: *"MAPOLIS PLAYER PRIVACY & PARENT NOTICE"*.
+     - Changed section title to: *"OUR PRIVACY COMMITMENTS:"*.
+  6. **Router Cleanup**:
+     - Removed unrendered `s-edu-*` router branches from `play/index.html` and `index.html`.

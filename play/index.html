@@ -464,8 +464,8 @@
     <div class="credits-heading">🔒 How We Think About This</div>
     <div class="credits-commit-row"><div class="credits-commit-icon">🪪</div><div><div class="credits-commit-title">Handles, not names</div><div class="credits-commit-desc">Every user picks a handle. No real name is ever collected, stored, or displayed — from anyone.</div></div></div>
     <div class="credits-commit-row"><div class="credits-commit-icon">📉</div><div><div class="credits-commit-title">Minimum viable data</div><div class="credits-commit-desc">We collect what's needed to make the game work and nothing more. If a field isn't doing a job, it doesn't exist.</div></div></div>
-    <div class="credits-commit-row"><div class="credits-commit-icon">🧑‍🏫</div><div><div class="credits-commit-title">Classrooms are sealed</div><div class="credits-commit-desc">An educator sees only their own students' progress. Row-level security makes this structural, not just policy.</div></div></div>
-    <div class="credits-commit-row"><div class="credits-commit-icon">📝</div><div><div class="credits-commit-title">No open chat</div><div class="credits-commit-desc">Student messages are selected from fixed templates. No free-text field where personal information could slip through.</div></div></div>
+    <div class="credits-commit-row"><div class="credits-commit-icon">🔒</div><div><div class="credits-commit-title">Profiles are private &amp; isolated</div><div class="credits-commit-desc">Player accounts cannot see or inspect other players' private data or history. Data minimization and row-level security make this structural.</div></div></div>
+    <div class="credits-commit-row"><div class="credits-commit-icon">📝</div><div><div class="credits-commit-title">No open chat or direct messaging</div><div class="credits-commit-desc">Players cannot chat, direct message, or communicate with strangers in Mapolis. No personal information can ever slip through.</div></div></div>
     <div class="credits-commit-row"><div class="credits-commit-icon">🚫</div><div><div class="credits-commit-title">Zero third-party tracking</div><div class="credits-commit-desc">No analytics SDK, no session replay, no advertising identifiers. Nothing you do in Mapolis is observed by any third party.</div></div></div>
     <div class="credits-commit-row"><div class="credits-commit-icon">🏫</div><div><div class="credits-commit-title">Schools always ad-free</div><div class="credits-commit-desc">Any account linked to a classroom never sees an ad — now or in the future. Consumer play is supported by COPPA-safe contextual ads or an optional nominal ad-free pass.</div></div></div>
     <div class="credits-commit-row"><div class="credits-commit-icon">🛡️</div><div><div class="credits-commit-title">Moderated namespace</div><div class="credits-commit-desc">Every handle passes a 195-word filter with leetspeak normalization and real-name detection before it's accepted.</div></div></div>
@@ -474,18 +474,18 @@
     <div class="credits-heading">🇺🇸 US Federal</div>
     <div class="credits-subheading">COPPA <span class="credits-license">Met</span></div>
     <p class="credits-body">Children's Online Privacy Protection Act. Anonymous profiles, data minimization, no third-party behavioral tracking, parental email for under-18 accounts. 2024 amendments (AI training restrictions, tighter consent) satisfied by architecture.</p>
-    <div class="credits-subheading">FERPA <span class="credits-license">Met</span></div>
-    <p class="credits-body">Family Educational Rights and Privacy Act. EdTech vendor role — no student PII, no cross-classroom access, educator-scoped data. Data Processing Agreements with school districts before classroom deployments.</p>
+    <div class="credits-subheading">FERPA <span class="credits-license" style="background:rgba(90,98,133,.2);color:#8899bb;border-color:rgba(90,98,133,.3);">School Portal Ready</span></div>
+    <p class="credits-body">Family Educational Rights and Privacy Act. EdTech vendor standards and student privacy architecture prepared for future classroom portal deployments.</p>
     <div class="credits-subheading">FTC Act §5 <span class="credits-license">Met</span></div>
     <p class="credits-body">Prohibits deceptive data practices and dark patterns. Privacy posture matches privacy policy exactly. Parental gate is a real cognitive task, not a speed bump.</p>
     <div class="credits-subheading">CIPA <span class="credits-license">Met</span></div>
-    <p class="credits-body">Children's Internet Protection Act. No harmful content, no open-form communication, no external links from the student experience, fully moderated handles.</p>
+    <p class="credits-body">Children's Internet Protection Act. No harmful content, no open-form communication, no external links from the player experience, fully moderated handles.</p>
 
     <div class="credits-heading">🏛️ US State Laws</div>
     <div class="credits-subheading">CCPA / CPRA <span class="credits-license" style="background:rgba(255,176,32,.12);color:#ffb020;border-color:rgba(255,176,32,.3);">Monitoring</span></div>
     <p class="credits-body">California Consumer Privacy Act. Gnapoley LLC currently qualifies for the small business exemption. No user data is sold or shared regardless of threshold status.</p>
-    <div class="credits-subheading">SOPIPA <span class="credits-license">Met</span></div>
-    <p class="credits-body">Student Online Personal Information Protection Act + 20 state equivalents. Classroom mode permanently ad-free. No student data for targeting. No data sold.</p>
+    <div class="credits-subheading">SOPIPA / State Youth Laws <span class="credits-license">Met</span></div>
+    <p class="credits-body">Student Online Personal Information Protection Act + 20 state equivalents. No user or player data for behavioral targeting. No data sold.</p>
     <div class="credits-subheading">CA CAADCA <span class="credits-license" style="background:rgba(90,98,133,.2);color:#8899bb;border-color:rgba(90,98,133,.3);">Partially Enjoined</span></div>
     <p class="credits-body">California Age-Appropriate Design Code. Partially enjoined; 9th Circuit partially reinstated March 2026. Architecture meets the code substantively regardless of legal status.</p>
     <div class="credits-subheading">CA DAGA <span class="credits-license" style="background:rgba(255,176,32,.12);color:#ffb020;border-color:rgba(255,176,32,.3);">Jan 2027</span></div>
@@ -946,20 +946,7 @@ function triggerScreenRefresh(screenId) {
     renderStore();
   } else if (screenId === 's-badges' && typeof renderBadges === 'function') {
     renderBadges();
-  } else if (screenId === 's-edu-dash' && typeof renderEduDashboard === 'function') {
-    renderEduDashboard();
-  } else if (screenId === 's-edu-students' && typeof renderEduStudents === 'function') {
-    renderEduStudents();
-  } else if (screenId === 's-edu-competitions' && typeof renderEduCompetitions === 'function') {
-    renderEduCompetitions();
-  } else if (screenId === 's-edu-tests' && typeof renderEduTests === 'function') {
-    renderEduTests();
-  } else if (screenId === 's-edu-cards' && typeof renderEduCards === 'function') {
-    renderEduCards();
-  } else if (screenId === 's-edu-messages' && typeof renderEduMessages === 'function') {
-    renderEduMessages();
-  } else if (screenId === 's-edu-search' && typeof renderEduSearch === 'function') {
-    renderEduSearch();
+
   }
 
   }
@@ -10959,20 +10946,7 @@ function renderProfile() {
 
   // Clean consumer profile (educator panel extracted for post-App Store portal)
 
-  {
-    const _pUnread = typeof getUnreadCountForProfile === 'function' ? getUnreadCountForProfile(profile.id) : 0;
-    const _pConvos = typeof getConversationsForProfile === 'function' ? getConversationsForProfile(profile.id).length : 0;
-    if (_pUnread > 0 || _pConvos > 0 || (profile.linkedEducators && profile.linkedEducators.length > 0) || profile.isEducator) {
-      let _mbadge = '';
-      if (_pUnread > 0) _mbadge = ' <span style="display:inline-block;background:var(--wrong);color:#fff;font-size:10px;font-weight:800;padding:1px 7px;border-radius:8px;margin-left:6px;">' + _pUnread + '</span>';
-      else if (_pConvos > 0) _mbadge = ' <span style="font-size:11px;color:var(--dim);">(' + _pConvos + ')</span>';
-      html += `<div style="margin-top:12px;">
-        <button id="btn-profile-messages" style="width:100%;padding:12px;background:var(--bg-panel);color:var(--text);font-weight:700;font-size:13px;border:1px solid var(--border);border-radius:var(--pill);">
-          💬 Messages${_mbadge}
-        </button>
-      </div>`;
-    }
-  }
+
 
   html += `<div style="margin-top:12px;">
     <button id="btn-send-note" style="width:100%;padding:12px;background:var(--bg-panel);color:var(--text);font-weight:700;font-size:13px;border:1px solid var(--border);border-radius:var(--pill);">
@@ -10999,14 +10973,7 @@ function renderProfile() {
 
 
 
-  const msgBtn = document.getElementById('btn-profile-messages');
-  if (msgBtn) {
-    msgBtn.addEventListener('click', () => {
-      if (typeof showStudentInbox === 'function') {
-        showStudentInbox();
-      }
-    });
-  }
+
 
   const noteBtn = document.getElementById('btn-send-note');
   if (noteBtn) {
@@ -11567,7 +11534,7 @@ function showBetaWelcome() {
       <h3>👋 Hello!</h3>
       <div class="nsg-body">
         <p>Hello and thank you. If you are reading this, it means you are in the group of trusted friends and family members I have asked to play my geography game.</p>
-        <p>On any page, when you click your avatar image it will take you to your profile page. There you will find a button to send me notes. Check out the educator panel, head-to-head mode, stats/leaderboard, and in-game rewards. (Most avatar types and associated assets will be purchasable with accumulated stars, but I wanted everyone here to have full access.)</p>
+        <p>On any page, when you click your avatar image it will take you to your profile page. There you will find a button to send me notes. Check out head-to-head mode, stats/leaderboard, and in-game rewards. (Most avatar types and associated assets will be purchasable with accumulated stars, but I wanted everyone here to have full access.)</p>
         <p>You can use an anonymous screen name. Send me honest opinions, critiques, and notes — anything that looks wrong, glitches, or has incorrect information, please let me know.</p>
         <p>There are a few more details I need to build out, but I am anxious to get this beta version out and start testing data flows. If you have a friend you think might enjoy it, feel free to share the link.</p>
         <p style="margin-bottom:0;">Thanks for spending time on my game — and especially thank you for your opinions, critiques, and debugging help…hope you like it!!!</p>

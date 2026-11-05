@@ -4366,3 +4366,94 @@ function customCardsToPool(cards) {
 })();
 
 
+
+
+// ── Student Message Templates & Classroom Group Messaging (Archived for Post-Launch School Portal) ──
+var STUDENT_MSG_TEMPLATES = Object.freeze([
+  Object.freeze({ id: 't_done',     text: 'I finished the assignment' }),
+  Object.freeze({ id: 't_question', text: 'I have a question' }),
+  Object.freeze({ id: 't_help',     text: 'Can you help me?' }),
+  Object.freeze({ id: 't_more',     text: 'I need more time' }),
+  Object.freeze({ id: 't_thanks',   text: 'Thank you!' }),
+  Object.freeze({ id: 't_confused', text: "I don't understand" }),
+  Object.freeze({ id: 't_review',   text: 'Can we review this?' }),
+  Object.freeze({ id: 't_ready',    text: "I'm ready for the next one" })
+]);
+
+function validateTemplateText(raw) {
+  var s = typeof normalizeUserString === 'function' ? normalizeUserString(raw) : (raw || '').trim();
+  if (!s) return { ok: false, reason: 'empty' };
+  if (s.length > 120) return { ok: false, reason: 'too_long' };
+  if (/[<>]/.test(s)) return { ok: false, reason: 'html_chars' };
+  if (/(https?:\/\/|www\.)\S+/i.test(s)) return { ok: false, reason: 'url' };
+  if (/[ --]/.test(s)) return { ok: false, reason: 'control_chars' };
+  return { ok: true, text: s };
+}
+
+function sanitizeTemplatesConfig(raw) {
+  var out = { mode: 'builtins', keepBuiltins: [], customTexts: [] };
+  if (!raw || typeof raw !== 'object') return out;
+  if (raw.mode !== 'custom') return out;
+  out.mode = 'custom';
+  var validBuiltinIds = {};
+  for (var i = 0; i < STUDENT_MSG_TEMPLATES.length; i++) validBuiltinIds[STUDENT_MSG_TEMPLATES[i].id] = true;
+  var keep = Array.isArray(raw.keepBuiltins) ? raw.keepBuiltins : [];
+  for (var j = 0; j < keep.length; j++) {
+    if (validBuiltinIds[keep[j]] && out.keepBuiltins.indexOf(keep[j]) === -1) out.keepBuiltins.push(keep[j]);
+  }
+  var custom = Array.isArray(raw.customTexts) ? raw.customTexts : [];
+  for (var k = 0; k < custom.length; k++) {
+    if (out.keepBuiltins.length + out.customTexts.length >= 24) break;
+    var v = validateTemplateText(custom[k]);
+    if (v.ok && out.customTexts.indexOf(v.text) === -1) out.customTexts.push(v.text);
+  }
+  return out;
+}
+
+function getEffectiveTemplatesForStudent(studentProfileId) {
+  try {
+    var studentId = studentProfileId;
+    var allProfiles = (typeof profiles !== 'undefined' && profiles) ? profiles : [];
+    for (var pi = 0; pi < allProfiles.length; pi++) {
+      var prof = allProfiles[pi];
+      if (!prof || !prof.isEducator) continue;
+      var key = (typeof EDU_GROUPS_KEY !== 'undefined' ? EDU_GROUPS_KEY : 'nsg_edu_groups') + '_' + prof.id;
+      var raw = null;
+      try { raw = localStorage.getItem(key); } catch (_) { continue; }
+      if (!raw) continue;
+      var groups;
+      try { groups = JSON.parse(raw); } catch (_) { continue; }
+      if (!Array.isArray(groups)) continue;
+      for (var gi = 0; gi < groups.length; gi++) {
+        var g = groups[gi];
+        if (!g || !Array.isArray(g.studentIds)) continue;
+        if (g.studentIds.indexOf(studentId) === -1) continue;
+        var cfg = sanitizeTemplatesConfig(g.templates);
+        if (cfg.mode !== 'custom') return STUDENT_MSG_TEMPLATES.slice();
+        var list = [];
+        for (var bi = 0; bi < STUDENT_MSG_TEMPLATES.length; bi++) {
+          var bt = STUDENT_MSG_TEMPLATES[bi];
+          if (cfg.keepBuiltins.indexOf(bt.id) !== -1) list.push({ id: bt.id, text: bt.text });
+        }
+        for (var ci = 0; ci < cfg.customTexts.length; ci++) {
+          list.push({ id: 'tc_' + ci, text: cfg.customTexts[ci] });
+        }
+        if (list.length === 0) return STUDENT_MSG_TEMPLATES.slice();
+        return list;
+      }
+    }
+  } catch (e) {
+    console.warn('templates_resolve_error:', e);
+  }
+  return STUDENT_MSG_TEMPLATES.slice();
+}
+
+function dispatchEduScreen(screenId) {
+  if (screenId === 's-edu-dash' && typeof renderEduDashboard === 'function') renderEduDashboard();
+  else if (screenId === 's-edu-students' && typeof renderEduStudents === 'function') renderEduStudents();
+  else if (screenId === 's-edu-competitions' && typeof renderEduCompetitions === 'function') renderEduCompetitions();
+  else if (screenId === 's-edu-tests' && typeof renderEduTests === 'function') renderEduTests();
+  else if (screenId === 's-edu-cards' && typeof renderEduCards === 'function') renderEduCards();
+  else if (screenId === 's-edu-messages' && typeof renderEduMessages === 'function') renderEduMessages();
+  else if (screenId === 's-edu-search' && typeof renderEduSearch === 'function') renderEduSearch();
+}
