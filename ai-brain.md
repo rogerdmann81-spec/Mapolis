@@ -1727,3 +1727,16 @@ npx netlify deploy --dir . --functions netlify/functions --prod --no-build
      - Changed section title to: *"OUR PRIVACY COMMITMENTS:"*.
   6. **Router Cleanup**:
      - Removed unrendered `s-edu-*` router branches from `play/index.html` and `index.html`.
+
+
+### Task 70: Update FERPA Section Phrasing
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5 (committed to GitHub, deployed to zero-credit Netlify draft preview)
+- **Goal**: Update the FERPA badge and description on the Privacy & Safety screen to reflect "Educator Integration Ready".
+- **What Was Done**:
+  1. Updated `play/index.html` and `index.html`:
+     - Badge: *"Educator Integration Ready"*
+     - Description: *"Family Educational Rights and Privacy Act. Educational vendor standards and student privacy architecture are in place and ready for future educator integrations."*
+  2. Verified AST syntax (`npm test`).
+  3. Applet compiled cleanly.
+  4. Deployed new zero-credit Netlify draft preview without modifying production.
