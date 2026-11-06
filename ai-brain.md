@@ -1751,3 +1751,15 @@ npx netlify deploy --dir . --functions netlify/functions --prod --no-build
   2. Verified AST syntax (`npm test`).
   3. Applet compiled cleanly.
   4. Deployed new zero-credit Netlify draft preview without modifying production.
+
+
+### Task 72: Update Contact Email to support@mapolis.app
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5 (committed to GitHub, deployed to zero-credit Netlify draft preview)
+- **Goal**: Update the contact email on the Privacy & Safety screen from unconfigured `hello@mapolis.com` to the verified `support@mapolis.app`.
+- **What Was Done**:
+  1. Updated `play/index.html` and `index.html`:
+     - Changed contact email from `hello@mapolis.com` to `support@mapolis.app`.
+  2. Verified AST syntax (`npm test`).
+  3. Applet compiled cleanly.
+  4. Deployed new zero-credit Netlify draft preview without modifying production.
