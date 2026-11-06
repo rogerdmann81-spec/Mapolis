@@ -1740,3 +1740,14 @@ npx netlify deploy --dir . --functions netlify/functions --prod --no-build
   2. Verified AST syntax (`npm test`).
   3. Applet compiled cleanly.
   4. Deployed new zero-credit Netlify draft preview without modifying production.
+
+
+### Task 71: Remove 'Schools Always Ad-Free' Commitment Row
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5 (committed to GitHub, deployed to zero-credit Netlify draft preview)
+- **Goal**: Cleanly remove the "Schools always ad-free" commitment row from the Privacy & Safety screen so the consumer beta commitments list only highlights active player privacy guarantees.
+- **What Was Done**:
+  1. Removed the "Schools always ad-free" commitment block from `play/index.html` and `index.html`.
+  2. Verified AST syntax (`npm test`).
+  3. Applet compiled cleanly.
+  4. Deployed new zero-credit Netlify draft preview without modifying production.
