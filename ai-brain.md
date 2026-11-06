@@ -1763,3 +1763,27 @@ npx netlify deploy --dir . --functions netlify/functions --prod --no-build
   2. Verified AST syntax (`npm test`).
   3. Applet compiled cleanly.
   4. Deployed new zero-credit Netlify draft preview without modifying production.
+
+
+### Task 73: Solidarity & Human Dignity Screen + MoCo IRC & Gaza Relief (PCRF) Pledges
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5 (committed to GitHub, deployed to zero-credit Netlify draft preview)
+- **Goal**: Implement the values and solidarity screen declaring that human lives and dignity are more important than lines on a map, acknowledging the historical violence/atrocities/genocide often used to draw borders, and pledging 5% of profits to MoCo IRC and 5% of profits to Gaza relief (PCRF).
+- **What Was Done**:
+  1. **New Screen (`s-solidarity`)**:
+     - Built using native Mapolis UI classes (`credits-scroll`, `credits-heading`, `credits-commit-row`, `credits-standards-card`).
+     - Includes opening declaration: *"The lines on our maps do not represent justice. Throughout human history, borders have repeatedly been determined through conquest, imperial partition, violence, atrocities, and genocide... Human lives, dignity, and families are inherently more sacred than any line drawn on a map."*
+     - Core principles: People Over Borders, Historical Honesty, Active Solidarity.
+     - **Pledge 1**: 5% of profits to **MoCo Immigrant Rights Collective (MoCo IRC)** with the official collective logo.
+     - **Pledge 2**: 5% of profits to **Gaza Relief via Palestine Children's Relief Fund (PCRF)** providing urgent pediatric medical care, operations, clean water, and food for children and families.
+  2. **Navigation Integration**:
+     - Added *"Solidarity"* button to the Title Screen footer (`s-title`).
+     - Added *"Solidarity & Human Dignity ↗"* button to the Credits screen (`s-credits`).
+     - Added dedicated card banner to the Privacy & Safety screen (`s-compliance`).
+     - Back button uses `data-action="goBack"` returning seamlessly to the prior screen.
+  3. **Asset Placement**:
+     - MoCo IRC logo placed in `assets/moco-irc.jpeg` and `play/assets/moco-irc.jpeg`.
+  4. **Verification**:
+     - AST test passed (`npm test`).
+     - Applet compilation passed cleanly.
+     - Deployed zero-credit Netlify draft preview without modifying production.
