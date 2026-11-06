@@ -1787,3 +1787,21 @@ npx netlify deploy --dir . --functions netlify/functions --prod --no-build
      - AST test passed (`npm test`).
      - Applet compilation passed cleanly.
      - Deployed zero-credit Netlify draft preview without modifying production.
+
+
+### Task 74: PCRF Official Logo & Monarch Butterfly Image Button Integration
+- **Status**: ✅ Complete
+- **Branch**: pre-beta5 (committed to GitHub, deployed to zero-credit Netlify draft preview)
+- **Goal**: Replace the PCRF placeholder with the user-provided official PCRF logo image, and replace the text "Solidarity" link on the Title page with an illuminated Monarch butterfly medallion button (also echoed on Credits and Privacy pages).
+- **What Was Done**:
+  1. **PCRF Official Logo**:
+     - Placed user-provided image at `assets/pcrf-logo.jpeg` and `play/assets/pcrf-logo.jpeg`.
+     - Replaced the placeholder block in `s-solidarity` with the official PCRF logo card in `play/index.html` and `index.html`.
+  2. **Monarch Butterfly Button & Assets**:
+     - Generated and saved a high-resolution, glowing Monarch butterfly medallion asset at `assets/monarch-badge.jpg` and `play/assets/monarch-badge.jpg`.
+     - Replaced the plain text link in the Title Screen footer (`s-title`) with an illuminated circular Monarch button linking to `s-solidarity`.
+     - Added the Monarch badge to the Solidarity buttons on both the Credits and Privacy & Safety screens.
+  3. **Verification**:
+     - AST test passed (`npm test`).
+     - Applet compilation passed cleanly.
+     - Pushed to `pre-beta5` and deployed to zero-credit Netlify draft preview.
