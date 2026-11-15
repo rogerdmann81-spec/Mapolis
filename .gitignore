@@ -10,3 +10,6 @@ android/
 
 # Local Netlify folder
 .netlify
+
+# AI Studio Artifacts storage
+.aistudio/

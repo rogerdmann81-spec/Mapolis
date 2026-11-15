@@ -258,7 +258,15 @@
       init();
       tryLoadLand();
       currentMode = mode || 'title';
+      if (currentMode === 'title') {
+        suspendedUntil = 0;
+        isDragging = false;
+      }
       const container = typeof containerId === 'string' ? document.getElementById(containerId) : containerId;
+      if (!svgEl) {
+        setTimeout(() => this.mount(containerId, mode), 50);
+        return;
+      }
       if (container && svgEl) {
         if (svgEl.parentNode !== container) {
           container.appendChild(svgEl);
@@ -271,10 +279,12 @@
           container.style.cursor = 'default';
           container.style.touchAction = 'auto';
         }
+        render();
       }
       this.start();
     },
     start: function() {
+      if (svgEl) svgEl.style.display = 'block';
       if (!isRunning) {
         isRunning = true;
         lastTime = performance.now();
