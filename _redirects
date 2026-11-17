@@ -1,8 +1,10 @@
 /api/parent-opt-out  /.netlify/functions/parent-opt-out  200
 /api/send-welcome-notice  /.netlify/functions/send-welcome-notice  200
 /api/request-recovery  /.netlify/functions/request-recovery  200
-/admin    /admin/index.html   200
-/admin/*  /admin/index.html   200
-/play     /play/index.html    200
-/play/*   /play/index.html    200
-/         /play/              301
+/admin        /play/admin/index.html   200
+/admin/*      /play/admin/index.html   200
+/play/admin   /play/admin/index.html   200
+/play/admin/* /play/admin/index.html   200
+/play         /play/index.html         200
+/play/*       /play/index.html         200
+/             /play/                   301

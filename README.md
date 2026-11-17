@@ -1,10 +1,10 @@
-# Mapolis (pre-beta5)
+# Mapolis (pre-beta6)
 
 An interactive, COPPA/FERPA-compliant geography quiz game for students and educators.
 
 ## Branch & Deployment Status
-- **Active Branch**: `pre-beta5`
-- **Consumer Game**: `play/` (published to `play.mapolis.app`)
+- **Active Branch**: `pre-beta6`
+- **Consumer Game**: `play/index.html` + shared root assets (published to `play.mapolis.app`)
 - **Admin/Educator Portal**: `play/admin/` (published to `mapolis-admin.netlify.app`)
 
 ## Operational Artifacts & Guides

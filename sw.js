@@ -5,33 +5,31 @@ const CACHE_NAME = 'mapolis-cache-v1';
 
 // Core assets required for 100% offline solo gameplay on classroom tablets
 const PRECACHE_ASSETS = [
-  '/',
   '/play/',
   '/play/index.html',
-  '/play/styles.css',
-  '/play/fonts.css',
+  '/styles.css',
+  '/fonts.css',
   '/lib/d3.min.js',
   '/lib/topojson.min.js',
   '/assets/mapolis-globe.js',
   '/assets/shared.js',
   '/env.js',
-  '/play/env.js',
   // Required TopoJSON & Game Data for Solo Mode
   '/data/countries-50m.json',
-  '/play/data/countries-50m.json',
   '/map-data.js',
-  '/play/map-data.js',
   '/avatar-assets.js',
-  '/play/avatar-assets.js',
-  // Manifest and icons
+  // Manifest, icons, and Title/Solidarity imagery
   '/manifest.json',
-  '/play/manifest.json',
   '/pwa-192x192.png',
   '/pwa-512x512.png',
   '/pwa-maskable-512x512.png',
   '/apple-touch-icon.png',
   '/favicon.ico',
-  '/play/favicon.ico'
+  '/icon.svg',
+  '/assets/monarch-badge.jpg',
+  '/assets/pcrf-logo.jpeg',
+  '/assets/cs-logo.png',
+  '/assets/moco-irc.jpeg'
 ];
 
 // Helper: Normalize URL to pathname for cache lookup
@@ -128,11 +126,11 @@ self.addEventListener('fetch', (event) => {
             return networkResp;
           })
           .catch(async () => {
-            // Offline fallback for navigation: serve cached play/index.html or /play/
+            // Offline fallback for navigation: match requested page first, then /play/
             const cache = await caches.open(CACHE_NAME);
-            const cachedNav = (await cache.match('/play/')) ||
-                              (await cache.match('/play/index.html')) ||
-                              (await cache.match(req));
+            const cachedNav = (await cache.match(req)) ||
+                              (await cache.match('/play/')) ||
+                              (await cache.match('/play/index.html'));
             if (cachedNav) return cachedNav;
             return new Response('<h1>Mapolis Offline</h1><p>Please reconnect to launch for the first time.</p>', {
               headers: { 'Content-Type': 'text/html' }
@@ -153,14 +151,13 @@ self.addEventListener('fetch', (event) => {
         // Secondary fallback matching for relative/absolute variants
         const cache = await caches.open(CACHE_NAME);
         if (pathname.endsWith('countries-50m.json')) {
-          const jsonFallback = (await cache.match('/data/countries-50m.json')) ||
-                               (await cache.match('/play/data/countries-50m.json'));
+          const jsonFallback = await cache.match('/data/countries-50m.json');
           if (jsonFallback) return jsonFallback;
         } else if (pathname.endsWith('map-data.js')) {
-          const mapFallback = (await cache.match('/play/map-data.js')) || (await cache.match('/map-data.js'));
+          const mapFallback = await cache.match('/map-data.js');
           if (mapFallback) return mapFallback;
         } else if (pathname.endsWith('avatar-assets.js')) {
-          const avaFallback = (await cache.match('/play/avatar-assets.js')) || (await cache.match('/avatar-assets.js'));
+          const avaFallback = await cache.match('/avatar-assets.js');
           if (avaFallback) return avaFallback;
         }
 

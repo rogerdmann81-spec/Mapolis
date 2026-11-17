@@ -4,7 +4,7 @@
 
 <head>
 
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/styles.css">
 <meta charset="UTF-8">
 <!--
   ─────────────────────────────────────────────────────────────────────
@@ -52,7 +52,7 @@
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   
-<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="/fonts.css">
 
 <!-- CDN: D3 v7 + TopoJSON v3 -->
 
@@ -689,8 +689,8 @@
 
 
 
-<script src="avatar-assets.js"></script>
-<script src="map-data.js"></script>
+<script src="/avatar-assets.js"></script>
+<script src="/map-data.js"></script>
 <script>
 
 const AudioMgr = (function() {
@@ -11847,14 +11847,12 @@ function showNotesModal() {
 (function initPWA() {
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
-      var swUrl = window.location.pathname.startsWith('/play') ? '/sw.js' : 'sw.js';
-      navigator.serviceWorker.register(swUrl, { scope: '/' })
+      navigator.serviceWorker.register('/sw.js', { scope: '/' })
         .then(function(reg) {
           console.log('[PWA] Service Worker registered silently (scope: ' + reg.scope + ')');
         })
         .catch(function(err) {
-          navigator.serviceWorker.register('sw.js')
-            .catch(function(e) { console.warn('[PWA] Service Worker registration failed:', e); });
+          console.warn('[PWA] Service Worker registration failed:', err);
         });
     });
   }
