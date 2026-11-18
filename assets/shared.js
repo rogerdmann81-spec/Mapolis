@@ -20,6 +20,34 @@ const SYNC_QUEUE_KEY = 'nsg_syncQueue';
 const LEADERBOARD_CACHE_KEY = 'nsg_leaderboard_cache';
 const LEADERBOARD_TS_KEY = 'nsg_leaderboard_ts';
 
+// ─── Avatar Sanitization (Stored XSS Prevention) ───────────────────────────
+
+function sanitizeAvatarSvgUrl(val) {
+  if (typeof val !== 'string') return null;
+  const s = val.trim();
+  if (!/^data:image\/svg\+xml;charset=utf-8,[A-Za-z0-9\-_.!~*'()%]+$/.test(s)) {
+    return null;
+  }
+  try {
+    const decoded = decodeURIComponent(s.slice('data:image/svg+xml;charset=utf-8,'.length));
+    if (!/^\s*<svg[\s>]/i.test(decoded)) return null;
+    if (/<script\b|javascript:|on[a-z]+\s*=|<foreignObject\b/i.test(decoded)) return null;
+  } catch (e) {
+    return null;
+  }
+  return s;
+}
+
+function escapeAvatarHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ─── Supabase helpers ──────────────────────────────────────────────────────
 
 function isSupabaseConfigured() {
@@ -326,7 +354,7 @@ const syncStore = {
       stats: row.stats || { cr: 0, totalAnswered: 0, totalCorrect: 0 },
       badges: row.badges || [],
       accessories: row.accessories || [],
-      avatar: { face: row.avatar_face || '🧑', selections: row.avatar_selections || null, svg: row.avatar_svg || null },
+      avatar: { face: row.avatar_face || '🧑', selections: row.avatar_selections || null, svg: sanitizeAvatarSvgUrl(row.avatar_svg) },
       unlockedAvatar: row.unlocked_avatar || null,
       linkCode: row.link_code || null,
       passwordHash: row.password_hash || null,
@@ -511,7 +539,7 @@ const syncStore = {
       badges: p.badges || [],
       accessories: p.accessories || [],
       avatar_face: p.avatar && p.avatar.face ? p.avatar.face : null,
-      avatar_svg: p.avatar && p.avatar.svg ? p.avatar.svg : null,
+      avatar_svg: (p.avatar && p.avatar.svg) ? sanitizeAvatarSvgUrl(p.avatar.svg) : null,
       avatar_selections: p.avatar && p.avatar.selections ? p.avatar.selections : null,
       unlocked_avatar: p.unlockedAvatar || null,
       link_code: p.linkCode || null,
@@ -1317,7 +1345,9 @@ if (typeof window !== 'undefined') {
   window.signInAnonymous = signInAnonymous;
   window.notesStore = notesStore;
   window.h2hStore = h2hStore;
+  window.sanitizeAvatarSvgUrl = sanitizeAvatarSvgUrl;
+  window.escapeAvatarHtml = escapeAvatarHtml;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { syncStore, mapolisUUID, mergeProfiles, submitRound, flushPendingRounds, getPendingRounds, ensureAuthSession, notesStore, h2hStore, authedHeaders, isSupabaseConfigured, SUPABASE_URL };
+  module.exports = { syncStore, mapolisUUID, mergeProfiles, submitRound, flushPendingRounds, getPendingRounds, ensureAuthSession, notesStore, h2hStore, authedHeaders, isSupabaseConfigured, SUPABASE_URL, sanitizeAvatarSvgUrl, escapeAvatarHtml };
 }
