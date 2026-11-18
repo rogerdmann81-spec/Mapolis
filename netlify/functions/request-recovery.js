@@ -62,10 +62,30 @@ async function handleRecovery(body) {
     return { status: 200, data: { ok: true, message: 'Recovery link sent' } };
   }
 
+  // 2. Enforce 60s per-email cooldown via recovery_tokens.created_at to prevent email flooding
+  try {
+    const cooldownCutoff = new Date(Date.now() - 60 * 1000).toISOString();
+    const recentUrl = `${supabaseUrl}/rest/v1/recovery_tokens?email=eq.${encodeURIComponent(email)}&created_at=gt.${encodeURIComponent(cooldownCutoff)}&select=id&limit=1`;
+    const recentRes = await fetch(recentUrl, {
+      headers: {
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`
+      }
+    });
+    if (recentRes.ok) {
+      const recentRows = await recentRes.json();
+      if (Array.isArray(recentRows) && recentRows.length > 0) {
+        return { status: 200, data: { ok: true, message: 'Recovery link sent', throttled: true } };
+      }
+    }
+  } catch (err) {
+    console.warn('[request-recovery] Cooldown check failed, continuing:', err);
+  }
+
   // Always pin canonical production origin to prevent Origin/Host header poisoning
   const baseUrl = 'https://play.mapolis.app/play/';
 
-  // 2. Generate token for each profile and save to recovery_tokens table
+  // 3. Generate token for each profile and save to recovery_tokens table
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
   const accountCards = [];
 

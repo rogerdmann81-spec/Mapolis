@@ -17,11 +17,18 @@ const escapeHtml = (s) => {
     .replace(/"/g, '&quot;');
 };
 
+const recentWelcomeNotices = new Map();
+const WELCOME_COOLDOWN_MS = 60 * 1000;
+
+function sanitizeHeaderText(s) {
+  return String(s || '').replace(/[\r\n\t]+/g, ' ').trim();
+}
+
 async function handleWelcomeNotice(body) {
   const email = (body && body.email ? String(body.email) : '').trim().toLowerCase();
   const playerId = (body && body.playerId ? String(body.playerId) : '').trim();
 
-  if (!email || !email.includes('@')) {
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { status: 400, data: { ok: false, error: 'Invalid email address' } };
   }
   if (!playerId) {
@@ -72,6 +79,13 @@ async function handleWelcomeNotice(body) {
   }
 
   const handle = (profileRow.handle || 'Player').trim();
+  const safeSubjectHandle = sanitizeHeaderText(handle) || 'Player';
+  const cooldownKey = `${profileRow.player_id}:${email}`;
+  const lastSentAt = recentWelcomeNotices.get(cooldownKey) || 0;
+  if (Date.now() - lastSentAt < WELCOME_COOLDOWN_MS) {
+    return { status: 200, data: { ok: true, sent: false, throttled: true } };
+  }
+
   const birthYear = profileRow.birth_year || (body && body.birthYear) || null;
   const isUnder18 = birthYear
     ? (new Date().getFullYear() - Number(birthYear) < 18)
@@ -91,7 +105,7 @@ async function handleWelcomeNotice(body) {
 
   if (isUnder18) {
     // ── COPPA / FERPA Parent Welcome Notice ──
-    subject = `Important Notice: Your child's Mapolis account (${handle})`;
+    subject = `Important Notice: Your child's Mapolis account (${safeSubjectHandle})`;
     text = `MAPOLIS PLAYER PRIVACY & PARENT NOTICE\n\n` +
       `Dear Parent or Guardian,\n\n` +
       `Your email was recently provided as the parent email for a Mapolis player profile:\n` +
@@ -168,7 +182,7 @@ async function handleWelcomeNotice(body) {
     `;
   } else {
     // ── Adult Recovery Email Confirmation ──
-    subject = `Mapolis: Recovery email linked for ${handle}`;
+    subject = `Mapolis: Recovery email linked for ${safeSubjectHandle}`;
     text = `MAPOLIS ACCOUNT SECURITY\n\n` +
       `Hi ${handle},\n\n` +
       `You have successfully linked ${email} as the recovery email for your Mapolis account (${handle}).\n\n` +
@@ -246,6 +260,7 @@ async function handleWelcomeNotice(body) {
     }
 
     const data = await resendRes.json();
+    recentWelcomeNotices.set(cooldownKey, Date.now());
     console.log('[send-welcome-notice] Email dispatched successfully to', email, 'ID:', data.id);
     return { status: 200, data: { ok: true, sent: true, id: data.id } };
   } catch (err) {
@@ -291,3 +306,4 @@ exports.handler = async (event, context) => {
 };
 
 exports.handleWelcomeNotice = handleWelcomeNotice;
+exports._resetWelcomeCooldownForTest = () => recentWelcomeNotices.clear();

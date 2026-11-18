@@ -27,7 +27,7 @@ async function handleParentOptOut(body) {
   const playerId = (body && body.playerId ? String(body.playerId) : '').trim();
   const token = (body && body.token ? String(body.token) : '').trim();
 
-  if (!email || !email.includes('@') || !playerId || !token) {
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !playerId || !token) {
     return { status: 400, data: { ok: false, error: 'Missing required verification parameters', deletedCount: 0 } };
   }
 
@@ -126,9 +126,10 @@ async function handleParentOptOut(body) {
 
   // 4. Send confirmation email to verified parent ONLY after confirmed deletion
   const displayHandle = dbHandle || 'Player';
+  const safeSubjectHandle = displayHandle.replace(/[\r\n\t]+/g, ' ').trim() || 'Player';
   if (resendApiKey && email && deletedCount > 0) {
     try {
-      const subject = `Mapolis: Profile '${displayHandle}' has been deleted`;
+      const subject = `Mapolis: Profile '${safeSubjectHandle}' has been deleted`;
       const html = `
 <!DOCTYPE html>
 <html>
