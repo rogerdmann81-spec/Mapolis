@@ -274,7 +274,7 @@ async function getCurrentUser() {
   try {
     const url = SUPABASE_URL
       + '/rest/v1/profiles?auth_uid=eq.' + encodeURIComponent(authUid)
-      + '&select=id,is_admin&limit=1';
+      + '&select=player_id,is_admin&limit=1';
 
     const resp = await fetch(url, { headers: authedHeaders() });
     if (!resp.ok) return { id: null, authUid, isAdmin: false };
@@ -283,7 +283,7 @@ async function getCurrentUser() {
     if (!rows.length) return { id: null, authUid, isAdmin: false };
 
     return {
-      id: rows[0].id,
+      id: rows[0].player_id,
       authUid,
       isAdmin: rows[0].is_admin === true
     };
@@ -370,14 +370,16 @@ const syncStore = {
   async fetchProfiles(authUid, localProfileIds = []) {
     if (!navigator.onLine || !isSupabaseConfigured()) return null;
     try {
+      await ensureAuthSession();
+      const safeCols = 'player_id,auth_uid,handle,country,birth_year,stats,cr,badges,accessories,avatar_face,avatar_svg,avatar_selections,unlocked_avatar,link_code,parent_email,frozen,is_admin,created_at,updated_at';
       let query = '';
       const validIds = Array.isArray(localProfileIds) ? localProfileIds.filter(Boolean) : [];
       if (authUid && validIds.length > 0) {
-        query = '?or=(auth_uid.eq.' + encodeURIComponent(authUid) + ',player_id.in.(' + validIds.map(encodeURIComponent).join(',') + '))';
+        query = '?or=(auth_uid.eq.' + encodeURIComponent(authUid) + ',player_id.in.(' + validIds.map(encodeURIComponent).join(',') + '))&select=' + safeCols;
       } else if (authUid) {
-        query = '?auth_uid=eq.' + encodeURIComponent(authUid);
+        query = '?auth_uid=eq.' + encodeURIComponent(authUid) + '&select=' + safeCols;
       } else if (validIds.length > 0) {
-        query = '?player_id=in.(' + validIds.map(encodeURIComponent).join(',') + ')';
+        query = '?player_id=in.(' + validIds.map(encodeURIComponent).join(',') + ')&select=' + safeCols;
       } else {
         return null;
       }
@@ -397,7 +399,9 @@ const syncStore = {
   async fetchProfileById(playerId) {
     if (!navigator.onLine || !isSupabaseConfigured() || !playerId) return null;
     try {
-      const url = SUPABASE_URL + '/rest/v1/profiles?player_id=eq.' + encodeURIComponent(playerId);
+      await ensureAuthSession();
+      const safeCols = 'player_id,auth_uid,handle,country,birth_year,stats,cr,badges,accessories,avatar_face,avatar_svg,avatar_selections,unlocked_avatar,link_code,parent_email,frozen,is_admin,created_at,updated_at';
+      const url = SUPABASE_URL + '/rest/v1/profiles?player_id=eq.' + encodeURIComponent(playerId) + '&select=' + safeCols;
       const resp = await fetch(url, { headers: authedHeaders() });
       if (resp.ok) {
         const rows = await resp.json();
@@ -406,7 +410,19 @@ const syncStore = {
           return this._mapRowToProfile(rows[0], authUid);
         }
       }
-      console.warn('[syncStore] fetchProfileById failed:', resp.status);
+      // Fallback to safe public RPC when querying non-owned profiles (e.g., H2H opponents)
+      const pubResp = await fetch(SUPABASE_URL + '/rest/v1/rpc/get_public_profile', {
+        method: 'POST',
+        headers: authedHeaders(),
+        body: JSON.stringify({ p_player_id: playerId })
+      });
+      if (pubResp.ok) {
+        const pubRow = await pubResp.json();
+        if (pubRow && pubRow.player_id) {
+          return this._mapRowToProfile(pubRow, null);
+        }
+      }
+      if (!resp.ok) console.warn('[syncStore] fetchProfileById failed:', resp.status);
     } catch (e) {
       console.warn('[syncStore] fetchProfileById error:', e);
     }
@@ -473,9 +489,11 @@ const syncStore = {
   async fetchLeaderboard() {
     if (navigator.onLine && isSupabaseConfigured()) {
       try {
-        const url = SUPABASE_URL
-          + '/rest/v1/profiles?select=player_id,handle,country,stats,cr,birth_year,avatar_face,avatar_svg&order=cr.desc.nullslast&limit=100';
-        const resp = await fetch(url, { headers: authedHeaders() });
+        const qs = '?select=player_id,handle,country,stats,cr,birth_year,avatar_face,avatar_svg&order=cr.desc.nullslast&limit=100';
+        let resp = await fetch(SUPABASE_URL + '/rest/v1/leaderboard_profiles' + qs, { headers: authedHeaders() });
+        if (!resp.ok) {
+          resp = await fetch(SUPABASE_URL + '/rest/v1/profiles' + qs, { headers: authedHeaders() });
+        }
         if (resp.ok) {
           const rows = await resp.json();
           const ts = Date.now();
@@ -756,6 +774,7 @@ async function submitRound(roundData) {
   }
 
   try {
+    await ensureAuthSession();
     const url = SUPABASE_URL + '/rest/v1/rpc/submit_round';
     const resp = await fetch(url, {
       method: 'POST',
@@ -786,6 +805,7 @@ async function flushPendingRounds() {
   const pending = getPendingRounds();
   if (!pending.length || !navigator.onLine || !isSupabaseConfigured()) return;
 
+  await ensureAuthSession();
   for (const round of pending) {
     try {
       const url = SUPABASE_URL + '/rest/v1/rpc/submit_round';
@@ -893,7 +913,16 @@ function _mapRowToNote(r) {
   };
 }
 
-function notesHeaders() {
+async function _playerNotesHeaders() {
+  await ensureAuthSession();
+  return authedHeaders();
+}
+
+function _adminNotesHeaders() {
+  const session = _getSession();
+  if (session && session.access_token && session.user && session.user.is_anonymous === false) {
+    return authedHeaders();
+  }
   return {
     'Content-Type': 'application/json',
     'apikey': SUPABASE_KEY,
@@ -908,12 +937,13 @@ const notesStore = {
     }
     try {
       let url = SUPABASE_URL + '/rest/v1/player_notes?select=*&order=created_at.desc';
+      const hdrs = profileId ? await _playerNotesHeaders() : _adminNotesHeaders();
       if (profileId) {
         url += '&profile_id=eq.' + encodeURIComponent(profileId);
       }
       const resp = await fetch(url, {
         method: 'GET',
-        headers: notesHeaders()
+        headers: hdrs
       });
       if (!resp.ok) {
         const errText = await resp.text();
@@ -958,10 +988,11 @@ const notesStore = {
     };
 
     if (isSupabaseConfigured() && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
+      const hdrs = await _playerNotesHeaders();
       const url = SUPABASE_URL + '/rest/v1/player_notes';
       const resp = await fetch(url, {
         method: 'POST',
-        headers: notesHeaders(),
+        headers: hdrs,
         body: JSON.stringify({
           id: tempId,
           profile_id: profileId,
@@ -985,8 +1016,9 @@ const notesStore = {
     const nowIso = new Date().toISOString();
     if (isSupabaseConfigured() && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
       try {
+        const hdrs = await _playerNotesHeaders();
         const getUrl = SUPABASE_URL + '/rest/v1/player_notes?id=eq.' + encodeURIComponent(noteId);
-        const getResp = await fetch(getUrl, { headers: notesHeaders() });
+        const getResp = await fetch(getUrl, { headers: hdrs });
         if (!getResp.ok) throw new Error('Fetch note failed ' + getResp.status);
         const rows = await getResp.json();
         if (!rows || !rows.length) throw new Error('Note not found');
@@ -1012,7 +1044,7 @@ const notesStore = {
         const patchUrl = SUPABASE_URL + '/rest/v1/player_notes?id=eq.' + encodeURIComponent(noteId);
         const patchResp = await fetch(patchUrl, {
           method: 'PATCH',
-          headers: notesHeaders(),
+          headers: hdrs,
           body: JSON.stringify({
             message: threadJson,
             is_read_by_admin: false,
@@ -1031,10 +1063,11 @@ const notesStore = {
   async markRepliesRead(profileId) {
     if (isSupabaseConfigured() && (typeof navigator === 'undefined' || navigator.onLine !== false) && profileId) {
       try {
+        const hdrs = await _playerNotesHeaders();
         const url = SUPABASE_URL + '/rest/v1/player_notes?profile_id=eq.' + encodeURIComponent(profileId) + '&is_read_by_player=eq.false';
         await fetch(url, {
           method: 'PATCH',
-          headers: notesHeaders(),
+          headers: hdrs,
           body: JSON.stringify({ is_read_by_player: true })
         });
       } catch (_) {}
@@ -1047,7 +1080,7 @@ const notesStore = {
         const url = SUPABASE_URL + '/rest/v1/player_notes?is_read_by_admin=eq.false';
         await fetch(url, {
           method: 'PATCH',
-          headers: notesHeaders(),
+          headers: _adminNotesHeaders(),
           body: JSON.stringify({ is_read_by_admin: true })
         });
       } catch (_) {}
@@ -1058,8 +1091,9 @@ const notesStore = {
     const nowIso = new Date().toISOString();
     if (isSupabaseConfigured() && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
       try {
+        const hdrs = _adminNotesHeaders();
         const getUrl = SUPABASE_URL + '/rest/v1/player_notes?id=eq.' + encodeURIComponent(noteId);
-        const getResp = await fetch(getUrl, { headers: notesHeaders() });
+        const getResp = await fetch(getUrl, { headers: hdrs });
         let threadJson = null;
         if (getResp.ok) {
           const rows = await getResp.json();
@@ -1091,7 +1125,7 @@ const notesStore = {
 
         const resp = await fetch(url, {
           method: 'PATCH',
-          headers: notesHeaders(),
+          headers: hdrs,
           body: JSON.stringify(patchBody)
         });
         if (!resp.ok) console.warn('[notesStore.replyToNote] Cloud update status: ' + resp.status);
@@ -1102,11 +1136,11 @@ const notesStore = {
   },
 
   async toggleCloseConversation(noteId, shouldClose) {
-    const nowIso = new Date().toISOString();
     if (isSupabaseConfigured() && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
       try {
+        const hdrs = _adminNotesHeaders();
         const getUrl = SUPABASE_URL + '/rest/v1/player_notes?id=eq.' + encodeURIComponent(noteId);
-        const getResp = await fetch(getUrl, { headers: notesHeaders() });
+        const getResp = await fetch(getUrl, { headers: hdrs });
         if (!getResp.ok) return;
         const rows = await getResp.json();
         if (!rows || !rows.length) return;
@@ -1123,7 +1157,7 @@ const notesStore = {
         const patchUrl = SUPABASE_URL + '/rest/v1/player_notes?id=eq.' + encodeURIComponent(noteId);
         await fetch(patchUrl, {
           method: 'PATCH',
-          headers: notesHeaders(),
+          headers: hdrs,
           body: JSON.stringify({
             message: threadJson
           })
@@ -1141,7 +1175,7 @@ const notesStore = {
         const url = SUPABASE_URL + '/rest/v1/player_notes?id=eq.' + encodeURIComponent(noteId);
         await fetch(url, {
           method: 'DELETE',
-          headers: notesHeaders()
+          headers: _adminNotesHeaders()
         });
       } catch (e) {
         console.warn('[notesStore.deleteNote] Error deleting from cloud:', e);
@@ -1198,6 +1232,7 @@ const h2hStore = {
 
   async leaveQueue(playerId) {
     if (!isSupabaseConfigured() || !playerId) return;
+    await ensureAuthSession();
     try {
       await fetch(SUPABASE_URL + '/rest/v1/rpc/h2h_leave_queue', {
         method: 'POST',
@@ -1209,6 +1244,7 @@ const h2hStore = {
 
   async syncSetup(matchId, playerId, continent, features, isReady, cardSequence = null) {
     if (!isSupabaseConfigured() || !matchId || !playerId) return null;
+    await ensureAuthSession();
     try {
       const payload = {
         p_match_id: matchId,
@@ -1234,6 +1270,7 @@ const h2hStore = {
 
   async syncGameplay(matchId, playerId, score, cardId = null, correct = null, isFinished = false) {
     if (!isSupabaseConfigured() || !matchId || !playerId) return null;
+    await ensureAuthSession();
     try {
       const payload = {
         p_match_id: matchId,
@@ -1261,6 +1298,7 @@ const h2hStore = {
 
   async finalizeMatch(matchId, playerId, finalScore) {
     if (!isSupabaseConfigured() || !matchId || !playerId) return null;
+    await ensureAuthSession();
     try {
       const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/h2h_finalize_match', {
         method: 'POST',
@@ -1281,6 +1319,7 @@ const h2hStore = {
 
   async forfeitMatch(matchId, playerId) {
     if (!isSupabaseConfigured() || !matchId || !playerId) return null;
+    await ensureAuthSession();
     try {
       const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/h2h_forfeit_match', {
         method: 'POST',
@@ -1299,6 +1338,7 @@ const h2hStore = {
 
   async syncRematch(matchId, playerId, action = 'stay') {
     if (!isSupabaseConfigured() || !matchId || !playerId) return null;
+    await ensureAuthSession();
     try {
       const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/h2h_rematch_sync', {
         method: 'POST',
@@ -1318,6 +1358,7 @@ const h2hStore = {
 
   async leaveResults(matchId, playerId) {
     if (!isSupabaseConfigured() || !matchId || !playerId) return null;
+    await ensureAuthSession();
     try {
       await fetch(SUPABASE_URL + '/rest/v1/rpc/h2h_rematch_sync', {
         method: 'POST',

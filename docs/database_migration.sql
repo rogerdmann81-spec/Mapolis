@@ -10,17 +10,158 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS parent_email TEXT;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS frozen BOOLEAN DEFAULT false;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS recovery_created_at TIMESTAMPTZ;
 
--- 2. Fix the infinite recursion in Admin policy
+-- 2. Fix the infinite recursion in Admin policy & harden auth_is_admin()
 DROP POLICY IF EXISTS "Admins can read all profiles" ON profiles;
 
-CREATE OR REPLACE FUNCTION auth_is_admin() RETURNS boolean
-LANGUAGE sql SECURITY DEFINER
+CREATE OR REPLACE FUNCTION public.auth_is_admin() RETURNS boolean
+LANGUAGE sql SECURITY DEFINER SET search_path = public
 AS $$
-  SELECT is_admin FROM profiles WHERE auth_uid = auth.uid();
+  SELECT COALESCE(bool_or(is_admin), false) FROM profiles WHERE auth_uid = auth.uid();
 $$;
 
 CREATE POLICY "Admins can read all profiles" ON profiles
     FOR ALL USING (auth_is_admin());
+
+-- Deduplicate profiles insert/update policies & protect is_admin / auth_uid from direct tampering
+DROP POLICY IF EXISTS "Users can insert their own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can update their own profile" ON profiles;
+
+DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
+CREATE POLICY "Users can insert own profile" ON profiles
+  FOR INSERT WITH CHECK (auth_uid = auth.uid() AND COALESCE(is_admin, false) = false);
+
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
+CREATE POLICY "Users can update own profile" ON profiles
+  FOR UPDATE USING (auth_uid = auth.uid())
+  WITH CHECK (auth_uid = auth.uid());
+
+CREATE OR REPLACE FUNCTION public.protect_profile_sensitive_columns()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  v_jwt_role text := COALESCE(current_setting('request.jwt.claim.role', true), '');
+BEGIN
+  IF current_user IN ('postgres', 'supabase_admin', 'service_role') OR v_jwt_role = 'service_role' THEN
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    NEW.is_admin := false;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'UPDATE' THEN
+    IF NOT COALESCE(auth_is_admin(), false) THEN
+      IF NEW.is_admin IS DISTINCT FROM OLD.is_admin THEN
+        RAISE EXCEPTION 'Permission denied: cannot modify is_admin';
+      END IF;
+      IF NEW.auth_uid IS DISTINCT FROM OLD.auth_uid THEN
+        RAISE EXCEPTION 'Permission denied: cannot reassign auth_uid directly';
+      END IF;
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_protect_profile_sensitive_columns ON profiles;
+CREATE TRIGGER trg_protect_profile_sensitive_columns
+  BEFORE INSERT OR UPDATE ON profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION public.protect_profile_sensitive_columns();
+
+-- Safe public leaderboard view & opponent lookup RPC (excludes parent_email, password_hash, auth_uid, link_code)
+CREATE OR REPLACE VIEW public.leaderboard_profiles AS
+SELECT
+  player_id, handle, country, stats, cr, birth_year, avatar_face, avatar_svg, created_at
+FROM public.profiles
+WHERE COALESCE(frozen, false) = false;
+
+GRANT SELECT ON public.leaderboard_profiles TO anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.get_public_profile(p_player_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  v_row RECORD;
+BEGIN
+  SELECT
+    player_id, handle, country, stats, cr, birth_year,
+    avatar_face, avatar_svg, avatar_selections, unlocked_avatar,
+    badges, accessories, created_at, updated_at
+  INTO v_row
+  FROM profiles
+  WHERE player_id = p_player_id AND COALESCE(frozen, false) = false
+  LIMIT 1;
+
+  IF NOT FOUND THEN RETURN NULL; END IF;
+  RETURN row_to_json(v_row)::jsonb;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_public_profile(uuid) TO anon, authenticated;
+
+-- Authenticated owner-scoped RLS policies for player_notes
+DROP POLICY IF EXISTS "notes_auth_select" ON player_notes;
+CREATE POLICY "notes_auth_select" ON player_notes
+  FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles p
+      WHERE p.player_id::text = player_notes.profile_id
+        AND p.auth_uid = auth.uid()
+    )
+    OR auth_is_admin()
+  );
+
+DROP POLICY IF EXISTS "notes_auth_insert" ON player_notes;
+CREATE POLICY "notes_auth_insert" ON player_notes
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM profiles p
+      WHERE p.player_id::text = player_notes.profile_id
+        AND p.auth_uid = auth.uid()
+    )
+    OR auth_is_admin()
+  );
+
+DROP POLICY IF EXISTS "notes_auth_update" ON player_notes;
+CREATE POLICY "notes_auth_update" ON player_notes
+  FOR UPDATE TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles p
+      WHERE p.player_id::text = player_notes.profile_id
+        AND p.auth_uid = auth.uid()
+    )
+    OR auth_is_admin()
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM profiles p
+      WHERE p.player_id::text = player_notes.profile_id
+        AND p.auth_uid = auth.uid()
+    )
+    OR auth_is_admin()
+  );
+
+DROP POLICY IF EXISTS "notes_auth_delete" ON player_notes;
+CREATE POLICY "notes_auth_delete" ON player_notes
+  FOR DELETE TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles p
+      WHERE p.player_id::text = player_notes.profile_id
+        AND p.auth_uid = auth.uid()
+    )
+    OR auth_is_admin()
+  );
 
 -- 3. Update the Restore Profile RPCs to handle frozen correctly
 CREATE OR REPLACE FUNCTION restore_profile(
@@ -62,43 +203,8 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION restore_profile_by_email(
-  p_parent_email text
-) RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_auth_uid uuid := auth.uid();
-  v_profile profiles%ROWTYPE;
-BEGIN
-  IF v_auth_uid IS NULL THEN
-    RAISE EXCEPTION 'Not authenticated';
-  END IF;
-
-  SELECT * INTO v_profile
-  FROM profiles
-  WHERE lower(parent_email) = lower(p_parent_email)
-  LIMIT 1;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Email not found';
-  END IF;
-
-  IF v_profile.frozen = true THEN
-    RAISE EXCEPTION 'Profile is frozen';
-  END IF;
-
-  UPDATE profiles
-  SET auth_uid = v_auth_uid,
-      recovery_created_at = now()
-  WHERE player_id = v_profile.player_id
-  RETURNING * INTO v_profile;
-
-  RETURN row_to_json(v_profile)::jsonb;
-END;
-$$;
+-- Legacy email-only restore removed (replaced by tokenized recovery)
+DROP FUNCTION IF EXISTS public.restore_profile_by_email(text);
 
 -- 4. Head-to-Head (H2H) Multiplayer Schema & RPCs (Branch: pre-beta4)
 
@@ -149,8 +255,10 @@ CREATE POLICY "match_results_read" ON match_results
     OR auth_is_admin()
   );
 
--- H2H Join Queue RPC
-CREATE OR REPLACE FUNCTION h2h_join_queue(
+-- H2H Join Queue RPC (drop legacy 3-arg overload first)
+DROP FUNCTION IF EXISTS public.h2h_join_queue(uuid, integer, jsonb);
+
+CREATE OR REPLACE FUNCTION public.h2h_join_queue(
   p_player_id uuid,
   p_tier int,
   p_card_sequence jsonb DEFAULT NULL,
@@ -159,8 +267,8 @@ CREATE OR REPLACE FUNCTION h2h_join_queue(
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_auth_uid uuid := auth.uid();
+  v_owner_uid uuid;
   v_opp_queue RECORD;
-  v_matched RECORD;
   v_lower_tier int;
   v_card_seq jsonb;
   v_match_id uuid;
@@ -171,22 +279,25 @@ BEGIN
     RAISE EXCEPTION 'h2h_join_queue: not authenticated';
   END IF;
 
-  -- Ensure profile exists and is updated with caller's real handle, avatar, and stats
-  IF EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id) THEN
+  -- Verify profile ownership if profile already exists
+  SELECT auth_uid INTO v_owner_uid FROM profiles WHERE player_id = p_player_id;
+  IF FOUND THEN
+    IF v_owner_uid IS NOT NULL AND v_owner_uid != v_auth_uid THEN
+      RAISE EXCEPTION 'h2h_join_queue: unauthorized player_id';
+    END IF;
     IF p_profile_data IS NOT NULL THEN
       UPDATE profiles SET
-        auth_uid = COALESCE(v_auth_uid, auth_uid),
+        auth_uid = COALESCE(auth_uid, v_auth_uid),
         avatar_svg = COALESCE(p_profile_data->>'avatar_svg', avatar_svg),
         avatar_face = COALESCE(p_profile_data->>'avatar_face', avatar_face),
         avatar_selections = COALESCE(p_profile_data->'avatar_selections', avatar_selections),
         stats = COALESCE(p_profile_data->'stats', stats),
         cr = COALESCE((p_profile_data->'stats'->'h2h'->>'rating')::int, (p_profile_data->>'rating')::int, cr)
-      WHERE player_id = p_player_id;
+      WHERE player_id = p_player_id AND (auth_uid IS NULL OR auth_uid = v_auth_uid);
     ELSE
       UPDATE profiles SET auth_uid = v_auth_uid WHERE player_id = p_player_id AND (auth_uid IS NULL OR auth_uid = v_auth_uid);
     END IF;
   ELSE
-    -- Profile does not exist yet; verify handle is not taken by another user
     v_safe_handle := COALESCE(p_profile_data->>'handle', 'Player-' || substring(p_player_id::text from 1 for 8));
     IF EXISTS (SELECT 1 FROM profiles WHERE lower(handle) = lower(v_safe_handle) AND player_id != p_player_id) THEN
       v_safe_handle := v_safe_handle || '_' || substring(p_player_id::text from 1 for 4);
@@ -204,12 +315,13 @@ BEGIN
       COALESCE((p_profile_data->'stats'->'h2h'->>'rating')::int, (p_profile_data->>'rating')::int, 1200)
     )
     ON CONFLICT (player_id) DO UPDATE SET
-      auth_uid = COALESCE(EXCLUDED.auth_uid, profiles.auth_uid),
+      auth_uid = COALESCE(profiles.auth_uid, EXCLUDED.auth_uid),
       avatar_svg = COALESCE(EXCLUDED.avatar_svg, profiles.avatar_svg),
       avatar_face = COALESCE(EXCLUDED.avatar_face, profiles.avatar_face),
       avatar_selections = COALESCE(EXCLUDED.avatar_selections, profiles.avatar_selections),
       stats = COALESCE(EXCLUDED.stats, profiles.stats),
-      cr = COALESCE(EXCLUDED.cr, profiles.cr);
+      cr = COALESCE(EXCLUDED.cr, profiles.cr)
+    WHERE profiles.auth_uid IS NULL OR profiles.auth_uid = v_auth_uid;
   END IF;
 
   -- Expire stale active matches older than 60s
@@ -220,13 +332,11 @@ BEGIN
   -- Clean up expired queue entries older than 60s
   DELETE FROM match_queue WHERE entered_at < now() - interval '60 seconds';
 
-  -- When explicitly entering the matchmaking queue, mark caller finished in ALL prior matches
-  -- so they can NEVER be reconnected or trapped in an old match
+  -- Mark caller finished in all prior matches
   UPDATE match_players
   SET finished_at = COALESCE(finished_at, now())
   WHERE profile_id = p_player_id;
 
-  -- Also finalize prior matches if both players have now finished
   UPDATE matches m
   SET status = 'finished', ended_at = now()
   WHERE m.status = 'active'
@@ -305,7 +415,7 @@ END;
 $$;
 
 -- H2H Queue Poll RPC
-CREATE OR REPLACE FUNCTION h2h_poll_queue(
+CREATE OR REPLACE FUNCTION public.h2h_poll_queue(
   p_player_id uuid
 ) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
@@ -318,13 +428,15 @@ BEGIN
     RAISE EXCEPTION 'h2h_poll_queue: not authenticated';
   END IF;
 
-  -- If caller is STILL in match_queue, they are still waiting for a peer
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id AND auth_uid = v_auth_uid) THEN
+    RAISE EXCEPTION 'h2h_poll_queue: unauthorized player_id';
+  END IF;
+
   SELECT EXISTS(SELECT 1 FROM match_queue WHERE profile_id = p_player_id) INTO v_in_queue;
   IF v_in_queue THEN
     RETURN jsonb_build_object('status', 'waiting');
   END IF;
 
-  -- Caller was paired out of match_queue by a joiner! Find the freshly created match
   SELECT m.id, m.card_pool_tier, m.status, m.started_at, m.card_sequence_json,
          p.player_id as opp_id, p.handle as opp_handle, p.avatar_svg as opp_svg, p.avatar_face as opp_face,
          p.avatar_selections as opp_selections, p.stats as opp_stats, p.country as opp_country, p.birth_year as opp_birth_year,
@@ -377,101 +489,23 @@ BEGIN
   RETURN jsonb_build_object('status', 'waiting');
 END;
 $$;
-      'opponent', jsonb_build_object(
-        'player_id', v_matched.opp_id,
-        'handle', v_matched.opp_handle,
-        'avatar_svg', v_matched.opp_svg,
-        'avatar_face', v_matched.opp_face,
-        'avatar_selections', v_matched.opp_selections,
-        'stats', v_matched.opp_stats,
-        'country', v_matched.opp_country,
-        'birth_year', v_matched.opp_birth_year,
-        'rating', v_matched.opp_elo,
-        'matches', v_matched.opp_matches,
-        'wins', v_matched.opp_wins,
-        'losses', v_matched.opp_losses,
-        'ties', v_matched.opp_ties,
-        'tier', v_matched.card_pool_tier
-      ),
-      'card_sequence', v_matched.card_sequence_json,
-      'tier', v_matched.card_pool_tier,
-      'started_at', v_matched.started_at
-    );
-  END IF;
-
-  RETURN jsonb_build_object('status', 'waiting');
-END;
-$$;
-
--- H2H Real-Time Lobby Choice & Setup Sync RPC
-CREATE OR REPLACE FUNCTION h2h_sync_setup(
-  p_match_id uuid,
-  p_player_id uuid,
-  p_continent text,
-  p_features jsonb,
-  p_ready boolean
-) RETURNS jsonb
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE
-  v_opp RECORD;
-BEGIN
-  -- Update caller's setup choices
-  UPDATE match_players
-  SET setup_continent = COALESCE(p_continent, setup_continent, 'globe'),
-      setup_features = COALESCE(p_features, setup_features, '{}'::jsonb),
-      setup_ready = COALESCE(p_ready, setup_ready, false),
-      setup_updated_at = now()
-  WHERE match_id = p_match_id AND profile_id = p_player_id;
-
-  -- Query opponent's setup choices and REAL profile stats
-  SELECT mp.setup_continent, mp.setup_features, mp.setup_ready,
-         p.player_id, p.handle, p.avatar_svg, p.avatar_face, p.avatar_selections, p.stats, p.country, p.birth_year,
-         COALESCE((p.stats->'h2h'->>'rating')::int, cr.elo, NULLIF(p.cr, 0), 1200) as opp_elo,
-         COALESCE((p.stats->'h2h'->>'matches')::int, cr.matches_played, (COALESCE((p.stats->'h2h'->>'wins')::int, 0) + COALESCE((p.stats->'h2h'->>'losses')::int, 0) + COALESCE((p.stats->'h2h'->>'ties')::int, 0)), 0) as opp_matches,
-         COALESCE((p.stats->'h2h'->>'wins')::int, cr.wins, 0) as opp_wins,
-         COALESCE((p.stats->'h2h'->>'losses')::int, cr.losses, 0) as opp_losses,
-         COALESCE((p.stats->'h2h'->>'ties')::int, cr.ties, 0) as opp_ties
-  INTO v_opp
-  FROM match_players mp
-  JOIN profiles p ON p.player_id = mp.profile_id
-  LEFT JOIN competitive_ratings cr ON cr.profile_id = p.player_id
-  WHERE mp.match_id = p_match_id AND mp.profile_id != p_player_id
-  LIMIT 1;
-
-  IF FOUND THEN
-    RETURN jsonb_build_object(
-      'has_opponent', true,
-      'opp_continent', COALESCE(v_opp.setup_continent, 'globe'),
-      'opp_features', COALESCE(v_opp.setup_features, '{}'::jsonb),
-      'opp_ready', COALESCE(v_opp.setup_ready, false),
-      'opponent', jsonb_build_object(
-        'player_id', v_opp.player_id,
-        'handle', v_opp.handle,
-        'avatar_svg', v_opp.avatar_svg,
-        'avatar_face', v_opp.avatar_face,
-        'avatar_selections', v_opp.avatar_selections,
-        'stats', v_opp.stats,
-        'birth_year', v_opp.birth_year,
-        'rating', v_opp.opp_elo,
-        'matches', v_opp.opp_matches,
-        'wins', v_opp.opp_wins,
-        'losses', v_opp.opp_losses,
-        'ties', v_opp.opp_ties,
-        'country', v_opp.country
-      )
-    );
-  ELSE
-    RETURN jsonb_build_object('has_opponent', false);
-  END IF;
-END;
-$$;
 
 -- H2H Leave Queue RPC
-CREATE OR REPLACE FUNCTION h2h_leave_queue(
+CREATE OR REPLACE FUNCTION public.h2h_leave_queue(
   p_player_id uuid
 ) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_auth_uid uuid := auth.uid();
 BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'h2h_leave_queue: not authenticated';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id AND auth_uid = v_auth_uid) THEN
+    RAISE EXCEPTION 'h2h_leave_queue: unauthorized player_id';
+  END IF;
+
   DELETE FROM match_queue WHERE profile_id = p_player_id;
   UPDATE match_players
   SET finished_at = COALESCE(finished_at, now()), disconnected = true
@@ -481,63 +515,15 @@ BEGIN
 END;
 $$;
 
--- H2H Sync Gameplay Score RPC
-CREATE OR REPLACE FUNCTION h2h_sync_gameplay(
-  p_match_id uuid,
-  p_player_id uuid,
-  p_score numeric,
-  p_card_id text DEFAULT NULL,
-  p_correct boolean DEFAULT NULL
-) RETURNS jsonb
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE
-  v_opp_score numeric;
-  v_opp_disc boolean;
-  v_started_at timestamptz;
-  v_opp_correct int := 0;
-  v_opp_wrong int := 0;
-BEGIN
-  UPDATE match_players
-  SET final_score = p_score
-  WHERE match_id = p_match_id AND profile_id = p_player_id;
-
-  IF p_card_id IS NOT NULL AND p_correct IS NOT NULL THEN
-    INSERT INTO match_events (match_id, profile_id, card_id, correct, score_delta, answered_at)
-    VALUES (p_match_id, p_player_id, p_card_id, p_correct, CASE WHEN p_correct THEN 1.0 ELSE -0.5 END, now());
-  END IF;
-
-  SELECT mp.final_score, mp.disconnected, m.started_at
-  INTO v_opp_score, v_opp_disc, v_started_at
-  FROM match_players mp
-  JOIN matches m ON m.id = mp.match_id
-  WHERE mp.match_id = p_match_id AND mp.profile_id != p_player_id
-  LIMIT 1;
-
-  SELECT
-    COALESCE(count(*) FILTER (WHERE correct = true), 0),
-    COALESCE(count(*) FILTER (WHERE correct = false), 0)
-  INTO v_opp_correct, v_opp_wrong
-  FROM match_events
-  WHERE match_id = p_match_id AND profile_id != p_player_id;
-
-  RETURN jsonb_build_object(
-    'opp_score', COALESCE(v_opp_score, 0),
-    'opp_correct', v_opp_correct,
-    'opp_wrong', v_opp_wrong,
-    'opp_disconnected', COALESCE(v_opp_disc, false),
-    'elapsed_sec', EXTRACT(EPOCH FROM (now() - COALESCE(v_started_at, now())))
-  );
-END;
-$$;
-
 -- H2H Finalize Match RPC
-CREATE OR REPLACE FUNCTION h2h_finalize_match(
+CREATE OR REPLACE FUNCTION public.h2h_finalize_match(
   p_match_id uuid,
   p_player_id uuid,
   p_final_score numeric
 ) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
+  v_auth_uid uuid := auth.uid();
   v_match matches%ROWTYPE;
   v_existing_result match_results%ROWTYPE;
   v_me match_players%ROWTYPE;
@@ -561,18 +547,27 @@ DECLARE
   v_winner uuid := NULL;
   v_outcome text;
 BEGIN
-  -- Save caller score and mark finished_at
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'h2h_finalize_match: not authenticated';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id AND auth_uid = v_auth_uid) THEN
+    RAISE EXCEPTION 'h2h_finalize_match: unauthorized player_id';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM match_players WHERE match_id = p_match_id AND profile_id = p_player_id) THEN
+    RAISE EXCEPTION 'h2h_finalize_match: not a participant in match';
+  END IF;
+
   UPDATE match_players
   SET final_score = p_final_score,
       finished_at = COALESCE(finished_at, now())
   WHERE match_id = p_match_id AND profile_id = p_player_id;
 
   SELECT * INTO v_match FROM matches WHERE id = p_match_id FOR UPDATE;
-
   SELECT * INTO v_me FROM match_players WHERE match_id = p_match_id AND profile_id = p_player_id;
   SELECT * INTO v_opp FROM match_players WHERE match_id = p_match_id AND profile_id != p_player_id;
 
-  -- Load true career records for both caller and opponent
   SELECT
     COALESCE(cr.elo, (p.stats->'h2h'->>'rating')::int, NULLIF(p.cr, 0), 1200),
     COALESCE(cr.matches_played, (p.stats->'h2h'->>'matches')::int, ((COALESCE((p.stats->'h2h'->>'wins')::int, 0) + COALESCE((p.stats->'h2h'->>'losses')::int, 0) + COALESCE((p.stats->'h2h'->>'ties')::int, 0))), 0),
@@ -595,7 +590,6 @@ BEGIN
   LEFT JOIN competitive_ratings cr ON cr.profile_id = p.player_id
   WHERE p.player_id = v_opp.profile_id;
 
-  -- Load in-match answer breakdown from match_events
   SELECT
     COALESCE(count(*) FILTER (WHERE correct = true), 0),
     COALESCE(count(*) FILTER (WHERE correct = false), 0)
@@ -603,7 +597,6 @@ BEGIN
   FROM match_events
   WHERE match_id = p_match_id AND profile_id = v_opp.profile_id;
 
-  -- Check if already finalized
   IF v_match.status = 'finished' THEN
     SELECT * INTO v_existing_result
     FROM match_results
@@ -631,7 +624,6 @@ BEGIN
     END IF;
   END IF;
 
-  -- Outcome determination
   IF v_me.final_score > v_opp.final_score THEN
     v_winner := p_player_id;
     v_my_score_float := 1.0;
@@ -646,17 +638,18 @@ BEGIN
     v_outcome := 'tie';
   END IF;
 
-  -- Standard Elo math (K=32, starting 1200)
   v_my_expected := 1.0 / (1.0 + power(10.0, (v_opp_elo - v_my_elo)::float / 400.0));
   v_my_delta := round(32.0 * (v_my_score_float - v_my_expected))::int;
   v_opp_delta := -v_my_delta;
 
-  -- Update match
   UPDATE matches
   SET status = 'finished', ended_at = now(), winner_id = v_winner
   WHERE id = p_match_id;
 
-  -- Upsert competitive_ratings for caller (preserving true accumulated career numbers)
+  UPDATE match_players
+  SET finished_at = COALESCE(finished_at, now())
+  WHERE match_id = p_match_id AND profile_id = v_opp.profile_id AND finished_at IS NULL;
+
   INSERT INTO competitive_ratings (profile_id, elo, updated_at, matches_played, wins, losses, ties)
   VALUES (
     p_player_id,
@@ -675,7 +668,6 @@ BEGIN
     losses = COALESCE(competitive_ratings.losses, v_my_losses) + (CASE WHEN v_outcome = 'loss' THEN 1 ELSE 0 END),
     ties = COALESCE(competitive_ratings.ties, v_my_ties) + (CASE WHEN v_outcome = 'tie' THEN 1 ELSE 0 END);
 
-  -- Upsert competitive_ratings for opponent (preserving true accumulated career numbers)
   INSERT INTO competitive_ratings (profile_id, elo, updated_at, matches_played, wins, losses, ties)
   VALUES (
     v_opp.profile_id,
@@ -694,47 +686,36 @@ BEGIN
     losses = COALESCE(competitive_ratings.losses, v_opp_losses) + (CASE WHEN v_outcome = 'win' THEN 1 ELSE 0 END),
     ties = COALESCE(competitive_ratings.ties, v_opp_ties) + (CASE WHEN v_outcome = 'tie' THEN 1 ELSE 0 END);
 
-  -- Keep profiles.stats in sync for caller
   UPDATE profiles
   SET stats = jsonb_set(
-    jsonb_set(
-      jsonb_set(
-        jsonb_set(
-          jsonb_set(
-            COALESCE(stats, '{}'::jsonb),
-            '{h2h,rating}', to_jsonb(GREATEST(0, v_my_elo + v_my_delta))
-          ),
-          '{h2h,matches}', to_jsonb(v_my_matches + 1)
-        ),
-        '{h2h,wins}', to_jsonb(v_my_wins + (CASE WHEN v_outcome = 'win' THEN 1 ELSE 0 END))
-      ),
-      '{h2h,losses}', to_jsonb(v_my_losses + (CASE WHEN v_outcome = 'loss' THEN 1 ELSE 0 END))
+    COALESCE(stats, '{}'::jsonb),
+    '{h2h}',
+    COALESCE(stats->'h2h', '{}'::jsonb) || jsonb_build_object(
+      'rating', GREATEST(0, v_my_elo + v_my_delta),
+      'matches', v_my_matches + 1,
+      'wins', v_my_wins + (CASE WHEN v_outcome = 'win' THEN 1 ELSE 0 END),
+      'losses', v_my_losses + (CASE WHEN v_outcome = 'loss' THEN 1 ELSE 0 END),
+      'ties', v_my_ties + (CASE WHEN v_outcome = 'tie' THEN 1 ELSE 0 END)
     ),
-    '{h2h,ties}', to_jsonb(v_my_ties + (CASE WHEN v_outcome = 'tie' THEN 1 ELSE 0 END))
+    true
   )
   WHERE player_id = p_player_id;
 
-  -- Keep profiles.stats in sync for opponent
   UPDATE profiles
   SET stats = jsonb_set(
-    jsonb_set(
-      jsonb_set(
-        jsonb_set(
-          jsonb_set(
-            COALESCE(stats, '{}'::jsonb),
-            '{h2h,rating}', to_jsonb(GREATEST(0, v_opp_elo + v_opp_delta))
-          ),
-          '{h2h,matches}', to_jsonb(v_opp_matches + 1)
-        ),
-        '{h2h,wins}', to_jsonb(v_opp_wins + (CASE WHEN v_outcome = 'loss' THEN 1 ELSE 0 END))
-      ),
-      '{h2h,losses}', to_jsonb(v_opp_losses + (CASE WHEN v_outcome = 'win' THEN 1 ELSE 0 END))
+    COALESCE(stats, '{}'::jsonb),
+    '{h2h}',
+    COALESCE(stats->'h2h', '{}'::jsonb) || jsonb_build_object(
+      'rating', GREATEST(0, v_opp_elo + v_opp_delta),
+      'matches', v_opp_matches + 1,
+      'wins', v_opp_wins + (CASE WHEN v_outcome = 'loss' THEN 1 ELSE 0 END),
+      'losses', v_opp_losses + (CASE WHEN v_outcome = 'win' THEN 1 ELSE 0 END),
+      'ties', v_opp_ties + (CASE WHEN v_outcome = 'tie' THEN 1 ELSE 0 END)
     ),
-    '{h2h,ties}', to_jsonb(v_opp_ties + (CASE WHEN v_outcome = 'tie' THEN 1 ELSE 0 END))
+    true
   )
   WHERE player_id = v_opp.profile_id;
 
-  -- Insert match_results for both
   INSERT INTO match_results (match_id, profile_id, outcome, elo_before, elo_after, score_delta, score, opponent_score)
   VALUES
     (p_match_id, p_player_id, v_outcome, v_my_elo, GREATEST(0, v_my_elo + v_my_delta), v_my_delta, v_me.final_score, v_opp.final_score),
@@ -761,12 +742,26 @@ END;
 $$;
 
 -- H2H Forfeit Match RPC
-CREATE OR REPLACE FUNCTION h2h_forfeit_match(
+CREATE OR REPLACE FUNCTION public.h2h_forfeit_match(
   p_match_id uuid,
   p_player_id uuid
 ) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_auth_uid uuid := auth.uid();
 BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'h2h_forfeit_match: not authenticated';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id AND auth_uid = v_auth_uid) THEN
+    RAISE EXCEPTION 'h2h_forfeit_match: unauthorized player_id';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM match_players WHERE match_id = p_match_id AND profile_id = p_player_id) THEN
+    RAISE EXCEPTION 'h2h_forfeit_match: not a participant in match';
+  END IF;
+
   UPDATE match_players
   SET disconnected = true, final_score = -99, finished_at = COALESCE(finished_at, now())
   WHERE match_id = p_match_id AND profile_id = p_player_id;
@@ -923,6 +918,7 @@ CREATE OR REPLACE FUNCTION public.h2h_sync_gameplay(
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $func$
 DECLARE
+  v_auth_uid uuid := auth.uid();
   v_opp_score numeric;
   v_opp_disc boolean;
   v_opp_finished_at timestamptz;
@@ -930,6 +926,18 @@ DECLARE
   v_opp_correct int := 0;
   v_opp_wrong int := 0;
 BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'h2h_sync_gameplay: not authenticated';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id AND auth_uid = v_auth_uid) THEN
+    RAISE EXCEPTION 'h2h_sync_gameplay: unauthorized player_id';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM match_players WHERE match_id = p_match_id AND profile_id = p_player_id) THEN
+    RAISE EXCEPTION 'h2h_sync_gameplay: not a participant in match';
+  END IF;
+
   IF p_finished = true THEN
     UPDATE match_players
     SET final_score = p_score,
@@ -985,9 +993,22 @@ CREATE OR REPLACE FUNCTION public.h2h_sync_setup(
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $func$
 DECLARE
+  v_auth_uid uuid := auth.uid();
   v_opp RECORD;
   v_card_seq jsonb;
 BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'h2h_sync_setup: not authenticated';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id AND auth_uid = v_auth_uid) THEN
+    RAISE EXCEPTION 'h2h_sync_setup: unauthorized player_id';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM match_players WHERE match_id = p_match_id AND profile_id = p_player_id) THEN
+    RAISE EXCEPTION 'h2h_sync_setup: not a participant in match';
+  END IF;
+
   UPDATE match_players
   SET setup_continent = COALESCE(p_continent, setup_continent, 'globe'),
       setup_features = COALESCE(p_features, setup_features, '{}'::jsonb),
@@ -1065,6 +1086,7 @@ CREATE OR REPLACE FUNCTION public.h2h_rematch_sync(
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $func$
 DECLARE
+  v_auth_uid uuid := auth.uid();
   v_match RECORD;
   v_me RECORD;
   v_opp RECORD;
@@ -1072,6 +1094,18 @@ DECLARE
   v_rematch_id uuid := NULL;
   v_tier int := 6;
 BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'h2h_rematch_sync: not authenticated';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id AND auth_uid = v_auth_uid) THEN
+    RAISE EXCEPTION 'h2h_rematch_sync: unauthorized player_id';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM match_players WHERE match_id = p_match_id AND profile_id = p_player_id) THEN
+    RAISE EXCEPTION 'h2h_rematch_sync: not a participant in match';
+  END IF;
+
   IF p_action = 'leave' THEN
     UPDATE match_players
     SET left_results_screen = true
@@ -1210,4 +1244,13 @@ BEGIN
   END IF;
 END;
 $func$;
+
+-- NOTE: Post-production cutover (run AFTER pre-beta6 is merged to main AND an admin Supabase user has is_admin=true):
+-- DROP POLICY IF EXISTS "Anyone can read profiles" ON profiles;
+-- CREATE POLICY "Users can read own profile" ON profiles FOR SELECT USING (auth_uid = auth.uid() OR auth_is_admin());
+-- DROP POLICY IF EXISTS "Allow anon select player_notes" ON player_notes;
+-- DROP POLICY IF EXISTS "Allow anon insert player_notes" ON player_notes;
+-- DROP POLICY IF EXISTS "Allow anon update player_notes" ON player_notes;
+-- DROP POLICY IF EXISTS "Allow anon delete player_notes" ON player_notes;
+
 

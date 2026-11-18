@@ -47,9 +47,10 @@ async function runH2HTests() {
     id: p2Id,
     handle: p2Handle,
     avatar: '🦅',
-    stats: { h2h: { rating: 1220, wins: 3, losses: 1, ties: 0 } }
+    stats: { cr: 40 }
   };
 
+  // Step 1b: Remove h2h key from p2's stats to verify h2h_finalize_match initializes stats.h2h when missing
   if (pat) {
     await fetch('https://api.supabase.com/v1/projects/tbibeuwpollcrlvowcpg/database/query', {
       method: 'POST',
@@ -58,7 +59,7 @@ async function runH2HTests() {
         INSERT INTO profiles (player_id, handle, avatar_face, stats, cr)
         VALUES
           ('${p1Id}', '${p1Handle}', '🦁', '{"h2h":{"rating":1250,"wins":5,"losses":2,"ties":0}}'::jsonb, 1250),
-          ('${p2Id}', '${p2Handle}', '🦅', '{"h2h":{"rating":1220,"wins":3,"losses":1,"ties":0}}'::jsonb, 1220)
+          ('${p2Id}', '${p2Handle}', '🦅', '{"cr":40}'::jsonb, 1220)
         ON CONFLICT (player_id) DO UPDATE SET handle = EXCLUDED.handle, stats = EXCLUDED.stats, cr = EXCLUDED.cr;
       ` })
     });
@@ -96,19 +97,16 @@ async function runH2HTests() {
   if (!p1PollRes.card_sequence || p1PollRes.card_sequence.length !== 3) {
     throw new Error('Card sequence was not properly synchronized between players');
   }
-  // The tier should be min(5, 4) = 4
   if (p1PollRes.tier !== 4 || p2QueueRes.tier !== 4) {
-    throw new Error(`Expected tier to be 4 (lower grade), got p1:${p1PollRes.tier} p2:${p2QueueRes.tier}`);
+    throw new Error(`Expected tier to be 4 (lower grade), got p1:${p1PollRes.tier} p2:${p2PollRes.tier}`);
   }
   console.log('  ✅ Step 5 Passed: Synchronized card deck and tier cap verified (Tier ' + p1PollRes.tier + ').');
 
   // 5. Real-time setup lobby synchronization
-  // P1 chooses South America and Seas, clicks ready
   const p1Setup = await h2hStore.syncSetup(matchId, p1Id, 'south-america', { seas: true }, true);
   if (!p1Setup || !p1Setup.has_opponent) {
     throw new Error('P1 setup sync failed: ' + JSON.stringify(p1Setup));
   }
-  // P2 syncs: should immediately receive P1's choices and real profile stats
   const p2Setup = await h2hStore.syncSetup(matchId, p2Id, 'globe', {}, false);
   if (!p2Setup || !p2Setup.has_opponent || p2Setup.opp_continent !== 'south-america' || !p2Setup.opp_features.seas || !p2Setup.opp_ready) {
     throw new Error('P2 failed to receive P1 setup choices: ' + JSON.stringify(p2Setup));
@@ -119,21 +117,17 @@ async function runH2HTests() {
   console.log('  ✅ Step 6 Passed: Real-time lobby setup sync and real opponent stats verified.');
 
   // 6. In-game live score syncing
-  // P1 scores a correct point (+1)
   const p1Sync1 = await h2hStore.syncGameplay(matchId, p1Id, 1, 'fra', true);
   if (!p1Sync1 || typeof p1Sync1.opp_score !== 'number') {
     throw new Error('P1 sync gameplay failed: ' + JSON.stringify(p1Sync1));
   }
 
-  // P2 scores a point (+1) and receives P1\'s current score
   const p2Sync1 = await h2hStore.syncGameplay(matchId, p2Id, 1, 'fra', true);
   if (!p2Sync1 || p2Sync1.opp_score !== 1) {
     throw new Error('P2 failed to receive P1 score of 1, got: ' + JSON.stringify(p2Sync1));
   }
 
-  // P1 scores another correct (+1 -> 2)
   await h2hStore.syncGameplay(matchId, p1Id, 2, 'jpn', true);
-  // P2 gets a wrong answer (-0.5 -> 0.5)
   const p2Sync2 = await h2hStore.syncGameplay(matchId, p2Id, 0.5, 'jpn', false);
   if (p2Sync2.opp_score !== 2) {
     throw new Error('P2 should observe P1 score at 2, got: ' + p2Sync2.opp_score);
@@ -148,10 +142,8 @@ async function runH2HTests() {
   }
   console.log('  ✅ Step 6.5 Passed: Real-time opponent finish detection and countdown signal verified.');
 
-  // 6. Finalize match
-  // P1 finishes with 2 points
+  // 7. Finalize match
   const p1Final = await h2hStore.finalizeMatch(matchId, p1Id, 2);
-  // P2 finishes with 0.5 points
   const p2Final = await h2hStore.finalizeMatch(matchId, p2Id, 0.5);
 
   if (!p1Final || !p2Final) {
@@ -167,8 +159,20 @@ async function runH2HTests() {
   }
   console.log(`  ✅ Step 7 Passed: Authoritative Elo finalization verified (P1 won +${p1Final.rating_delta} [${p1Final.elo_after}], P2 lost ${p2Final.rating_delta} [${p2Final.elo_after}]).`);
 
-  // 7. Cleanup
+  // Verify P2 stats.h2h was initialized & preserved stats.cr = 40 even though h2h key started missing
   if (pat) {
+    const p2Check = await fetch('https://api.supabase.com/v1/projects/tbibeuwpollcrlvowcpg/database/query', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + pat, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: `SELECT stats FROM profiles WHERE player_id = '${p2Id}';` })
+    }).then(r => r.json());
+    const p2Stats = p2Check && p2Check[0] && p2Check[0].stats;
+    if (!p2Stats || !p2Stats.h2h || typeof p2Stats.h2h.rating !== 'number' || p2Stats.cr !== 40) {
+      throw new Error('P2 stats.h2h initialization check failed: ' + JSON.stringify(p2Stats));
+    }
+    console.log('  ✅ Step 7.5 Passed: stats.h2h initialized cleanly without losing stats.cr when h2h key started absent.');
+
+    // Cleanup
     await fetch('https://api.supabase.com/v1/projects/tbibeuwpollcrlvowcpg/database/query', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + pat, 'Content-Type': 'application/json' },
