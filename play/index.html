@@ -1378,10 +1378,11 @@ function initApp() {
   window.addEventListener('online', updateOnlineStatus);
 
   window.addEventListener('offline', updateOnlineStatus);
-  window.addEventListener('hashchange', function() { checkRecoveryToken(); checkParentOptOutAction(); });
+  window.addEventListener('hashchange', function() { checkRecoveryToken(); checkParentOptOutAction(); checkInitialHashRoute(); });
   window.addEventListener('popstate', function() { checkRecoveryToken(); checkParentOptOutAction(); });
   checkRecoveryToken();
   checkParentOptOutAction();
+  checkInitialHashRoute();
 
   updateOnlineStatus();
 
@@ -1462,13 +1463,7 @@ if (typeof window !== 'undefined') {
 document.addEventListener('DOMContentLoaded', function() {
   setTimeout(dismissPageCurtain, 600);
   setTimeout(initApp, 300);
-  setTimeout(checkRecoveryToken, 100);
-  setTimeout(checkParentOptOutAction, 120);
 });
-if (typeof window !== 'undefined') {
-  setTimeout(checkRecoveryToken, 150);
-  setTimeout(checkParentOptOutAction, 180);
-}
 
 const PROFILES_KEY = 'nsg_profiles';
 
@@ -2031,8 +2026,8 @@ function openRestoreProfileModal() {
 
 async function openResetPasswordModal(token) {
   if (!token) return;
-  var existing = document.getElementById('reset-password-overlay');
-  if (existing) existing.remove();
+  if (document.getElementById('reset-password-overlay') || window._activeRecoveryToken === token) return;
+  window._activeRecoveryToken = token;
 
   var overlay = document.createElement('div');
   overlay.id = 'reset-password-overlay';
@@ -2050,6 +2045,7 @@ async function openResetPasswordModal(token) {
   document.body.appendChild(overlay);
 
   function closeReset() {
+    window._activeRecoveryToken = null;
     var el = document.getElementById('reset-password-overlay');
     if (el) el.remove();
     try {
@@ -2198,7 +2194,7 @@ async function openResetPasswordModal(token) {
         try { localStorage.setItem(ACTIVE_KEY, updatedProfile.id); } catch (e) {}
         saveProfiles();
         if (typeof updateAvatarBars === 'function') updateAvatarBars();
-        if (typeof renderProfileCards === 'function') renderProfileCards();
+        if (typeof renderProfileGrid === 'function') renderProfileGrid();
       }
 
       showToast('Password updated! Welcome back, ' + handle);
@@ -2244,8 +2240,10 @@ function extractRecoveryToken() {
 }
 
 function checkRecoveryToken() {
+  if (document.getElementById('reset-password-overlay')) return true;
   var token = extractRecoveryToken();
   if (token) {
+    if (window._activeRecoveryToken === token) return true;
     console.log('[recovery] Detected recovery token in URL:', token.slice(0, 8) + '...');
     openResetPasswordModal(token);
     return true;
@@ -2253,15 +2251,32 @@ function checkRecoveryToken() {
   return false;
 }
 
+function checkInitialHashRoute() {
+  var hash = (window.location.hash || '').trim().toLowerCase();
+  if (hash === '#compliance' || hash === '#s-compliance') {
+    if (typeof go === 'function') go('s-compliance');
+    return true;
+  }
+  if (hash === '#credits' || hash === '#s-credits') {
+    if (typeof go === 'function') go('s-credits');
+    return true;
+  }
+  if (hash === '#solidarity' || hash === '#s-solidarity') {
+    if (typeof go === 'function') go('s-solidarity');
+    return true;
+  }
+  return false;
+}
+
 
 function openParentOptOutModal(params) {
-  var existing = document.getElementById("parent-opt-out-overlay");
-  if (existing) existing.remove();
-
   var handle = params.handle || "Player";
   var email = params.email || "";
   var pid = params.pid || "";
   var token = params.token || "";
+  var optKey = [handle, email, pid, token].join('|');
+  if (document.getElementById("parent-opt-out-overlay") || window._activeParentOptOutKey === optKey) return;
+  window._activeParentOptOutKey = optKey;
 
   var overlay = document.createElement("div");
   overlay.id = "parent-opt-out-overlay";
@@ -2335,6 +2350,7 @@ function openParentOptOutModal(params) {
   }
 
   function close() {
+    window._activeParentOptOutKey = null;
     overlay.remove();
     cleanupUrl();
   }
@@ -2365,7 +2381,11 @@ function openParentOptOutModal(params) {
 
       var data = await res.json().catch(function() { return {}; });
 
-      // Clean local storage if this account exists on this device
+      if (!res.ok || !data || !data.ok || !(data.deletedCount > 0)) {
+        throw new Error((data && data.error) || ("Server returned HTTP " + res.status));
+      }
+
+      // Clean local storage only after confirmed server deletion
       var targetHandle = (handle || "").toLowerCase();
       var targetPid = pid || "";
       allProfiles = allProfiles.filter(function(p) {
@@ -2390,10 +2410,13 @@ function openParentOptOutModal(params) {
       cleanupUrl();
 
       if (typeof updateAvatarBars === "function") updateAvatarBars();
-      if (typeof renderProfiles === "function") renderProfiles();
+      if (typeof renderProfileGrid === "function") renderProfileGrid();
     } catch (err) {
       console.error("[parent-opt-out] Deletion failed:", err);
-      showToast("Could not complete deletion. Please try again.");
+      var errMsg = (err && err.message && !err.message.startsWith("Server returned HTTP"))
+        ? err.message
+        : "Could not complete deletion. Please check the link or try again.";
+      showToast(errMsg);
       btn.disabled = false;
       btn.textContent = "Delete Profile & Data";
     }
@@ -2401,6 +2424,7 @@ function openParentOptOutModal(params) {
 }
 
 function checkParentOptOutAction() {
+  if (document.getElementById("parent-opt-out-overlay")) return true;
   try {
     var sp = new URLSearchParams(window.location.search);
     if (sp.get("action") === "parent-opt-out") {
@@ -2409,6 +2433,8 @@ function checkParentOptOutAction() {
       var pid = sp.get("pid") || "";
       var token = sp.get("token") || "";
       if (handle || email || pid) {
+        var optKey = [handle || "Player", email, pid, token].join('|');
+        if (window._activeParentOptOutKey === optKey) return true;
         console.log("[parent-opt-out] Detected parent opt-out request for:", handle, email);
         openParentOptOutModal({ handle: handle, email: email, pid: pid, token: token });
         return true;
@@ -6035,7 +6061,7 @@ function startH2HQueue() {
   // Connect to Supabase match queue with caller's real profile stats
   if (window.h2hStore && profile.id) {
     var myProfileData = {
-      handle: profile.name || profile.handle || 'Player',
+      handle: profile.handle || profile.name || 'Player',
       avatar_svg: (profile.avatar && profile.avatar.svg) || null,
       avatar_face: (profile.avatar && profile.avatar.face) || '🧑',
       avatar_selections: (profile.avatar && profile.avatar.selections) || null,
@@ -6943,7 +6969,7 @@ function makeSoloConfigForH2HPlayer(selection, tierCeiling) {
 }
 
 function buildH2HDeck(sel1, sel2, tierCeiling, matchId) {
-  var prng = createH2HPRNG(matchId || h2h_match);
+  var prng = createH2HPRNG(matchId || 'h2h_match');
   var targetCount = 10;
 
   // CANONICAL SELECTION ORDER: Sort selections so caller argument order NEVER alters pool composition
@@ -7118,7 +7144,7 @@ function launchReconciledMatch() {
   var deck = (_h2h.sharedDeck && Array.isArray(_h2h.sharedDeck) && _h2h.sharedDeck.length >= 10)
     ? _h2h.sharedDeck
     : (function() {
-        var p1Sel = { continent: (_h2hSetup && _h2hSetup.yourContinent) || globe, features: (_h2hSetup && _h2hSetup.yourFeatures) || {} };
+        var p1Sel = { continent: (_h2hSetup && _h2hSetup.yourContinent) || 'globe', features: (_h2hSetup && _h2hSetup.yourFeatures) || {} };
         var p2Sel = { continent: (_h2hSetup && _h2hSetup.oppContinent) || null, features: (_h2hSetup && _h2hSetup.oppFeatures) || {} };
         return buildH2HDeck(p1Sel, p2Sel, tierCeiling, _h2h.matchId);
       })();
@@ -7293,7 +7319,7 @@ function setupH2HHud() {
     // Refresh chips with current players and strip checkmarks
     var youChip = document.getElementById('h2h-you-chip');
     if (youChip) {
-      var youName = (window.activeProfile && (window.activeProfile.name || window.activeProfile.handle)) || 'You';
+      var youName = (window.activeProfile && (window.activeProfile.handle || window.activeProfile.name)) || 'You';
       var youNameEl = youChip.querySelector('.name');
       if (youNameEl) youNameEl.textContent = youName;
     }
@@ -7374,7 +7400,7 @@ function setupH2HHud() {
   // Build card row that wraps existing q-card with chips on either side
   var youSvg = (window.activeProfile && window.activeProfile.avatar && window.activeProfile.avatar.svg) || null;
   var youFace = (window.activeProfile && window.activeProfile.avatar && window.activeProfile.avatar.face) || '🧑';
-  var youHandle = (window.activeProfile && window.activeProfile.name) || 'You';
+  var youHandle = (window.activeProfile && (window.activeProfile.handle || window.activeProfile.name)) || 'You';
   var oppAva = _h2h.opponent ? _h2h.opponent.avatar : null;
   var oppHandle = _h2h.opponent ? _h2h.opponent.handle : 'Opponent';
 
@@ -7805,13 +7831,13 @@ function renderH2HResults() {
   root.className = 'h2h-results-' + outcome;
 
   var profile = window.activeProfile || {};
-  var youHandle = (profile && profile.name) || 'You';
+  var youHandle = (profile && (profile.handle || profile.name)) || 'You';
   var youSvg = (profile && profile.avatar && profile.avatar.svg) || null;
   var youFace = (profile && profile.avatar && profile.avatar.face) || '🧑';
   var oppHandle = _h2h.opponent ? _h2h.opponent.handle : 'Opponent';
   var oppAva = _h2h.opponent ? _h2h.opponent.avatar : null;
 
-  var outcome = _h2h.outcome; // win | loss | tie
+  var isBotMatch = !_h2h.isOnlineMatch || (_h2h.opponent && _h2h.opponent.isBot) || (_h2h.matchId && String(_h2h.matchId).startsWith('bot_'));
 
   var youAvaCls, oppAvaCls;
   if (outcome === 'win') { youAvaCls = 'winner'; oppAvaCls = 'loser'; }
@@ -7882,7 +7908,6 @@ function renderH2HResults() {
     return '<div class="ava ' + cls + '" style="background:#2a3a6a;font-size:32px">' + escapeHtml(face || '🧑') + '</div>';
   }
 
-  var isBotMatch = !_h2h.isOnlineMatch || (_h2h.opponent && _h2h.opponent.isBot) || (_h2h.matchId && String(_h2h.matchId).startsWith('bot_'));
   var html = '';
   if (outcome === 'loss') {
     html += '<div class="h2h-card-loss">';

@@ -1,7 +1,7 @@
 // Mapolis Service Worker - Offline Asset Pre-caching
-// Version: mapolis-v1-pre-beta5
+// Version: mapolis-v2-pre-beta6
 
-const CACHE_NAME = 'mapolis-cache-v1';
+const CACHE_NAME = 'mapolis-cache-v2';
 
 // Core assets required for 100% offline solo gameplay on classroom tablets
 const PRECACHE_ASSETS = [
@@ -42,6 +42,16 @@ function normalizeUrl(url) {
   }
 }
 
+// App code & manifest paths that must stay version-synced with HTML (Network-First when online)
+function isVersionSensitiveAsset(pathname) {
+  if (pathname.startsWith('/lib/')) return false;
+  return (
+    pathname.endsWith('.js') ||
+    pathname.endsWith('.css') ||
+    pathname === '/manifest.json'
+  );
+}
+
 // 1. Install: Pre-cache essential offline assets
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -53,7 +63,7 @@ self.addEventListener('install', (event) => {
       const cachePromises = PRECACHE_ASSETS.map(async (assetUrl) => {
         try {
           const resp = await fetch(assetUrl, { cache: 'no-cache' });
-          if (resp && resp.ok) {
+          if (resp && resp.ok && !resp.redirected) {
             await cache.put(assetUrl, resp);
             return { url: assetUrl, status: 'cached' };
           }
@@ -88,6 +98,22 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+async function matchStaticFallback(cache, req, pathname) {
+  const exact = (await cache.match(req)) || (await cache.match(pathname));
+  if (exact) return exact;
+  if (pathname.endsWith('countries-50m.json')) {
+    const jsonFallback = await cache.match('/data/countries-50m.json');
+    if (jsonFallback) return jsonFallback;
+  } else if (pathname.endsWith('map-data.js')) {
+    const mapFallback = await cache.match('/map-data.js');
+    if (mapFallback) return mapFallback;
+  } else if (pathname.endsWith('avatar-assets.js')) {
+    const avaFallback = await cache.match('/avatar-assets.js');
+    if (avaFallback) return avaFallback;
+  }
+  return null;
+}
+
 // 3. Fetch Strategy
 self.addEventListener('fetch', (event) => {
   const req = event.request;
@@ -96,8 +122,9 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
 
-  // Handle Supabase and external API requests: Network only with graceful offline JSON fallback
+  // Handle Supabase requests: Network only with graceful offline JSON fallback
   if (url.hostname.includes('supabase.co')) {
     event.respondWith(
       fetch(req).catch(() => {
@@ -114,64 +141,101 @@ self.addEventListener('fetch', (event) => {
   if (url.origin === self.location.origin) {
     const pathname = url.pathname;
 
-    // Navigation requests (HTML document loads)
+    // Never cache or intercept serverless API / function endpoints
+    if (pathname.startsWith('/api/') || pathname.startsWith('/.netlify/')) {
+      return;
+    }
+
+    // Navigation requests (HTML document loads): Network-First with route-isolated offline fallback
     if (req.mode === 'navigate') {
+      const isAdminRoute = pathname.startsWith('/admin') || pathname.startsWith('/play/admin');
       event.respondWith(
         fetch(req)
           .then((networkResp) => {
-            if (networkResp && networkResp.ok) {
+            if (networkResp && networkResp.ok && !networkResp.redirected) {
               const clone = networkResp.clone();
-              caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+              caches.open(CACHE_NAME).then((cache) => {
+                cache.put(req, clone.clone());
+                if (pathname && pathname !== '/' && req.url.includes('?')) {
+                  cache.put(pathname, clone);
+                }
+              });
             }
             return networkResp;
           })
           .catch(async () => {
-            // Offline fallback for navigation: match requested page first, then /play/
             const cache = await caches.open(CACHE_NAME);
-            const cachedNav = (await cache.match(req)) ||
-                              (await cache.match('/play/')) ||
-                              (await cache.match('/play/index.html'));
-            if (cachedNav) return cachedNav;
+            const exactNav = (await cache.match(req)) ||
+                             (await cache.match(req, { ignoreSearch: true })) ||
+                             (await cache.match(pathname));
+            if (exactNav) return exactNav;
+
+            if (isAdminRoute) {
+              const adminCached = (await cache.match('/play/admin/index.html')) ||
+                                  (await cache.match('/play/admin/')) ||
+                                  (await cache.match('/admin/'));
+              if (adminCached) return adminCached;
+              return new Response('<h1>Admin Portal Offline</h1><p>Please reconnect to access the Mapolis Admin Portal.</p>', {
+                headers: { 'Content-Type': 'text/html' },
+                status: 503
+              });
+            }
+
+            const playCached = (await cache.match('/play/')) ||
+                               (await cache.match('/play/index.html'));
+            if (playCached) return playCached;
             return new Response('<h1>Mapolis Offline</h1><p>Please reconnect to launch for the first time.</p>', {
-              headers: { 'Content-Type': 'text/html' }
+              headers: { 'Content-Type': 'text/html' },
+              status: 503
             });
           })
       );
       return;
     }
 
-    // Static assets (countries-50m.json, map-data.js, avatar-assets.js, CSS, JS, fonts)
-    // Strategy: Cache-First with Network Fallback
+    // Version-sensitive assets (JS, CSS, manifest.json): Network-First with Cache Fallback
+    // Prevents new HTML + old JS/CSS version skew after deployments while keeping offline play working.
+    if (isVersionSensitiveAsset(pathname)) {
+      event.respondWith(
+        fetch(req)
+          .then(async (networkResp) => {
+            if (networkResp && networkResp.ok && !networkResp.redirected) {
+              const clone = networkResp.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+              return networkResp;
+            }
+            const cache = await caches.open(CACHE_NAME);
+            const fallback = await matchStaticFallback(cache, req, pathname);
+            return fallback || networkResp;
+          })
+          .catch(async () => {
+            const cache = await caches.open(CACHE_NAME);
+            const fallback = await matchStaticFallback(cache, req, pathname);
+            if (fallback) return fallback;
+            console.warn(`[SW] Versioned asset fetch failed offline: ${pathname}`);
+            return new Response(null, { status: 404, statusText: 'Offline asset not found' });
+          })
+      );
+      return;
+    }
+
+    // Heavy static libs, TopoJSON map geometry, fonts, and imagery: Cache-First with Network Fallback
     event.respondWith(
-      caches.match(req).then(async (cachedResp) => {
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cachedResp = await matchStaticFallback(cache, req, pathname);
         if (cachedResp) {
           return cachedResp;
         }
 
-        // Secondary fallback matching for relative/absolute variants
-        const cache = await caches.open(CACHE_NAME);
-        if (pathname.endsWith('countries-50m.json')) {
-          const jsonFallback = await cache.match('/data/countries-50m.json');
-          if (jsonFallback) return jsonFallback;
-        } else if (pathname.endsWith('map-data.js')) {
-          const mapFallback = await cache.match('/map-data.js');
-          if (mapFallback) return mapFallback;
-        } else if (pathname.endsWith('avatar-assets.js')) {
-          const avaFallback = await cache.match('/avatar-assets.js');
-          if (avaFallback) return avaFallback;
-        }
-
-        // If not in cache, fetch from network and dynamically cache
         return fetch(req)
           .then((networkResp) => {
-            if (networkResp && networkResp.ok) {
+            if (networkResp && networkResp.ok && !networkResp.redirected) {
               const clone = networkResp.clone();
-              caches.open(CACHE_NAME).then((c) => c.put(req, clone));
+              cache.put(req, clone);
             }
             return networkResp;
           })
           .catch(() => {
-            // Network failed and not in cache
             console.warn(`[SW] Asset fetch failed offline: ${pathname}`);
             return new Response(null, { status: 404, statusText: 'Offline asset not found' });
           });
