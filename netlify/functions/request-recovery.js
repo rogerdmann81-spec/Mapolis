@@ -10,9 +10,13 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-async function handleRecovery(body, origin) {
+function escapeIlikeLiteral(value) {
+  return String(value).replace(/[\\%_]/g, '\\$&');
+}
+
+async function handleRecovery(body) {
   const email = (body && body.email ? String(body.email) : '').trim().toLowerCase();
-  if (!email || !email.includes('@')) {
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { status: 400, data: { ok: false, error: 'Invalid email address' } };
   }
 
@@ -20,8 +24,18 @@ async function handleRecovery(body, origin) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const resendApiKey = process.env.RESEND_API_KEY || process.env.Resendrecoveryapi;
 
-  // 1. Query matching profiles by lower(parent_email)
-  const queryUrl = `${supabaseUrl}/rest/v1/profiles?parent_email=ilike.${encodeURIComponent(email)}&select=player_id,handle,birth_year,country`;
+  if (!serviceKey) {
+    console.error('[request-recovery] SUPABASE_SERVICE_ROLE_KEY is not configured');
+    return { status: 500, data: { ok: false, error: 'Server configuration error' } };
+  }
+  if (!resendApiKey) {
+    console.error('[request-recovery] RESEND_API_KEY is not configured');
+    return { status: 500, data: { ok: false, error: 'Email service not configured' } };
+  }
+
+  // 1. Query matching profiles by escaped ilike + verify exact parent_email match in JS
+  const escapedEmail = escapeIlikeLiteral(email);
+  const queryUrl = `${supabaseUrl}/rest/v1/profiles?parent_email=ilike.${encodeURIComponent(escapedEmail)}&select=player_id,handle,birth_year,country,parent_email`;
   let profRes;
   try {
     profRes = await fetch(queryUrl, {
@@ -40,18 +54,16 @@ async function handleRecovery(body, origin) {
     return { status: 200, data: { ok: true, message: 'Recovery link sent' } };
   }
 
-  const profiles = await profRes.json();
-  if (!Array.isArray(profiles) || profiles.length === 0) {
+  const rawProfiles = await profRes.json();
+  const profiles = Array.isArray(rawProfiles)
+    ? rawProfiles.filter(p => (p && p.parent_email ? String(p.parent_email) : '').trim().toLowerCase() === email)
+    : [];
+  if (profiles.length === 0) {
     return { status: 200, data: { ok: true, message: 'Recovery link sent' } };
   }
 
-  let baseUrl = origin || 'https://play.mapolis.app';
-  if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
-  if (!baseUrl.endsWith('/play')) {
-    baseUrl += '/play';
-  }
-  // Ensure trailing slash so Netlify serves 200 directly without 301 redirect
-  baseUrl += '/';
+  // Always pin canonical production origin to prevent Origin/Host header poisoning
+  const baseUrl = 'https://play.mapolis.app/play/';
 
   // 2. Generate token for each profile and save to recovery_tokens table
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
@@ -193,9 +205,7 @@ exports.handler = async (event, context) => {
   } catch (e) {
     body = {};
   }
-  const headers = event.headers || {};
-  const origin = headers.origin || (headers.host ? `https://${headers.host}` : 'https://play.mapolis.app');
-  const result = await handleRecovery(body, origin);
+  const result = await handleRecovery(body);
   return {
     statusCode: result.status,
     headers: {
