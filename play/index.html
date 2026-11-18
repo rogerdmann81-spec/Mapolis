@@ -10772,7 +10772,6 @@ function openRecoveryEmailModal(targetProfile) {
     : 'Update recovery email in case you ever forget your username or password.';
   var fieldLabel = isUnder18 ? "Parent's Email Address" : "Recovery Email Address";
   var placeholder = isUnder18 ? 'parent@example.com' : 'you@example.com';
-  var btnText = currentEmail ? 'Update Email' : 'Save & Protect Profile';
 
   var overlay = document.createElement('div');
   overlay.id = 'recovery-email-overlay';
@@ -10838,7 +10837,9 @@ function openRecoveryEmailModal(targetProfile) {
     }
 
     var normalized = typeof normalizeEmail === 'function' ? normalizeEmail(raw) : raw.toLowerCase();
-    
+    var submitBtn = document.getElementById('rec-email-submit');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'SAVING...'; }
+
     prof.parentEmail = normalized;
     prof.updatedAt = new Date().toISOString();
     if (window.activeProfile && prof.id === window.activeProfile.id) {
@@ -10859,6 +10860,8 @@ function openRecoveryEmailModal(targetProfile) {
         console.warn('[openRecoveryEmailModal] Sync before welcome notice failed:', e);
       }
     }
+
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'SAVE'; }
 
     fetch('/api/send-welcome-notice', {
       method: 'POST',
@@ -11055,7 +11058,7 @@ function renderProfile() {
               ${_isUnder18 ? 'Parent Email Protected' : 'Recovery Email Protected'}
             </div>
             <div style="font-size:11px;color:var(--dim);margin-top:2px;">
-              ${maskEmail(_curEmail)}
+              ${escHtml(maskEmail(_curEmail))}
             </div>
           </div>
         </div>
@@ -11139,6 +11142,20 @@ function renderProfile() {
           if (badge) noteBtn.innerHTML = '📝 Notes to Dev Team' + badge;
         }).catch(function() {});
       }
+  }
+
+  // ── Account Security & Recovery Email buttons ──
+  const editRecoveryEmailBtn = root.querySelector('#btn-edit-recovery-email');
+  if (editRecoveryEmailBtn) {
+    editRecoveryEmailBtn.addEventListener('click', () => {
+      openRecoveryEmailModal(profile);
+    });
+  }
+  const addRecoveryEmailBtn = root.querySelector('#btn-add-recovery-email');
+  if (addRecoveryEmailBtn) {
+    addRecoveryEmailBtn.addEventListener('click', () => {
+      openRecoveryEmailModal(profile);
+    });
   }
 
   // ── Visit Star Store button ──
