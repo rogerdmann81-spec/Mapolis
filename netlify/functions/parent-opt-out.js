@@ -15,105 +15,120 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
-async function handleParentOptOut(body, origin) {
+function safeEqualHex(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || !a || a.length !== b.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
+}
+
+async function handleParentOptOut(body) {
   const email = (body && body.email ? String(body.email) : '').trim().toLowerCase();
-  const handle = (body && body.handle ? String(body.handle) : '').trim();
   const playerId = (body && body.playerId ? String(body.playerId) : '').trim();
   const token = (body && body.token ? String(body.token) : '').trim();
 
-  if (!email || !email.includes('@')) {
-    return { status: 400, data: { ok: false, error: 'Invalid or missing parent email address' } };
+  if (!email || !email.includes('@') || !playerId || !token) {
+    return { status: 400, data: { ok: false, error: 'Missing required verification parameters', deletedCount: 0 } };
   }
 
   const supabaseUrl = cleanSupabaseUrl(process.env.SUPABASE_URL);
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const resendApiKey = process.env.RESEND_API_KEY || process.env.Resendrecoveryapi;
 
-  // Verify HMAC token if provided or fallback to matching parent_email in database
-  let tokenValid = false;
-  if (token) {
-    const expected = crypto.createHmac('sha256', serviceKey || 'mapolis-opt-out-secret')
-      .update(`${email}:${handle}:${playerId}`)
-      .digest('hex')
-      .slice(0, 24);
-    if (token === expected) {
-      tokenValid = true;
-    }
+  if (!serviceKey) {
+    console.error('[parent-opt-out] SUPABASE_SERVICE_ROLE_KEY is not configured');
+    return { status: 500, data: { ok: false, error: 'Server configuration error', deletedCount: 0 } };
   }
 
-  // 1. Locate profile in Supabase to confirm ownership by this parent email
-  let profilesToDelete = [];
-
-  if (serviceKey) {
-    try {
-      let queryUrl = '';
-      if (playerId) {
-        queryUrl = `${supabaseUrl}/rest/v1/profiles?player_id=eq.${encodeURIComponent(playerId)}&select=player_id,handle,parent_email`;
-      } else if (handle) {
-        queryUrl = `${supabaseUrl}/rest/v1/profiles?handle=ilike.${encodeURIComponent(handle)}&parent_email=ilike.${encodeURIComponent(email)}&select=player_id,handle,parent_email`;
-      } else {
-        queryUrl = `${supabaseUrl}/rest/v1/profiles?parent_email=ilike.${encodeURIComponent(email)}&select=player_id,handle,parent_email`;
+  // 1. Locate exact profile by player_id in Supabase
+  let targetProfile = null;
+  try {
+    const queryUrl = `${supabaseUrl}/rest/v1/profiles?player_id=eq.${encodeURIComponent(playerId)}&select=player_id,handle,parent_email`;
+    const queryRes = await fetch(queryUrl, {
+      headers: {
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`
       }
+    });
 
-      const queryRes = await fetch(queryUrl, {
-        headers: {
-          'apikey': serviceKey,
-          'Authorization': `Bearer ${serviceKey}`
-        }
-      });
-
-      if (queryRes.ok) {
-        const rows = await queryRes.json();
-        if (Array.isArray(rows)) {
-          for (const row of rows) {
-            const pEmail = (row.parent_email || '').toLowerCase().trim();
-            if (tokenValid || pEmail === email) {
-              profilesToDelete.push(row);
-            }
-          }
-        }
-      }
-    } catch (e) {
-      console.error('[parent-opt-out] Error querying profiles:', e);
+    if (!queryRes.ok) {
+      console.error('[parent-opt-out] Supabase lookup failed:', queryRes.status);
+      return { status: 502, data: { ok: false, error: 'Failed to verify profile record', deletedCount: 0 } };
     }
+
+    const rows = await queryRes.json();
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return { status: 404, data: { ok: false, error: 'Profile not found', deletedCount: 0 } };
+    }
+
+    targetProfile = rows[0];
+  } catch (e) {
+    console.error('[parent-opt-out] Error querying profiles:', e);
+    return { status: 502, data: { ok: false, error: 'Failed to verify profile record', deletedCount: 0 } };
   }
 
-  // 2. Perform deletion for each matched profile
+  // 2. Enforce BOTH exact parent_email match AND valid HMAC token
+  const dbEmail = (targetProfile.parent_email || '').toLowerCase().trim();
+  const dbHandle = (targetProfile.handle || '').trim();
+  const expected = crypto.createHmac('sha256', serviceKey)
+    .update(`${email}:${dbHandle}:${targetProfile.player_id}`)
+    .digest('hex')
+    .slice(0, 24);
+  const tokenValid = safeEqualHex(token, expected);
+
+  if (!tokenValid || !dbEmail || dbEmail !== email || targetProfile.player_id !== playerId) {
+    return { status: 403, data: { ok: false, error: 'Invalid or expired verification token', deletedCount: 0 } };
+  }
+
+  // 3. Perform deletion for the verified profile
   let deletedCount = 0;
-  for (const prof of profilesToDelete) {
-    const pId = prof.player_id;
-    try {
-      // Call delete_profile RPC
-      await fetch(`${supabaseUrl}/rest/v1/rpc/delete_profile`, {
-        method: 'POST',
-        headers: {
-          'apikey': serviceKey,
-          'Authorization': `Bearer ${serviceKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ p_player_id: pId })
-      });
+  try {
+    const rpcRes = await fetch(`${supabaseUrl}/rest/v1/rpc/delete_profile`, {
+      method: 'POST',
+      headers: {
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ p_player_id: targetProfile.player_id })
+    });
 
-      // Also ensure direct deletion from profiles table
-      await fetch(`${supabaseUrl}/rest/v1/profiles?player_id=eq.${encodeURIComponent(pId)}`, {
-        method: 'DELETE',
-        headers: {
-          'apikey': serviceKey,
-          'Authorization': `Bearer ${serviceKey}`
-        }
-      });
+    const delRes = await fetch(`${supabaseUrl}/rest/v1/profiles?player_id=eq.${encodeURIComponent(targetProfile.player_id)}`, {
+      method: 'DELETE',
+      headers: {
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`,
+        'Prefer': 'return=representation'
+      }
+    });
 
-      deletedCount++;
-      console.log(`[parent-opt-out] Successfully deleted profile ${prof.handle} (${pId})`);
-    } catch (err) {
-      console.error(`[parent-opt-out] Failed deleting profile ${pId}:`, err);
+    if (!rpcRes.ok && !delRes.ok) {
+      console.error(`[parent-opt-out] Both RPC (${rpcRes.status}) and DELETE (${delRes.status}) failed`);
+      return { status: 502, data: { ok: false, error: 'Failed to delete profile record', deletedCount: 0 } };
     }
+
+    let directDeleted = false;
+    if (delRes.ok) {
+      const deletedRows = await delRes.json().catch(() => []);
+      directDeleted = Array.isArray(deletedRows) && deletedRows.length > 0;
+    }
+
+    if (!rpcRes.ok && !directDeleted) {
+      return { status: 404, data: { ok: false, error: 'Profile not found or already deleted', deletedCount: 0 } };
+    }
+
+    deletedCount = 1;
+    console.log(`[parent-opt-out] Successfully deleted profile ${dbHandle} (${targetProfile.player_id})`);
+  } catch (err) {
+    console.error(`[parent-opt-out] Failed deleting profile ${targetProfile.player_id}:`, err);
+    return { status: 502, data: { ok: false, error: 'Failed to delete profile record', deletedCount: 0 } };
   }
 
-  // 3. Send confirmation email to parent via Resend
-  if (resendApiKey && email) {
+  // 4. Send confirmation email to verified parent ONLY after confirmed deletion
+  const displayHandle = dbHandle || 'Player';
+  if (resendApiKey && email && deletedCount > 0) {
     try {
-      const subject = `Mapolis: Profile '${handle || 'Player'}' has been deleted`;
+      const subject = `Mapolis: Profile '${displayHandle}' has been deleted`;
       const html = `
 <!DOCTYPE html>
 <html>
@@ -127,7 +142,7 @@ async function handleParentOptOut(body, origin) {
     <div style="padding:24px 20px;">
       <p style="font-size:15px;line-height:1.5;margin-top:0;"><strong>Dear Parent or Guardian,</strong></p>
       <p style="font-size:14px;line-height:1.6;color:#334155;">
-        As requested, the Mapolis player profile <strong>${escapeHtml(handle || 'Player')}</strong> and all associated gameplay history have been permanently deleted from our database.
+        As requested, the Mapolis player profile <strong>${escapeHtml(displayHandle)}</strong> and all associated gameplay history have been permanently deleted from our database.
       </p>
       <p style="font-size:13px;line-height:1.6;color:#64748b;">
         Your email address (<strong>${escapeHtml(email)}</strong>) has also been purged from this account record. No further notices regarding this profile will be sent.
@@ -142,7 +157,7 @@ async function handleParentOptOut(body, origin) {
 </body>
 </html>
       `;
-      const text = `MAPOLIS ACCOUNT DELETION CONFIRMATION\n\nDear Parent or Guardian,\n\nAs requested, the Mapolis player profile '${handle || 'Player'}' and all associated gameplay history have been permanently deleted from our database.\n\nYour email address (${email}) has also been purged from this account record.\n\nWarm regards,\nThe Mapolis Team - mapolis.app`;
+      const text = `MAPOLIS ACCOUNT DELETION CONFIRMATION\n\nDear Parent or Guardian,\n\nAs requested, the Mapolis player profile '${displayHandle}' and all associated gameplay history have been permanently deleted from our database.\n\nYour email address (${email}) has also been purged from this account record.\n\nWarm regards,\nThe Mapolis Team - mapolis.app`;
 
       await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -200,9 +215,7 @@ exports.handler = async (event, context) => {
     body = {};
   }
 
-  const headers = event.headers || {};
-  const origin = headers.origin || (headers.host ? `https://${headers.host}` : 'https://play.mapolis.app');
-  const result = await handleParentOptOut(body, origin);
+  const result = await handleParentOptOut(body);
 
   return {
     statusCode: result.status,

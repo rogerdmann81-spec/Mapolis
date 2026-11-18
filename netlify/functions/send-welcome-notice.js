@@ -3,6 +3,11 @@
 
 const crypto = require('crypto');
 
+function cleanSupabaseUrl(url) {
+  if (!url) return 'https://tbibeuwpollcrlvowcpg.supabase.co';
+  return url.trim().replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+}
+
 const escapeHtml = (s) => {
   if (!s) return '';
   return String(s)
@@ -12,23 +17,73 @@ const escapeHtml = (s) => {
     .replace(/"/g, '&quot;');
 };
 
-async function handleWelcomeNotice(body, origin) {
+async function handleWelcomeNotice(body) {
   const email = (body && body.email ? String(body.email) : '').trim().toLowerCase();
-  const handle = (body && body.handle ? String(body.handle) : 'Player').trim();
-  const isUnder18 = body && (body.isUnder18 === true || (body.birthYear && (new Date().getFullYear() - body.birthYear < 18)));
-  const siteOrigin = origin || body.origin || 'https://play.mapolis.app';
+  const playerId = (body && body.playerId ? String(body.playerId) : '').trim();
 
   if (!email || !email.includes('@')) {
     return { status: 400, data: { ok: false, error: 'Invalid email address' } };
   }
+  if (!playerId) {
+    return { status: 400, data: { ok: false, error: 'Missing player ID' } };
+  }
 
+  const supabaseUrl = cleanSupabaseUrl(process.env.SUPABASE_URL);
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const resendApiKey = process.env.RESEND_API_KEY || process.env.Resendrecoveryapi;
 
-  const playerId = (body && body.playerId ? String(body.playerId) : '').trim();
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'mapolis-opt-out-secret';
-  const token = crypto.createHmac('sha256', serviceKey).update(`${email}:${handle}:${playerId}`).digest('hex').slice(0, 24);
+  if (!serviceKey) {
+    console.error('[send-welcome-notice] SUPABASE_SERVICE_ROLE_KEY is not configured');
+    return { status: 500, data: { ok: false, error: 'Server configuration error' } };
+  }
+
+  // Verify against Supabase that this player_id exists and belongs to this exact email
+  let profileRow = null;
+  try {
+    const queryUrl = `${supabaseUrl}/rest/v1/profiles?player_id=eq.${encodeURIComponent(playerId)}&select=player_id,handle,parent_email,birth_year`;
+    const queryRes = await fetch(queryUrl, {
+      headers: {
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`
+      }
+    });
+    if (!queryRes.ok) {
+      console.error('[send-welcome-notice] Supabase lookup failed:', queryRes.status);
+      return { status: 502, data: { ok: false, error: 'Failed to verify profile record' } };
+    }
+    const rows = await queryRes.json();
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return { status: 404, data: { ok: false, error: 'Profile not found' } };
+    }
+    profileRow = rows[0];
+  } catch (err) {
+    console.error('[send-welcome-notice] Error querying profiles:', err);
+    return { status: 502, data: { ok: false, error: 'Failed to verify profile record' } };
+  }
+
+  const dbEmail = (profileRow.parent_email || '').toLowerCase().trim();
+  if (!dbEmail || dbEmail !== email) {
+    return { status: 403, data: { ok: false, error: 'Email does not match profile record' } };
+  }
+
+  if (!resendApiKey) {
+    console.error('[send-welcome-notice] RESEND_API_KEY is not configured');
+    return { status: 500, data: { ok: false, sent: false, error: 'Email service not configured' } };
+  }
+
+  const handle = (profileRow.handle || 'Player').trim();
+  const birthYear = profileRow.birth_year || (body && body.birthYear) || null;
+  const isUnder18 = birthYear
+    ? (new Date().getFullYear() - Number(birthYear) < 18)
+    : Boolean(body && body.isUnder18 === true);
+
+  const siteOrigin = 'https://play.mapolis.app';
+  const token = crypto.createHmac('sha256', serviceKey)
+    .update(`${email}:${handle}:${profileRow.player_id}`)
+    .digest('hex')
+    .slice(0, 24);
   const privacyUrl = `${siteOrigin}/play/#compliance`;
-  const deleteUrl = `${siteOrigin}/play/?action=parent-opt-out&handle=${encodeURIComponent(handle)}&email=${encodeURIComponent(email)}&pid=${encodeURIComponent(playerId)}&token=${token}`;
+  const deleteUrl = `${siteOrigin}/play/?action=parent-opt-out&handle=${encodeURIComponent(handle)}&email=${encodeURIComponent(email)}&pid=${encodeURIComponent(profileRow.player_id)}&token=${token}`;
 
   let subject = '';
   let html = '';
@@ -223,9 +278,7 @@ exports.handler = async (event, context) => {
     body = {};
   }
 
-  const headers = event.headers || {};
-  const origin = headers.origin || (headers.host ? `https://${headers.host}` : 'https://play.mapolis.app');
-  const result = await handleWelcomeNotice(body, origin);
+  const result = await handleWelcomeNotice(body);
 
   return {
     statusCode: result.status,

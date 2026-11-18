@@ -10812,12 +10812,25 @@ function openRecoveryEmailModal(targetProfile) {
     var normalized = typeof normalizeEmail === 'function' ? normalizeEmail(raw) : raw.toLowerCase();
     
     prof.parentEmail = normalized;
+    prof.updatedAt = new Date().toISOString();
     if (window.activeProfile && prof.id === window.activeProfile.id) {
       window.activeProfile.parentEmail = normalized;
+      window.activeProfile.updatedAt = prof.updatedAt;
     }
     var idx = allProfiles.findIndex(function(p) { return p.id === prof.id; });
     if (idx >= 0) allProfiles[idx] = prof;
     saveProfiles();
+
+    if (typeof syncStore !== 'undefined') {
+      try {
+        if (!window.activeProfile || prof.id !== window.activeProfile.id) {
+          syncStore.syncProfile(prof);
+        }
+        await syncStore.processQueue();
+      } catch (e) {
+        console.warn('[openRecoveryEmailModal] Sync before welcome notice failed:', e);
+      }
+    }
 
     fetch('/api/send-welcome-notice', {
       method: 'POST',
@@ -10827,8 +10840,7 @@ function openRecoveryEmailModal(targetProfile) {
         handle: prof.handle,
         playerId: prof.id,
         isUnder18: isUnder18,
-        birthYear: prof.birthYear,
-        origin: window.location.origin
+        birthYear: prof.birthYear
       })
     }).catch(function(e) { console.warn('[send-welcome-notice] Request failed:', e); });
 
