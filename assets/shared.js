@@ -55,6 +55,10 @@ function isSupabaseConfigured() {
     && SUPABASE_KEY !== 'your-anon-key-here';
 }
 
+function isBrowserOnline() {
+  return typeof navigator === 'undefined' || navigator.onLine !== false;
+}
+
 function supabaseHeaders() {
   return {
     'Content-Type': 'application/json',
@@ -368,7 +372,7 @@ const syncStore = {
   },
 
   async fetchProfiles(authUid, localProfileIds = []) {
-    if (!navigator.onLine || !isSupabaseConfigured()) return null;
+    if (!isBrowserOnline() || !isSupabaseConfigured()) return null;
     try {
       await ensureAuthSession();
       const safeCols = 'player_id,auth_uid,handle,country,birth_year,stats,cr,badges,accessories,avatar_face,avatar_svg,avatar_selections,unlocked_avatar,link_code,parent_email,frozen,is_admin,created_at,updated_at';
@@ -397,7 +401,7 @@ const syncStore = {
   },
 
   async fetchProfileById(playerId) {
-    if (!navigator.onLine || !isSupabaseConfigured() || !playerId) return null;
+    if (!isBrowserOnline() || !isSupabaseConfigured() || !playerId) return null;
     try {
       await ensureAuthSession();
       const safeCols = 'player_id,auth_uid,handle,country,birth_year,stats,cr,badges,accessories,avatar_face,avatar_svg,avatar_selections,unlocked_avatar,link_code,parent_email,frozen,is_admin,created_at,updated_at';
@@ -487,7 +491,7 @@ const syncStore = {
   },
 
   async fetchLeaderboard() {
-    if (navigator.onLine && isSupabaseConfigured()) {
+    if (isBrowserOnline() && isSupabaseConfigured()) {
       try {
         const qs = '?select=player_id,handle,country,stats,cr,birth_year,avatar_face,avatar_svg&order=cr.desc.nullslast&limit=100';
         let resp = await fetch(SUPABASE_URL + '/rest/v1/leaderboard_profiles' + qs, { headers: authedHeaders() });
@@ -517,7 +521,7 @@ const syncStore = {
   },
 
   async processQueue() {
-    if (!navigator.onLine || !isSupabaseConfigured()) return;
+    if (!isBrowserOnline() || !isSupabaseConfigured()) return;
     const queue = syncStore._getQueue();
     if (!queue.length) return;
 
@@ -768,7 +772,7 @@ async function submitRound(roundData) {
     console.log('[submitRound] Submitting round payload:', roundData);
   }
 
-  if (!navigator.onLine || !isSupabaseConfigured()) {
+  if (!isBrowserOnline() || !isSupabaseConfigured()) {
     cachePendingRound(roundData);
     return { success: false, offline: true };
   }
@@ -803,7 +807,7 @@ async function submitRound(roundData) {
 
 async function flushPendingRounds() {
   const pending = getPendingRounds();
-  if (!pending.length || !navigator.onLine || !isSupabaseConfigured()) return;
+  if (!pending.length || !isBrowserOnline() || !isSupabaseConfigured()) return;
 
   await ensureAuthSession();
   for (const round of pending) {

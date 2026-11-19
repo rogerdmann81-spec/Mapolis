@@ -116,7 +116,7 @@ async function handleWelcomeNotice(body) {
       `• No Open Messaging: Players cannot chat, send direct messages, or communicate with strangers.\n` +
       `• No Data Sharing: Mapolis never collects or shares behavioral data, never sells any user data including email addresses, or trains AI on gameplay data.\n\n` +
       `WHY YOUR EMAIL IS LINKED:\n` +
-      `This address acts as a safety net, if your child ever forgets their username or password you can recover their account using this email address.\n\n` +
+      `This address acts as a safety net—if your child ever forgets their username or needs to restore their profile on a new device, you can recover their account using this email address.\n\n` +
       `PARENTAL CONTROL & OPT-OUT:\n` +
       `If you did not authorize this account or would like this profile removed, you can request immediate account deletion here:\n` +
       `${deleteUrl}\n\n` +
@@ -155,7 +155,7 @@ async function handleWelcomeNotice(body) {
       </ul>
 
       <p style="font-size:13px;line-height:1.6;color:#475569;">
-        <strong>Why your email is linked:</strong> This address acts as a safety net, if your child ever forgets their username or password you can recover their account using this email address.
+        <strong>Why your email is linked:</strong> This address acts as a safety net—if your child ever forgets their username or needs to restore their profile on a new device, you can recover their account using this email address.
       </p>
 
       <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 16px;margin:24px 0;">

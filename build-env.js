@@ -16,9 +16,6 @@ const envContent = `
   };
 `;
 
-// Write env.js to root and play/admin folders
+// Write canonical env.js to root (loaded via /env.js by both /play/ and /play/admin/)
 fs.writeFileSync(path.join(__dirname, 'env.js'), envContent);
-if (fs.existsSync(path.join(__dirname, 'play', 'admin'))) {
-  fs.writeFileSync(path.join(__dirname, 'play', 'admin', 'env.js'), envContent);
-}
 console.log('Generated env.js for static deployment.');

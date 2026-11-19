@@ -1,7 +1,7 @@
 // Mapolis Service Worker - Offline Asset Pre-caching
-// Version: mapolis-v2-pre-beta6
+// Version: mapolis-v3-pre-beta6
 
-const CACHE_NAME = 'mapolis-cache-v2';
+const CACHE_NAME = 'mapolis-cache-v3';
 
 // Core assets required for 100% offline solo gameplay on classroom tablets
 const PRECACHE_ASSETS = [
@@ -26,7 +26,7 @@ const PRECACHE_ASSETS = [
   '/apple-touch-icon.png',
   '/favicon.ico',
   '/icon.svg',
-  '/assets/monarch-badge.jpg',
+  '/assets/monarch-badge.webp',
   '/assets/pcrf-logo.jpeg',
   '/assets/cs-logo.png',
   '/assets/moco-irc.jpeg'

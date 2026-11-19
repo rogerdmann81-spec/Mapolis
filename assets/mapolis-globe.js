@@ -55,9 +55,19 @@
     return best;
   }
 
+  const MAX_INIT_RETRIES = 100;
+  const MAX_LAND_RETRIES = 150;
+  let initRetries = 0;
+  let landRetries = 0;
+
   function init() {
     if (svgEl) return;
     if (typeof d3 === 'undefined' || typeof topojson === 'undefined') {
+      if (initRetries >= MAX_INIT_RETRIES) {
+        console.warn('[MapolisGlobe] D3/TopoJSON did not load after ' + MAX_INIT_RETRIES + ' attempts; stopping retries.');
+        return;
+      }
+      initRetries++;
       setTimeout(init, 50);
       return;
     }
@@ -103,8 +113,9 @@
     render();
   }
 
-  function tryLoadLand() {
+  function tryLoadLand(resetRetries) {
     if (landReady) return;
+    if (resetRetries) landRetries = 0;
     if (typeof WORLD_TOPO !== 'undefined' && WORLD_TOPO && WORLD_TOPO.objects && WORLD_TOPO.objects.countries) {
       try {
         const merged = topojson.merge(WORLD_TOPO, WORLD_TOPO.objects.countries.geometries);
@@ -117,7 +128,8 @@
         } catch (e2) {}
       }
       render();
-    } else {
+    } else if (landRetries < MAX_LAND_RETRIES) {
+      landRetries++;
       setTimeout(tryLoadLand, 120);
     }
   }
@@ -252,9 +264,10 @@
   window.MapolisGlobe = {
     init: init,
     onWorldLoaded: function() {
-      tryLoadLand();
+      tryLoadLand(true);
     },
-    mount: function(containerId, mode) {
+    mount: function(containerId, mode, _attempt) {
+      var attempt = _attempt || 0;
       init();
       tryLoadLand();
       currentMode = mode || 'title';
@@ -264,7 +277,9 @@
       }
       const container = typeof containerId === 'string' ? document.getElementById(containerId) : containerId;
       if (!svgEl) {
-        setTimeout(() => this.mount(containerId, mode), 50);
+        if (attempt < MAX_INIT_RETRIES) {
+          setTimeout(() => this.mount(containerId, mode, attempt + 1), 50);
+        }
         return;
       }
       if (container && svgEl) {
