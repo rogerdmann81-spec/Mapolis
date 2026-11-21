@@ -53,6 +53,9 @@ BEGIN
   END IF;
 
   IF TG_OP = 'UPDATE' THEN
+    IF OLD.password_hash IS NOT NULL AND NEW.password_hash IS NULL THEN
+      NEW.password_hash := OLD.password_hash;
+    END IF;
     IF NOT COALESCE(auth_is_admin(), false) THEN
       IF NEW.is_admin IS DISTINCT FROM OLD.is_admin THEN
         RAISE EXCEPTION 'Permission denied: cannot modify is_admin';
@@ -199,12 +202,177 @@ BEGIN
   WHERE player_id = v_profile.player_id
   RETURNING * INTO v_profile;
 
-  RETURN row_to_json(v_profile)::jsonb;
+  RETURN jsonb_build_object(
+    'player_id', v_profile.player_id,
+    'auth_uid', v_profile.auth_uid,
+    'handle', v_profile.handle,
+    'birth_year', v_profile.birth_year,
+    'country', v_profile.country,
+    'stats', v_profile.stats,
+    'cr', v_profile.cr,
+    'badges', v_profile.badges,
+    'accessories', v_profile.accessories,
+    'avatar_face', v_profile.avatar_face,
+    'avatar_svg', v_profile.avatar_svg,
+    'avatar_selections', v_profile.avatar_selections,
+    'unlocked_avatar', v_profile.unlocked_avatar,
+    'parent_email', v_profile.parent_email,
+    'frozen', COALESCE(v_profile.frozen, false),
+    'is_admin', COALESCE(v_profile.is_admin, false),
+    'created_at', v_profile.created_at,
+    'updated_at', v_profile.updated_at
+  );
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION public.restore_profile(text, text) TO authenticated;
+
 -- Legacy email-only restore removed (replaced by tokenized recovery)
 DROP FUNCTION IF EXISTS public.restore_profile_by_email(text);
+
+-- 3b. Tokenized Account Recovery Table & RPCs (Version-Controlled Source of Truth)
+CREATE TABLE IF NOT EXISTS public.recovery_tokens (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  token text NOT NULL UNIQUE,
+  player_id uuid NOT NULL REFERENCES public.profiles(player_id) ON DELETE CASCADE,
+  email text NOT NULL,
+  expires_at timestamptz NOT NULL,
+  used boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_recovery_tokens_email_created_at
+  ON public.recovery_tokens (email, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_recovery_tokens_player_email_created_at
+  ON public.recovery_tokens (player_id, email, created_at DESC);
+
+-- Lock recovery_tokens to service_role and SECURITY DEFINER RPCs only (0 public policies)
+ALTER TABLE public.recovery_tokens ENABLE ROW LEVEL SECURITY;
+
+CREATE OR REPLACE FUNCTION public.verify_recovery_token(p_token text)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_row RECORD;
+BEGIN
+  IF p_token IS NULL OR length(trim(p_token)) < 16 THEN
+    RETURN jsonb_build_object('valid', false, 'error', 'Invalid token');
+  END IF;
+
+  SELECT rt.id, rt.player_id, rt.expires_at, rt.used, p.handle, p.frozen
+  INTO v_row
+  FROM public.recovery_tokens rt
+  JOIN public.profiles p ON p.player_id = rt.player_id
+  WHERE rt.token = trim(p_token)
+    AND rt.used = false
+    AND rt.expires_at > now()
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('valid', false, 'error', 'Token expired or already used');
+  END IF;
+
+  IF COALESCE(v_row.frozen, false) = true THEN
+    RETURN jsonb_build_object('valid', false, 'error', 'Profile is frozen');
+  END IF;
+
+  RETURN jsonb_build_object(
+    'valid', true,
+    'handle', v_row.handle
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.verify_recovery_token(text) TO anon, authenticated;
+
+-- Note: p_auth_uid is accepted only as a deprecated optional parameter for backwards compatibility
+-- with older clients; the RPC strictly binds ownership to auth.uid() and ignores p_auth_uid.
+CREATE OR REPLACE FUNCTION public.complete_recovery(
+  p_token text,
+  p_new_password_hash text,
+  p_auth_uid uuid DEFAULT NULL
+) RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_auth_uid uuid := auth.uid();
+  v_player_id uuid;
+  v_profile public.profiles%ROWTYPE;
+BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  IF p_token IS NULL OR length(trim(p_token)) < 16 THEN
+    RAISE EXCEPTION 'Invalid or expired recovery token';
+  END IF;
+
+  IF p_new_password_hash IS NULL OR length(trim(p_new_password_hash)) < 16 THEN
+    RAISE EXCEPTION 'Invalid password hash';
+  END IF;
+
+  -- Atomically consume the single-use recovery token
+  UPDATE public.recovery_tokens
+  SET used = true
+  WHERE token = trim(p_token)
+    AND used = false
+    AND expires_at > now()
+  RETURNING player_id INTO v_player_id;
+
+  IF v_player_id IS NULL THEN
+    RAISE EXCEPTION 'Invalid or expired recovery token';
+  END IF;
+
+  SELECT * INTO v_profile
+  FROM public.profiles
+  WHERE player_id = v_player_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Profile not found';
+  END IF;
+
+  IF COALESCE(v_profile.frozen, false) = true THEN
+    RAISE EXCEPTION 'Profile is frozen';
+  END IF;
+
+  UPDATE public.profiles
+  SET password_hash = p_new_password_hash,
+      auth_uid = v_auth_uid,
+      recovery_created_at = now(),
+      updated_at = now()
+  WHERE player_id = v_player_id
+  RETURNING * INTO v_profile;
+
+  RETURN jsonb_build_object(
+    'player_id', v_profile.player_id,
+    'auth_uid', v_profile.auth_uid,
+    'handle', v_profile.handle,
+    'birth_year', v_profile.birth_year,
+    'country', v_profile.country,
+    'stats', v_profile.stats,
+    'cr', v_profile.cr,
+    'badges', v_profile.badges,
+    'accessories', v_profile.accessories,
+    'avatar_face', v_profile.avatar_face,
+    'avatar_svg', v_profile.avatar_svg,
+    'avatar_selections', v_profile.avatar_selections,
+    'unlocked_avatar', v_profile.unlocked_avatar,
+    'parent_email', v_profile.parent_email,
+    'frozen', COALESCE(v_profile.frozen, false),
+    'is_admin', COALESCE(v_profile.is_admin, false),
+    'created_at', v_profile.created_at,
+    'updated_at', v_profile.updated_at
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.complete_recovery(text, text, uuid) TO authenticated;
 
 -- 4. Head-to-Head (H2H) Multiplayer Schema & RPCs (Branch: pre-beta4)
 
@@ -817,6 +985,9 @@ ALTER TABLE match_results ADD CONSTRAINT match_results_match_id_fkey FOREIGN KEY
 ALTER TABLE match_results DROP CONSTRAINT IF EXISTS match_results_profile_id_fkey;
 ALTER TABLE match_results ADD CONSTRAINT match_results_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES profiles(player_id) ON DELETE CASCADE;
 
+ALTER TABLE recovery_tokens DROP CONSTRAINT IF EXISTS recovery_tokens_player_id_fkey;
+ALTER TABLE recovery_tokens ADD CONSTRAINT recovery_tokens_player_id_fkey FOREIGN KEY (player_id) REFERENCES profiles(player_id) ON DELETE CASCADE;
+
 -- Profile Deletion RPC with permission check
 CREATE OR REPLACE FUNCTION delete_profile(p_player_id uuid)
 RETURNS boolean
@@ -846,7 +1017,7 @@ BEGIN
     RETURN false;
   END IF;
 
-  SELECT COALESCE(is_admin, false) INTO v_is_admin
+  SELECT COALESCE(bool_or(is_admin), false) INTO v_is_admin
   FROM profiles
   WHERE auth_uid = v_auth_uid;
 
@@ -858,6 +1029,8 @@ BEGIN
   END IF;
 END;
 $func$;
+
+GRANT EXECUTE ON FUNCTION public.delete_profile(uuid) TO authenticated;
 
 -- Admin Test Profile Cleanup RPC
 CREATE OR REPLACE FUNCTION admin_cleanup_test_profiles()
@@ -876,7 +1049,7 @@ BEGIN
       RAISE EXCEPTION 'Not authenticated';
     END IF;
   ELSE
-    SELECT COALESCE(is_admin, false) INTO v_is_admin
+    SELECT COALESCE(bool_or(is_admin), false) INTO v_is_admin
     FROM profiles
     WHERE auth_uid = v_auth_uid;
 
@@ -902,6 +1075,8 @@ BEGIN
   RETURN jsonb_build_object('ok', true, 'deleted_count', v_deleted_count);
 END;
 $func$;
+
+GRANT EXECUTE ON FUNCTION public.admin_cleanup_test_profiles() TO authenticated;
 
 -- H2H Finish Countdown: add finished_at to match_players and update h2h_sync_gameplay
 ALTER TABLE match_players ADD COLUMN IF NOT EXISTS finished_at timestamptz;

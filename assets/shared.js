@@ -371,50 +371,9 @@ const syncStore = {
     };
   },
 
-  async fetchProfiles(authUid, localProfileIds = []) {
-    if (!isBrowserOnline() || !isSupabaseConfigured()) return null;
-    try {
-      await ensureAuthSession();
-      const safeCols = 'player_id,auth_uid,handle,country,birth_year,stats,cr,badges,accessories,avatar_face,avatar_svg,avatar_selections,unlocked_avatar,link_code,parent_email,frozen,is_admin,created_at,updated_at';
-      let query = '';
-      const validIds = Array.isArray(localProfileIds) ? localProfileIds.filter(Boolean) : [];
-      if (authUid && validIds.length > 0) {
-        query = '?or=(auth_uid.eq.' + encodeURIComponent(authUid) + ',player_id.in.(' + validIds.map(encodeURIComponent).join(',') + '))&select=' + safeCols;
-      } else if (authUid) {
-        query = '?auth_uid=eq.' + encodeURIComponent(authUid) + '&select=' + safeCols;
-      } else if (validIds.length > 0) {
-        query = '?player_id=in.(' + validIds.map(encodeURIComponent).join(',') + ')&select=' + safeCols;
-      } else {
-        return null;
-      }
-      const url = SUPABASE_URL + '/rest/v1/profiles' + query;
-      const resp = await fetch(url, { headers: authedHeaders() });
-      if (resp.ok) {
-        const rows = await resp.json();
-        return rows.map(r => this._mapRowToProfile(r, authUid || r.auth_uid));
-      }
-      console.warn('[syncStore] fetchProfiles failed:', resp.status);
-    } catch (e) {
-      console.warn('[syncStore] fetchProfiles error:', e);
-    }
-    return null;
-  },
-
-  async fetchProfileById(playerId) {
+  async fetchPublicProfile(playerId) {
     if (!isBrowserOnline() || !isSupabaseConfigured() || !playerId) return null;
     try {
-      await ensureAuthSession();
-      const safeCols = 'player_id,auth_uid,handle,country,birth_year,stats,cr,badges,accessories,avatar_face,avatar_svg,avatar_selections,unlocked_avatar,link_code,parent_email,frozen,is_admin,created_at,updated_at';
-      const url = SUPABASE_URL + '/rest/v1/profiles?player_id=eq.' + encodeURIComponent(playerId) + '&select=' + safeCols;
-      const resp = await fetch(url, { headers: authedHeaders() });
-      if (resp.ok) {
-        const rows = await resp.json();
-        if (rows && rows.length > 0) {
-          const authUid = (typeof _getSession === 'function' && _getSession() && _getSession().user) ? _getSession().user.id : rows[0].auth_uid;
-          return this._mapRowToProfile(rows[0], authUid);
-        }
-      }
-      // Fallback to safe public RPC when querying non-owned profiles (e.g., H2H opponents)
       const pubResp = await fetch(SUPABASE_URL + '/rest/v1/rpc/get_public_profile', {
         method: 'POST',
         headers: authedHeaders(),
@@ -426,7 +385,87 @@ const syncStore = {
           return this._mapRowToProfile(pubRow, null);
         }
       }
-      if (!resp.ok) console.warn('[syncStore] fetchProfileById failed:', resp.status);
+    } catch (e) {
+      console.warn('[syncStore] fetchPublicProfile error:', e);
+    }
+    return null;
+  },
+
+  async fetchProfiles(authUid, localProfileIds = []) {
+    if (!isBrowserOnline() || !isSupabaseConfigured()) return null;
+    try {
+      await ensureAuthSession();
+      const session = _getSession();
+      const effectiveAuthUid = (session && session.user && session.user.id) || authUid || null;
+      const ownedCols = 'player_id,auth_uid,handle,country,birth_year,stats,cr,badges,accessories,avatar_face,avatar_svg,avatar_selections,unlocked_avatar,parent_email,frozen,is_admin,created_at,updated_at';
+      const validIds = Array.isArray(localProfileIds) ? localProfileIds.filter(Boolean) : [];
+      if (!effectiveAuthUid && validIds.length === 0) return null;
+
+      const results = [];
+      const seenIds = new Set();
+
+      // 1. Fetch profiles owned by the current authenticated session (safe to include owner's parent_email)
+      if (effectiveAuthUid) {
+        const url = SUPABASE_URL + '/rest/v1/profiles?auth_uid=eq.' + encodeURIComponent(effectiveAuthUid) + '&select=' + ownedCols;
+        const resp = await fetch(url, { headers: authedHeaders() });
+        if (resp.ok) {
+          const rows = await resp.json();
+          if (Array.isArray(rows)) {
+            for (const r of rows) {
+              if (r && r.player_id && !seenIds.has(r.player_id)) {
+                seenIds.add(r.player_id);
+                results.push(this._mapRowToProfile(r, effectiveAuthUid));
+              }
+            }
+          }
+        } else {
+          console.warn('[syncStore] fetchProfiles failed:', resp.status);
+        }
+      }
+
+      // 2. For any local cached IDs belonging to a different device/auth_uid, fetch public non-PII fields only
+      const missingIds = validIds.filter(id => !seenIds.has(id));
+      if (missingIds.length > 0) {
+        const publicProfiles = await Promise.all(missingIds.map(id => this.fetchPublicProfile(id)));
+        for (const prof of publicProfiles) {
+          if (prof && prof.id && !seenIds.has(prof.id)) {
+            seenIds.add(prof.id);
+            results.push(prof);
+          }
+        }
+      }
+
+      return results;
+    } catch (e) {
+      console.warn('[syncStore] fetchProfiles error:', e);
+    }
+    return null;
+  },
+
+  async fetchProfileById(playerId) {
+    if (!isBrowserOnline() || !isSupabaseConfigured() || !playerId) return null;
+    try {
+      await ensureAuthSession();
+      const session = _getSession();
+      const sessionAuthUid = (session && session.user && session.user.id) || null;
+
+      // Only query direct profiles columns (including owner's parent_email) when scoped to the signed-in owner
+      if (sessionAuthUid) {
+        const ownedCols = 'player_id,auth_uid,handle,country,birth_year,stats,cr,badges,accessories,avatar_face,avatar_svg,avatar_selections,unlocked_avatar,parent_email,frozen,is_admin,created_at,updated_at';
+        const url = SUPABASE_URL + '/rest/v1/profiles?player_id=eq.' + encodeURIComponent(playerId) + '&auth_uid=eq.' + encodeURIComponent(sessionAuthUid) + '&select=' + ownedCols;
+        const resp = await fetch(url, { headers: authedHeaders() });
+        if (resp.ok) {
+          const rows = await resp.json();
+          if (rows && rows.length > 0) {
+            return this._mapRowToProfile(rows[0], sessionAuthUid);
+          }
+        } else {
+          console.warn('[syncStore] fetchProfileById owner lookup failed:', resp.status);
+        }
+      }
+
+      // Fallback to safe public RPC when querying non-owned profiles (zero PII exposed)
+      return await this.fetchPublicProfile(playerId);
     } catch (e) {
       console.warn('[syncStore] fetchProfileById error:', e);
     }
@@ -550,7 +589,7 @@ const syncStore = {
   },
 
   _buildProfileRow(p) {
-    return {
+    const row = {
       player_id: p.id,
       auth_uid: p.auth_uid || (typeof _getSession === 'function' && _getSession() && _getSession().user ? _getSession().user.id : null),
       handle: p.handle || null,
@@ -564,11 +603,12 @@ const syncStore = {
       avatar_svg: (p.avatar && p.avatar.svg) ? sanitizeAvatarSvgUrl(p.avatar.svg) : null,
       avatar_selections: p.avatar && p.avatar.selections ? p.avatar.selections : null,
       unlocked_avatar: p.unlockedAvatar || null,
-      link_code: p.linkCode || null,
-      password_hash: p.passwordHash || null,
-      parent_email: p.parentEmail || null,
       updated_at: new Date().toISOString()
     };
+    if (p.linkCode) row.link_code = p.linkCode;
+    if (p.passwordHash) row.password_hash = p.passwordHash;
+    if (p.parentEmail) row.parent_email = p.parentEmail;
+    return row;
   },
 
   _getQueue() {
@@ -617,12 +657,15 @@ function mergeProfiles(local, remote) {
     result.handle = remote.handle || local.handle;
     result.country = remote.country || local.country;
     result.birthYear = remote.birthYear || local.birthYear;
+    result.parentEmail = remote.parentEmail || local.parentEmail || null;
   } else {
     result.avatar = local.avatar || remote.avatar;
     result.handle = local.handle || remote.handle;
     result.country = local.country || remote.country;
     result.birthYear = local.birthYear || remote.birthYear;
+    result.parentEmail = local.parentEmail || remote.parentEmail || null;
   }
+  result.passwordHash = local.passwordHash || remote.passwordHash || null;
   result.updatedAt = new Date(Math.max(localTs, remoteTs, Date.now())).toISOString();
 
   // 2. Badges: Strict Set Union (an earned badge is NEVER lost)

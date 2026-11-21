@@ -19,9 +19,19 @@ const escapeHtml = (s) => {
 
 const recentWelcomeNotices = new Map();
 const WELCOME_COOLDOWN_MS = 60 * 1000;
+const OPT_OUT_TOKEN_TTL_SEC = 90 * 24 * 60 * 60; // 90 days for COPPA parental review
 
 function sanitizeHeaderText(s) {
   return String(s || '').replace(/[\r\n\t]+/g, ' ').trim();
+}
+
+function buildOptOutToken(serviceKey, email, handle, playerId, nowMs = Date.now()) {
+  const expSec = Math.floor(nowMs / 1000) + OPT_OUT_TOKEN_TTL_SEC;
+  const sig = crypto.createHmac('sha256', serviceKey)
+    .update(`${email}:${handle}:${playerId}:${expSec}`)
+    .digest('hex')
+    .slice(0, 32);
+  return `${expSec}.${sig}`;
 }
 
 async function handleWelcomeNotice(body) {
@@ -86,18 +96,37 @@ async function handleWelcomeNotice(body) {
     return { status: 200, data: { ok: true, sent: false, throttled: true } };
   }
 
+  // Persistent cross-instance cooldown check via Supabase recovery_tokens (prefixed 'welcome:' so it never collides with recovery emails)
+  const welcomeMarkerEmail = `welcome:${email}`;
+  try {
+    const cooldownCutoff = new Date(Date.now() - WELCOME_COOLDOWN_MS).toISOString();
+    const recentUrl = `${supabaseUrl}/rest/v1/recovery_tokens?player_id=eq.${encodeURIComponent(profileRow.player_id)}&email=eq.${encodeURIComponent(welcomeMarkerEmail)}&created_at=gt.${encodeURIComponent(cooldownCutoff)}&select=id&limit=1`;
+    const recentRes = await fetch(recentUrl, {
+      headers: {
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`
+      }
+    });
+    if (recentRes.ok) {
+      const recentRows = await recentRes.json();
+      if (Array.isArray(recentRows) && recentRows.length > 0) {
+        recentWelcomeNotices.set(cooldownKey, Date.now());
+        return { status: 200, data: { ok: true, sent: false, throttled: true } };
+      }
+    }
+  } catch (err) {
+    console.warn('[send-welcome-notice] Persistent cooldown check failed, continuing with in-memory fallback:', err);
+  }
+
   const birthYear = profileRow.birth_year || (body && body.birthYear) || null;
   const isUnder18 = birthYear
     ? (new Date().getFullYear() - Number(birthYear) < 18)
     : Boolean(body && body.isUnder18 === true);
 
   const siteOrigin = 'https://play.mapolis.app';
-  const token = crypto.createHmac('sha256', serviceKey)
-    .update(`${email}:${handle}:${profileRow.player_id}`)
-    .digest('hex')
-    .slice(0, 24);
+  const token = buildOptOutToken(serviceKey, email, handle, profileRow.player_id);
   const privacyUrl = `${siteOrigin}/play/#compliance`;
-  const deleteUrl = `${siteOrigin}/play/?action=parent-opt-out&handle=${encodeURIComponent(handle)}&email=${encodeURIComponent(email)}&pid=${encodeURIComponent(profileRow.player_id)}&token=${token}`;
+  const deleteUrl = `${siteOrigin}/play/?action=parent-opt-out&handle=${encodeURIComponent(handle)}&email=${encodeURIComponent(email)}&pid=${encodeURIComponent(profileRow.player_id)}&token=${encodeURIComponent(token)}`;
 
   let subject = '';
   let html = '';
@@ -261,6 +290,28 @@ async function handleWelcomeNotice(body) {
 
     const data = await resendRes.json();
     recentWelcomeNotices.set(cooldownKey, Date.now());
+    // Persist cooldown marker in Supabase so cold starts / separate Netlify instances honor the 60s window
+    try {
+      const markerToken = 'welcome_' + crypto.randomBytes(16).toString('hex');
+      await fetch(`${supabaseUrl}/rest/v1/recovery_tokens`, {
+        method: 'POST',
+        headers: {
+          'apikey': serviceKey,
+          'Authorization': `Bearer ${serviceKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          token: markerToken,
+          player_id: profileRow.player_id,
+          email: welcomeMarkerEmail,
+          expires_at: new Date(Date.now() - 1000).toISOString(),
+          used: true
+        })
+      });
+    } catch (markerErr) {
+      console.warn('[send-welcome-notice] Failed to persist cooldown marker:', markerErr);
+    }
     console.log('[send-welcome-notice] Email dispatched successfully to', email, 'ID:', data.id);
     return { status: 200, data: { ok: true, sent: true, id: data.id } };
   } catch (err) {
@@ -306,4 +357,6 @@ exports.handler = async (event, context) => {
 };
 
 exports.handleWelcomeNotice = handleWelcomeNotice;
+exports.buildOptOutToken = buildOptOutToken;
+exports.OPT_OUT_TOKEN_TTL_SEC = OPT_OUT_TOKEN_TTL_SEC;
 exports._resetWelcomeCooldownForTest = () => recentWelcomeNotices.clear();

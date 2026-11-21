@@ -54,12 +54,11 @@ app.get('/play/admin/env.js', envHandler);
 // Automated Password Recovery Endpoint
 const recoveryRoute = async (req, res) => {
   try {
-    const origin = req.headers.origin || `${req.protocol}://${req.get('host')}`;
-    const result = await handleRecovery(req.body, origin);
+    const result = await handleRecovery(req.body);
     res.status(result.status).json(result.data);
   } catch (err) {
     console.error('[server] Recovery route error:', err);
-    res.status(200).json({ ok: true, message: 'Recovery link sent' });
+    res.status(500).json({ ok: false, error: 'Internal server error' });
   }
 };
 
@@ -77,7 +76,7 @@ const welcomeNoticeHandler = async (req, res) => {
     res.status(result.statusCode).json(JSON.parse(result.body));
   } catch (err) {
     console.error('[server] Welcome notice route error:', err);
-    res.status(200).json({ ok: true, message: 'Notice processed' });
+    res.status(500).json({ ok: false, error: 'Internal server error' });
   }
 };
 const parentOptOutHandler = async (req, res) => {

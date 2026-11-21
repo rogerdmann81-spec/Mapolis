@@ -2137,16 +2137,19 @@ async function openResetPasswordModal(token) {
 
     try {
       var hash = await hashPassword(pw1);
+      if (typeof ensureAuthSession === 'function') {
+        await ensureAuthSession();
+      }
+      var compHdrs = (typeof window.authedHeaders === 'function') ? window.authedHeaders() : hdrs;
       var curSess = typeof _getSession === 'function' ? _getSession() : null;
       var authUid = (curSess && curSess.user && curSess.user.id) || null;
 
       var compResp = await fetch(baseUrl + '/rest/v1/rpc/complete_recovery', {
         method: 'POST',
-        headers: hdrs,
+        headers: compHdrs,
         body: JSON.stringify({
           p_token: token,
-          p_new_password_hash: hash,
-          p_auth_uid: authUid
+          p_new_password_hash: hash
         })
       });
 
@@ -6008,9 +6011,12 @@ function startH2HQueue() {
       subEl.innerHTML = 'Challenger discovered! (<span style="color:#5bf0a0;font-weight:700;">' + escapeHtml(_h2h.opponent.handle) + '</span>) Launching…';
     }
 
-    // Enrich with full real profile stats from Supabase
-    if (opp.player_id && window.syncStore && typeof window.syncStore.fetchProfileById === 'function') {
-      window.syncStore.fetchProfileById(opp.player_id).then(function(realProf) {
+    // Enrich with safe public opponent stats from Supabase (zero PII)
+    if (opp.player_id && window.syncStore && (typeof window.syncStore.fetchPublicProfile === 'function' || typeof window.syncStore.fetchProfileById === 'function')) {
+      var fetchOppFn = typeof window.syncStore.fetchPublicProfile === 'function'
+        ? window.syncStore.fetchPublicProfile(opp.player_id)
+        : window.syncStore.fetchProfileById(opp.player_id);
+      fetchOppFn.then(function(realProf) {
         if (realProf && _h2h.opponent && _h2h.opponent.id === opp.player_id) {
           if (realProf.handle) _h2h.opponent.handle = realProf.handle;
           if (realProf.avatar) {
@@ -6036,7 +6042,7 @@ function startH2HQueue() {
           }
           if (currentScreen === 's-h2h-setup') renderH2HSetupUI();
         }
-      }).catch(function(e){ console.warn('[h2h] fetchProfileById error:', e); });
+      }).catch(function(e){ console.warn('[h2h] fetchPublicProfile error:', e); });
     }
 
     setTimeout(function() {

@@ -15,11 +15,40 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
+const MAX_OPT_OUT_TTL_SEC = 90 * 24 * 60 * 60 + 300; // 90 days (+5m clock skew buffer)
+
 function safeEqualHex(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string' || !a || a.length !== b.length) {
     return false;
   }
   return crypto.timingSafeEqual(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
+}
+
+function verifyOptOutToken(token, serviceKey, email, handle, playerId, nowMs = Date.now()) {
+  if (typeof token !== 'string') return { valid: false, reason: 'invalid' };
+  const match = token.match(/^(\d{10,12})\.([a-f0-9]{32})$/i);
+  if (!match) return { valid: false, reason: 'invalid' };
+
+  const expSec = Number(match[1]);
+  const providedSig = match[2].toLowerCase();
+  const nowSec = Math.floor(nowMs / 1000);
+
+  if (!Number.isFinite(expSec) || expSec <= nowSec) {
+    return { valid: false, reason: 'expired' };
+  }
+  if (expSec > nowSec + MAX_OPT_OUT_TTL_SEC) {
+    return { valid: false, reason: 'invalid' };
+  }
+
+  const expectedSig = crypto.createHmac('sha256', serviceKey)
+    .update(`${email}:${handle}:${playerId}:${expSec}`)
+    .digest('hex')
+    .slice(0, 32);
+
+  if (!safeEqualHex(providedSig, expectedSig)) {
+    return { valid: false, reason: 'invalid' };
+  }
+  return { valid: true, expSec };
 }
 
 async function handleParentOptOut(body) {
@@ -67,17 +96,16 @@ async function handleParentOptOut(body) {
     return { status: 502, data: { ok: false, error: 'Failed to verify profile record', deletedCount: 0 } };
   }
 
-  // 2. Enforce BOTH exact parent_email match AND valid HMAC token
+  // 2. Enforce BOTH exact parent_email match AND valid time-bound HMAC token
   const dbEmail = (targetProfile.parent_email || '').toLowerCase().trim();
   const dbHandle = (targetProfile.handle || '').trim();
-  const expected = crypto.createHmac('sha256', serviceKey)
-    .update(`${email}:${dbHandle}:${targetProfile.player_id}`)
-    .digest('hex')
-    .slice(0, 24);
-  const tokenValid = safeEqualHex(token, expected);
+  const verification = verifyOptOutToken(token, serviceKey, email, dbHandle, targetProfile.player_id);
 
-  if (!tokenValid || !dbEmail || dbEmail !== email || targetProfile.player_id !== playerId) {
-    return { status: 403, data: { ok: false, error: 'Invalid or expired verification token', deletedCount: 0 } };
+  if (!verification.valid || !dbEmail || dbEmail !== email || targetProfile.player_id !== playerId) {
+    const errMsg = verification.reason === 'expired'
+      ? 'This deletion link has expired. Please contact support@mapolis.app for assistance.'
+      : 'Invalid or expired verification token';
+    return { status: 403, data: { ok: false, error: errMsg, deletedCount: 0 } };
   }
 
   // 3. Perform deletion for the verified profile
@@ -229,3 +257,4 @@ exports.handler = async (event, context) => {
 };
 
 exports.handleParentOptOut = handleParentOptOut;
+exports.verifyOptOutToken = verifyOptOutToken;
