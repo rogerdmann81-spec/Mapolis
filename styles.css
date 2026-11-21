@@ -356,6 +356,42 @@ overflow-y:auto; overflow-x:hidden;
   font-size:11.5px; color:var(--dim); line-height:1.6;
 }
 
+/* Solidarity & Human Dignity screen */
+#s-solidarity { background:var(--bg-deep); }
+.title-monarch-btn:hover { transform:scale(1.12); }
+.title-monarch-btn:active { transform:scale(.95); }
+.solidarity-globe-hero {
+  display:flex; justify-content:center; align-items:center;
+  margin:-8px 0 22px;
+}
+#s-solidarity .globe-wrap {
+  width:min(56vw, 220px);
+  height:min(56vw, 220px);
+  margin:0;
+}
+#s-solidarity .globe-wrap .wordmark {
+  font-size:clamp(26px, 7.2vw, 40px);
+  text-shadow:0 3px 0 rgba(0,0,40,.5), 0 0 18px rgba(0,0,40,.6);
+}
+.solidarity-charity-card {
+  display:block; text-decoration:none; color:inherit; cursor:pointer;
+  transition:transform .15s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.solidarity-charity-card:hover {
+  transform:translateY(-2px);
+  border-color:rgba(255,255,255,.32);
+  box-shadow:0 8px 22px rgba(0,0,0,.35);
+}
+.solidarity-charity-card:active { transform:translateY(0); }
+.solidarity-charity-ext {
+  margin-left:auto; flex-shrink:0; font-size:14px; font-weight:800;
+  color:rgba(255,255,255,.45); align-self:flex-start;
+  transition:color .15s ease, transform .15s ease;
+}
+.solidarity-charity-card:hover .solidarity-charity-ext {
+  color:#fff; transform:translate(2px, -2px);
+}
+
 /* Commit/principle row — icon + text in a panel */
 .credits-commit-row {
   display:flex; gap:12px; align-items:flex-start;
