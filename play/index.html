@@ -64,6 +64,7 @@
 
   <script src="/env.js"></script>
   <script src="/assets/shared.js"></script>
+  <script src="/assets/features-prebeta6.js"></script>
 </head>
 
 <body>
@@ -375,6 +376,14 @@
 
   <div id="leaderboard-root"></div>
 
+</div>
+
+<div id="s-friends" class="screen">
+  <div id="friends-root"></div>
+</div>
+
+<div id="s-atlas" class="screen">
+  <div id="atlas-root"></div>
 </div>
 
 <!-- ══════════════════════════════════════════════
@@ -880,7 +889,7 @@ const MusicMgr = (function() {
   };
 
   var SCREEN_MAP = {
-    's-title':'starlight', 's-profiles':'starlight', 's-profile':'starlight', 's-badges':'starlight', 's-store':'starlight', 's-credits':'starlight', 's-compliance':'starlight', 's-solidarity':'starlight',
+    's-title':'starlight', 's-profiles':'starlight', 's-profile':'starlight', 's-badges':'starlight', 's-store':'starlight', 's-credits':'starlight', 's-compliance':'starlight', 's-solidarity':'starlight', 's-friends':'starlight', 's-atlas':'starlight',
     's-create':'jungle', 's-avatar':'jungle',
     's-setup':'northern', 
     's-game':'sunrise',
@@ -976,6 +985,8 @@ const SCREEN_IDS = [
 
   's-game','s-results','s-profile','s-badges','s-store','s-leaderboard',
 
+  's-friends','s-atlas',
+
   's-h2h-queue','s-h2h-setup','s-h2h-results',
 
   's-compliance', 's-credits', 's-solidarity'
@@ -1062,6 +1073,10 @@ function triggerScreenRefresh(screenId) {
     renderStore();
   } else if (screenId === 's-badges' && typeof renderBadges === 'function') {
     renderBadges();
+  } else if (screenId === 's-friends' && typeof renderFriendsScreen === 'function') {
+    renderFriendsScreen(true);
+  } else if (screenId === 's-atlas' && typeof renderAtlasScreen === 'function') {
+    renderAtlasScreen();
   }
 }
 
@@ -5913,6 +5928,8 @@ function startH2HQueue() {
   _h2h.rematchYou = false;
   _h2h.rematchOpp = false;
   _h2h.isOnlineMatch = false;
+  _h2h.isRanked = true;
+  _h2h.eloCapped = false;
   _h2h.matchId = null;
   _h2h.sharedDeck = null;
   _h2h._oppDiscAlerted = false;
@@ -6061,6 +6078,74 @@ function startH2HQueue() {
       startH2HSetupScreen();
     }, 600);
   }
+
+  // Expose direct friend/room match launcher reusing the identical H2H setup & gameplay pipeline
+  window.launchFriendH2HMatch = function(matchData) {
+    var prof = window.activeProfile;
+    if (!prof || !matchData || !matchData.match_id) return;
+    if (!prof.stats) prof.stats = {};
+    if (!prof.stats.h2h) prof.stats.h2h = { rating: 1200, matches: 0, wins: 0, losses: 0, ties: 0, currentStreak: 0, bestStreak: 0 };
+
+    resetH2HState();
+    _h2h.you = JSON.parse(JSON.stringify(prof.stats.h2h));
+    _h2h.yourScore = 0;
+    _h2h.oppScore = 0;
+    _h2h.yourAnswers = [];
+    _h2h.oppAnswers = [];
+    _h2h.oppCorrect = 0;
+    _h2h.oppWrong = 0;
+    _h2h.youFinished = false;
+    _h2h.oppFinished = false;
+    _h2h.finishCountdown = null;
+    _h2h.finishInitiator = null;
+    _h2h.outcome = null;
+    _h2h.ratingDelta = 0;
+    _h2h.starsEarned = 0;
+    _h2h.rematchYou = false;
+    _h2h.rematchOpp = false;
+    _h2h.isOnlineMatch = true;
+    _h2h.isRanked = (matchData.is_ranked !== false);
+    _h2h.eloCapped = false;
+    _h2h.matchId = matchData.match_id;
+    _h2h._oppDiscAlerted = false;
+    _h2h.startedAt = Date.now();
+
+    var opp = matchData.opponent || {};
+    var oppSvg = _safeAvaSvg(opp.avatar_svg) || _safeAvaSvg(opp.avatar);
+    var oppFace = (opp.avatar_face && typeof opp.avatar_face === 'string') ? opp.avatar_face : '🧑';
+    var oppStats = opp.stats || {};
+    var oppRating = (oppStats.h2h && typeof oppStats.h2h.rating === 'number') ? oppStats.h2h.rating : ((typeof opp.rating === 'number') ? opp.rating : 1200);
+    var oppWins = (oppStats.h2h && typeof oppStats.h2h.wins === 'number') ? oppStats.h2h.wins : ((typeof opp.wins === 'number') ? opp.wins : 0);
+    var oppLosses = (oppStats.h2h && typeof oppStats.h2h.losses === 'number') ? oppStats.h2h.losses : ((typeof opp.losses === 'number') ? opp.losses : 0);
+    var oppTies = (oppStats.h2h && typeof oppStats.h2h.ties === 'number') ? oppStats.h2h.ties : ((typeof opp.ties === 'number') ? opp.ties : 0);
+    var oppMatches = (oppStats.h2h && typeof oppStats.h2h.matches === 'number') ? oppStats.h2h.matches : ((typeof opp.matches === 'number') ? opp.matches : (oppWins + oppLosses + oppTies));
+    var yourGradeFallback = (typeof estimateGrade === 'function') ? estimateGrade(prof) : 6;
+    var oppGrade = (typeof estimateGrade === 'function') ? estimateGrade({ birthYear: opp.birth_year, stats: oppStats }) : (opp.tier || yourGradeFallback);
+
+    _h2h.opponent = {
+      id: opp.player_id || null,
+      handle: opp.handle || 'Friend',
+      avatar: oppSvg || oppFace,
+      avatarFace: oppFace,
+      avatarSvg: oppSvg,
+      rating: oppRating,
+      matches: oppMatches,
+      wins: oppWins,
+      losses: oppLosses,
+      ties: oppTies,
+      country: opp.country || '',
+      stats: oppStats,
+      grade: oppGrade,
+      tier: matchData.tier || 6,
+      isBot: false
+    };
+    if (matchData.card_sequence && Array.isArray(matchData.card_sequence) && matchData.card_sequence.length > 0) {
+      _h2h.sharedDeck = matchData.card_sequence;
+    }
+
+    H2H.transition('matched');
+    startH2HSetupScreen();
+  };
 
   // Continuous matchmaking search without forced timeout
   var queueStartedAt = Date.now();
@@ -6694,6 +6779,7 @@ function renderH2HSetupUI() {
   html += '  <div class="h2h-s-vs">';
   html += '    <span class="h2h-s-vs-badge">VS</span>';
   html += '    <span class="h2h-s-timer" id="h2h-s-countdown">Auto 0:' + (_h2hSetup.countdownSec < 10 ? '0' : '') + _h2hSetup.countdownSec + '</span>';
+  html += '    <span style="font-size:10px;font-weight:800;margin-top:3px;color:' + (_h2h && _h2h.isRanked === false ? '#86efac' : '#93c5fd') + ';">' + (_h2h && _h2h.isRanked === false ? '🤝 Friendly · Unranked' : '⚔️ Ranked · ELO') + '</span>';
   html += '  </div>';
 
   html += '  <div class="h2h-s-slot opp">';
@@ -7679,8 +7765,9 @@ function finishH2HMatch() {
   var yourR = _h2h.you.rating;
   var oppR = (_h2h.opponent && typeof _h2h.opponent.rating === 'number') ? _h2h.opponent.rating : 1200;
   var isBotMatch = !_h2h.isOnlineMatch || (_h2h.opponent && _h2h.opponent.isBot) || (_h2h.matchId && String(_h2h.matchId).startsWith('bot_'));
-  // Zero Elo adjustment on bot/practice matches
-  _h2h.ratingDelta = isBotMatch ? 0 : H2HStub.calcRatingDelta(yourR, oppR, outcomeScore);
+  var isUnrankedMatch = isBotMatch || (_h2h.isRanked === false);
+  // Zero Elo adjustment on bot/practice or Friendly (unranked) matches
+  _h2h.ratingDelta = isUnrankedMatch ? 0 : H2HStub.calcRatingDelta(yourR, oppR, outcomeScore);
 
   // Compute opponent immediate post-match career stats
   var oppPriorRating = oppR;
@@ -7712,20 +7799,20 @@ function finishH2HMatch() {
     _h2h.opponent.priorTies = oppPriorT;
     _h2h.opponent.priorMatches = oppPriorMatches;
 
-    _h2h.opponent.postWins = isBotMatch ? oppPriorW : (oppPriorW + (oppIsWin ? 1 : 0));
-    _h2h.opponent.postLosses = isBotMatch ? oppPriorL : (oppPriorL + (oppIsLoss ? 1 : 0));
-    _h2h.opponent.postTies = isBotMatch ? oppPriorT : (oppPriorT + (oppIsTie ? 1 : 0));
-    _h2h.opponent.postMatches = isBotMatch ? oppPriorMatches : (oppPriorMatches + 1);
-    _h2h.opponent.ratingDelta = isBotMatch ? 0 : -_h2h.ratingDelta;
-    _h2h.opponent.postRating = isBotMatch ? oppPriorRating : Math.max(0, oppPriorRating - _h2h.ratingDelta);
+    _h2h.opponent.postWins = isUnrankedMatch ? oppPriorW : (oppPriorW + (oppIsWin ? 1 : 0));
+    _h2h.opponent.postLosses = isUnrankedMatch ? oppPriorL : (oppPriorL + (oppIsLoss ? 1 : 0));
+    _h2h.opponent.postTies = isUnrankedMatch ? oppPriorT : (oppPriorT + (oppIsTie ? 1 : 0));
+    _h2h.opponent.postMatches = isUnrankedMatch ? oppPriorMatches : (oppPriorMatches + 1);
+    _h2h.opponent.ratingDelta = isUnrankedMatch ? 0 : -_h2h.ratingDelta;
+    _h2h.opponent.postRating = isUnrankedMatch ? oppPriorRating : Math.max(0, oppPriorRating - _h2h.ratingDelta);
   }
 
   // Persist to profile
   var profile = window.activeProfile;
   if (profile && profile.stats && profile.stats.h2h) {
     var h = profile.stats.h2h;
-    // Strictly preclude rating and win/loss/match records for bot matches
-    if (!isBotMatch) {
+    // Strictly preclude rating and win/loss/match records for bot or Friendly (unranked) matches
+    if (!isUnrankedMatch) {
       h.rating = Math.max(0, h.rating + _h2h.ratingDelta);
       h.matches = (h.matches || 0) + 1;
       if (_h2h.outcome === 'win')  { h.wins   = (h.wins   || 0) + 1; h.currentStreak = (h.currentStreak || 0) + 1; }
@@ -7802,6 +7889,8 @@ function finishH2HMatch() {
       .then(function(finRes) {
         if (finRes && finRes.outcome) {
           _h2h.outcome = finRes.outcome;
+          if (typeof finRes.is_ranked === 'boolean') _h2h.isRanked = finRes.is_ranked;
+          if (typeof finRes.elo_capped === 'boolean') _h2h.eloCapped = finRes.elo_capped;
           if (typeof finRes.rating_delta === 'number') _h2h.ratingDelta = finRes.rating_delta;
           if (typeof finRes.elo_after === 'number') {
             profile.stats.h2h.rating = finRes.elo_after;
@@ -7816,6 +7905,8 @@ function finishH2HMatch() {
             if (typeof finRes.opp_ties === 'number') _h2h.opponent.postTies = finRes.opp_ties;
           }
           if (window._gameResults && window._gameResults.h2h && _h2h.opponent) {
+            window._gameResults.h2h.ratingDelta = _h2h.ratingDelta;
+            window._gameResults.h2h.ratingAfter = (typeof finRes.elo_after === 'number') ? finRes.elo_after : window._gameResults.h2h.ratingAfter;
             window._gameResults.h2h.opponentRatingAfter = _h2h.opponent.postRating;
             window._gameResults.h2h.opponentRatingDelta = _h2h.opponent.ratingDelta;
             window._gameResults.h2h.opponentMatches = _h2h.opponent.postMatches;
@@ -7933,6 +8024,10 @@ function renderH2HResults() {
   }
   if (isBotMatch) {
     html += '<div style="font-size:11px;color:#a8c8e0;letter-spacing:1px;text-transform:uppercase;font-weight:700;margin-bottom:8px;text-align:center;">🤖 Practice Match (Unranked)</div>';
+  } else if (_h2h.eloCapped) {
+    html += '<div style="font-size:11px;color:#fde68a;letter-spacing:.4px;font-weight:700;margin-bottom:8px;text-align:center;">Daily Ranked Cap Reached (3/day vs same opponent) · Unranked</div>';
+  } else if (_h2h.isRanked === false) {
+    html += '<div style="font-size:11px;color:#86efac;letter-spacing:1px;text-transform:uppercase;font-weight:700;margin-bottom:8px;text-align:center;">🤝 Friendly Match (Unranked)</div>';
   }
 
   html += headlineHtml;
@@ -8119,6 +8214,8 @@ function handleRematchSyncResponse(res) {
       _h2h.resultsPollTimer = null;
     }
     _h2h.matchId = res.rematch_match_id;
+    if (typeof res.is_ranked === 'boolean') _h2h.isRanked = res.is_ranked;
+    _h2h.eloCapped = false;
     _h2h.isRematch = true;
     _h2h.rematchYou = true;
     _h2h.rematchOpp = true;
@@ -9244,7 +9341,10 @@ function renderGlobePage() {
   html += '<button class="gp-btn" id="gp-btn-globe"><span class="gp-btn-ico">🌍</span>Globe</button>';
   html += '<button class="gp-btn" id="gp-btn-h2h"><span class="gp-btn-ico">⚔️</span>Head to Head</button>';
   html += '</div>';
-  html += '<button class="gp-lb" id="gp-lb">🏆 Leaderboard</button>';
+  html += '<div style="display:flex;gap:8px;justify-content:center;width:100%;max-width:340px;">';
+  html += '<button class="gp-lb" id="gp-lb" style="flex:1;">🏆 Leaderboard</button>';
+  html += '<button class="gp-lb" id="gp-atlas" style="flex:1;">📖 World Atlas</button>';
+  html += '</div>';
   html += '<div class="gp-foot">Gnapoley · Mapolis</div>';
   html += '</div>';
 
@@ -9299,11 +9399,18 @@ function renderGlobePage() {
   const hBtn = document.getElementById('gp-btn-h2h');
   if (hBtn) hBtn.addEventListener('click', () => {
     if (typeof AudioMgr !== 'undefined' && AudioMgr.slideIn) AudioMgr.slideIn();
-    startH2HQueue();
+    if (typeof window.openH2HModePicker === 'function') {
+      window.openH2HModePicker();
+    } else {
+      startH2HQueue();
+    }
   });
 
   const lbBtn = document.getElementById('gp-lb');
   if (lbBtn) lbBtn.addEventListener('click', () => go('s-leaderboard'));
+
+  const atlasBtn = document.getElementById('gp-atlas');
+  if (atlasBtn) atlasBtn.addEventListener('click', () => go('s-atlas'));
 
   if (typeof updateAvatarBars === 'function') updateAvatarBars();
 
@@ -9833,14 +9940,21 @@ function renderLbRow(row, index, highlight) {
     subText = `Bal: ⭐ ${row.cr.toLocaleString()} · ⚔️ ${row.h2hRating}`;
   }
 
-  return `<div class="lb-row${isMe ? ' lb-me' : ''}">
+  const clickableAttr = !isMe
+    ? ` data-lb-pid="${escHtml(String(row.id || ''))}" role="button" tabindex="0" title="View player card or challenge ${escHtml(row.handle || '')}" style="cursor:pointer;"`
+    : '';
+
+  return `<div class="lb-row${isMe ? ' lb-me' : ' lb-row-clickable'}"${clickableAttr}>
     <div class="lb-rank ${rankClass}">${rankNum}</div>
     <div class="lb-ava">${avaHtml}</div>
     <div class="lb-info">
       <div class="lb-handle">${escHtml(row.handle || 'Unknown')} <span style="font-size:10px;opacity:.7;">${row.country ? escHtml(row.country) : ''}</span></div>
       <div class="lb-sub" style="font-size:11px;color:var(--dim);">${subText}</div>
     </div>
-    <div class="lb-cr" style="font-family:'Space Mono',monospace;font-weight:700;color:${_lbMetric === 'h2h' ? '#68d391' : STAR_COLOR};">${primaryVal}</div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div class="lb-cr" style="font-family:'Space Mono',monospace;font-weight:700;color:${_lbMetric === 'h2h' ? '#68d391' : STAR_COLOR};">${primaryVal}</div>
+      ${!isMe ? '<span style="font-size:12px;color:var(--blue-lt);opacity:.85;" aria-hidden="true">⚔️</span>' : ''}
+    </div>
   </div>`;
 }
 
@@ -9881,7 +9995,7 @@ async function renderLeaderboard() {
   html += `<div style="text-align:center;margin-bottom:12px;">
     <div style="font-size:32px;">🏆</div>
     <h2 style="font-family:'Fredoka One',sans-serif;font-size:22px;color:#fff;margin:4px 0 2px 0;">Leaderboard</h2>
-    <div style="font-size:11px;color:var(--dim);">Compete globally or within your division</div>
+    <div style="font-size:11px;color:var(--dim);">Compete globally or within your division · Tap any player to challenge or add</div>
   </div>`;
 
   // METRIC TOGGLE: Total Stars vs H2H Rating
@@ -10007,6 +10121,24 @@ async function renderLeaderboard() {
       }
     });
   });
+
+  // Clickable & challengeable leaderboard rows (opens minimal Public Player Card modal)
+  root.querySelectorAll('.lb-row-clickable').forEach(rowEl => {
+    const activateRow = () => {
+      const pid = rowEl.getAttribute('data-lb-pid');
+      const matched = displayData.find(r => String(r.id || '') === pid) || _lbData.find(r => String(r.id || '') === pid);
+      if (matched && typeof window.openPublicPlayerCard === 'function') {
+        window.openPublicPlayerCard(matched);
+      }
+    };
+    rowEl.addEventListener('click', activateRow);
+    rowEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        activateRow();
+      }
+    });
+  });
 }
 
 async function refreshLeaderboard() {
@@ -10029,6 +10161,8 @@ function updateTopBarRankBadge() {
   go = function(id) {
     _p8go(id);
     if (id === 's-leaderboard') refreshLeaderboard();
+    if (id === 's-friends' && typeof renderFriendsScreen === 'function') renderFriendsScreen(true);
+    if (id === 's-atlas' && typeof renderAtlasScreen === 'function') renderAtlasScreen();
     if (id === 's-setup') updateTopBarRankBadge();
   };
 })();
@@ -10765,8 +10899,10 @@ function renderResults() {
     for (const mid of mistakeIds) {
       const label = mid.replace(/_/g, ' ').replace(/^(country|capital|flag|river|mountain|land|water|city|heritage)\s/, '');
       const count = gr.mistakes[mid];
-      html += `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(91,143,255,.08);font-size:12px;">
-        <span style="color:var(--text);">${escHtml(label)}</span>
+      const isCountryLike = /^(country|capital|flag)_/.test(mid);
+      html += `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(91,143,255,.08);font-size:12px;">
+        <span style="color:var(--text);flex:1;">${escHtml(label)}</span>
+        ${isCountryLike ? `<button class="btn-mistake-genesis" data-genesis-key="${escHtml(mid)}" style="background:none;border:1px solid rgba(91,143,255,.35);border-radius:7px;padding:2px 7px;color:#93c5fd;font-size:10px;font-weight:700;cursor:pointer;">📖 Origin</button>` : ''}
         <span style="color:var(--wrong);font-weight:700;">×${count}</span>
       </div>`;
     }
@@ -10784,6 +10920,13 @@ function renderResults() {
   if (mistakesBtn && mistakesList) {
     mistakesBtn.addEventListener('click', () => {
       mistakesList.style.display = mistakesList.style.display === 'none' ? 'block' : 'none';
+    });
+    mistakesList.querySelectorAll('.btn-mistake-genesis').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (typeof window.openGenesisCard === 'function') {
+          window.openGenesisCard(btn.getAttribute('data-genesis-key'));
+        }
+      });
     });
   }
 
@@ -11150,6 +11293,11 @@ function renderProfile() {
   }
 
   html += `<div style="display:flex;gap:10px;margin-top:14px;">
+    <button id="btn-profile-friends" style="flex:1;background:var(--bg-panel);color:#fff;font-weight:700;font-size:13px;border:1px solid rgba(74,222,128,.35);border-radius:var(--pill);padding:11px;cursor:pointer;">🤝 Friends</button>
+    <button id="btn-profile-atlas" style="flex:1;background:var(--bg-panel);color:#fff;font-weight:700;font-size:13px;border:1px solid rgba(91,143,255,.35);border-radius:var(--pill);padding:11px;cursor:pointer;">📖 World Atlas</button>
+  </div>`;
+
+  html += `<div style="display:flex;gap:10px;margin-top:10px;">
     <button id="btn-edit-avatar" style="flex:1;background:var(--bg-panel);color:var(--text);font-weight:700;font-size:13px;border:1px solid var(--border);border-radius:var(--pill);padding:12px;">✏️ Edit Avatar</button>
     <button id="btn-profile-play" style="flex:1;background:var(--yellow);color:#111;font-family:'Fredoka One',sans-serif;font-size:15px;border-radius:var(--pill);padding:12px;">Play</button>
   </div>`;
@@ -11174,6 +11322,8 @@ function renderProfile() {
   });
 
   document.getElementById('btn-profile-back')?.addEventListener('click', () => go('s-setup'));
+  document.getElementById('btn-profile-friends')?.addEventListener('click', () => go('s-friends'));
+  document.getElementById('btn-profile-atlas')?.addEventListener('click', () => go('s-atlas'));
   document.getElementById('btn-edit-avatar')?.addEventListener('click', () => {
     window._avatarEditMode = true;
     go('s-avatar');

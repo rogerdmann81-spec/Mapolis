@@ -1420,6 +1420,122 @@ const h2hStore = {
   }
 };
 
+// ─── Friends, Exact Handle Search & Private H2H Rooms Store ─────────────────
+async function _callMapolisRpc(rpcName, payload) {
+  if (!isSupabaseConfigured()) {
+    return { ok: false, offline: true, error: 'offline' };
+  }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return { ok: false, offline: true, error: 'offline' };
+  }
+  try {
+    await ensureAuthSession();
+    const resp = await fetch(SUPABASE_URL + '/rest/v1/rpc/' + rpcName, {
+      method: 'POST',
+      headers: authedHeaders(),
+      body: JSON.stringify(payload || {})
+    });
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => '');
+      console.warn('[friendStore.' + rpcName + '] HTTP', resp.status, errText);
+      return { ok: false, status: 'error', error: 'rpc_error', httpStatus: resp.status };
+    }
+    return await resp.json();
+  } catch (e) {
+    console.warn('[friendStore.' + rpcName + '] network exception:', e);
+    return { ok: false, offline: true, error: 'network_error' };
+  }
+}
+
+const friendStore = {
+  async getMyCode(playerId) {
+    if (!playerId) return { ok: false, error: 'no_player' };
+    return _callMapolisRpc('friend_get_my_code', { p_player_id: playerId });
+  },
+
+  async rotateCode(playerId) {
+    if (!playerId) return { ok: false, error: 'no_player' };
+    return _callMapolisRpc('friend_rotate_code', { p_player_id: playerId });
+  },
+
+  async setPrivacy(playerId, allow) {
+    if (!playerId) return { ok: false, error: 'no_player' };
+    return _callMapolisRpc('friend_set_privacy', { p_player_id: playerId, p_allow: !!allow });
+  },
+
+  async lookupPlayer(playerId, query) {
+    if (!playerId) return { found: false, reason: 'no_player' };
+    return _callMapolisRpc('friend_lookup_player', { p_player_id: playerId, p_query: String(query || '').trim() });
+  },
+
+  async getPlayerCard(playerId, targetId) {
+    if (!playerId || !targetId) return { found: false, reason: 'invalid_args' };
+    return _callMapolisRpc('friend_get_player_card', { p_player_id: playerId, p_target_id: targetId });
+  },
+
+  async requestFriend(playerId, targetId) {
+    if (!playerId || !targetId) return { ok: false, error: 'invalid_args' };
+    return _callMapolisRpc('friend_request', { p_player_id: playerId, p_target_id: targetId });
+  },
+
+  async respondFriend(playerId, otherId, action) {
+    if (!playerId || !otherId) return { ok: false, error: 'invalid_args' };
+    return _callMapolisRpc('friend_respond', { p_player_id: playerId, p_other_id: otherId, p_action: action });
+  },
+
+  async listFriends(playerId) {
+    if (!playerId) return { friends: [], incoming: [], outgoing: [], blocked: [] };
+    return _callMapolisRpc('friend_list', { p_player_id: playerId });
+  },
+
+  async createRoom(playerId, isRanked, tier, cardSequence, targetPlayerId = null) {
+    if (!playerId) return { ok: false, error: 'no_player' };
+    return _callMapolisRpc('h2h_create_room', {
+      p_player_id: playerId,
+      p_is_ranked: !!isRanked,
+      p_tier: tier || 6,
+      p_card_sequence: cardSequence || null,
+      p_target_player_id: targetPlayerId || null
+    });
+  },
+
+  async joinRoom(playerId, roomCode, tier, cardSequence = null) {
+    if (!playerId) return { status: 'error', error: 'no_player' };
+    return _callMapolisRpc('h2h_join_room', {
+      p_player_id: playerId,
+      p_room_code: String(roomCode || '').trim(),
+      p_tier: tier || 6,
+      p_card_sequence: cardSequence || null
+    });
+  },
+
+  async pollRoom(playerId, roomId) {
+    if (!playerId || !roomId) return { status: 'expired' };
+    return _callMapolisRpc('h2h_poll_room', { p_player_id: playerId, p_room_id: roomId });
+  },
+
+  async cancelRoom(playerId, roomId) {
+    if (!playerId || !roomId) return { ok: false };
+    return _callMapolisRpc('h2h_cancel_room', { p_player_id: playerId, p_room_id: roomId });
+  },
+
+  async listIncomingChallenges(playerId) {
+    if (!playerId) return { challenges: [] };
+    return _callMapolisRpc('h2h_list_incoming_challenges', { p_player_id: playerId });
+  },
+
+  async respondChallenge(playerId, roomId, action, tier, cardSequence = null) {
+    if (!playerId || !roomId) return { status: 'error', error: 'invalid_args' };
+    return _callMapolisRpc('h2h_respond_challenge', {
+      p_player_id: playerId,
+      p_room_id: roomId,
+      p_action: action,
+      p_tier: tier || 6,
+      p_card_sequence: cardSequence || null
+    });
+  }
+};
+
 if (typeof window !== 'undefined') {
   window.syncStore = syncStore;
   window.mapolisUUID = mapolisUUID;
@@ -1433,9 +1549,11 @@ if (typeof window !== 'undefined') {
   window.signInAnonymous = signInAnonymous;
   window.notesStore = notesStore;
   window.h2hStore = h2hStore;
+  window.friendStore = friendStore;
   window.sanitizeAvatarSvgUrl = sanitizeAvatarSvgUrl;
   window.escapeAvatarHtml = escapeAvatarHtml;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { syncStore, mapolisUUID, mergeProfiles, submitRound, flushPendingRounds, getPendingRounds, ensureAuthSession, notesStore, h2hStore, authedHeaders, isSupabaseConfigured, SUPABASE_URL, sanitizeAvatarSvgUrl, escapeAvatarHtml };
+  module.exports = { syncStore, mapolisUUID, mergeProfiles, submitRound, flushPendingRounds, getPendingRounds, ensureAuthSession, notesStore, h2hStore, friendStore, authedHeaders, isSupabaseConfigured, SUPABASE_URL, sanitizeAvatarSvgUrl, escapeAvatarHtml };
 }
+

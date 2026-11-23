@@ -1335,8 +1335,8 @@ BEGIN
     IF COALESCE(v_opp.rematch_requested, false) = true THEN
       v_tier := COALESCE(v_match.card_pool_tier, 6);
       
-      INSERT INTO matches (card_pool_tier, status, started_at)
-      VALUES (v_tier, 'active', now())
+      INSERT INTO matches (card_pool_tier, status, started_at, is_ranked)
+      VALUES (v_tier, 'active', now(), COALESCE(v_match.is_ranked, true))
       RETURNING id INTO v_rematch_id;
 
       UPDATE matches
@@ -1351,6 +1351,7 @@ BEGIN
       RETURN jsonb_build_object(
         'status', 'rematch_accepted',
         'rematch_match_id', v_rematch_id,
+        'is_ranked', COALESCE(v_match.is_ranked, true),
         'opp_available', true,
         'you_requested', true,
         'opp_requested', true
@@ -1369,6 +1370,7 @@ BEGIN
     RETURN jsonb_build_object(
       'status', 'rematch_accepted',
       'rematch_match_id', v_match.rematch_match_id,
+      'is_ranked', COALESCE(v_match.is_ranked, true),
       'opp_available', v_opp_available,
       'you_requested', COALESCE(v_me.rematch_requested, false),
       'opp_requested', COALESCE(v_opp.rematch_requested, false)
@@ -1420,6 +1422,1346 @@ BEGIN
 END;
 $func$;
 
+-- ============================================================================
+-- PRE-BETA6: Compliance-Safe Friend Linking, Exact Handle Lookup & Private H2H
+-- ============================================================================
+
+-- 1. Profile columns for Friend Code & Privacy Opt-In
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS friend_code text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS allow_friend_requests boolean NOT NULL DEFAULT true;
+
+-- 2. Match ranked/unranked flag (default true for backward compatibility with quick matchmaking)
+ALTER TABLE public.matches ADD COLUMN IF NOT EXISTS is_ranked boolean NOT NULL DEFAULT true;
+
+-- 3. Unambiguous Friend Code generator (excludes 0, O, 1, I)
+CREATE OR REPLACE FUNCTION public.generate_mapolis_friend_code()
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $func$
+DECLARE
+  v_chars text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  v_code text;
+  v_attempt int := 0;
+  v_i int;
+BEGIN
+  LOOP
+    v_attempt := v_attempt + 1;
+    v_code := 'MAP-';
+    FOR v_i IN 1..4 LOOP
+      v_code := v_code || substr(v_chars, 1 + floor(random() * length(v_chars))::int, 1);
+    END LOOP;
+    IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE friend_code = v_code) THEN
+      RETURN v_code;
+    END IF;
+    IF v_attempt > 40 THEN
+      v_code := 'MAP-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 6));
+      RETURN v_code;
+    END IF;
+  END LOOP;
+END;
+$func$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_friend_code
+  ON public.profiles (friend_code)
+  WHERE friend_code IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_profiles_handle_lower
+  ON public.profiles (lower(handle));
+
+-- Backfill existing profiles without a friend_code
+UPDATE public.profiles
+SET friend_code = public.generate_mapolis_friend_code()
+WHERE friend_code IS NULL;
+
+-- Update profile protection trigger to auto-populate friend_code on INSERT and block direct spoofing on UPDATE
+CREATE OR REPLACE FUNCTION public.protect_profile_sensitive_columns()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public
+AS $func$
+DECLARE
+  v_jwt_role text := COALESCE(current_setting('request.jwt.claim.role', true), '');
+  v_allow_fc text := COALESCE(current_setting('mapolis.allow_friend_code_update', true), '');
+BEGIN
+  IF current_user IN ('postgres', 'supabase_admin', 'service_role') OR v_jwt_role = 'service_role' THEN
+    IF TG_OP = 'INSERT' AND NEW.friend_code IS NULL THEN
+      NEW.friend_code := public.generate_mapolis_friend_code();
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    NEW.is_admin := false;
+    NEW.friend_code := public.generate_mapolis_friend_code();
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'UPDATE' THEN
+    IF OLD.password_hash IS NOT NULL AND NEW.password_hash IS NULL THEN
+      NEW.password_hash := OLD.password_hash;
+    END IF;
+    IF NEW.friend_code IS DISTINCT FROM OLD.friend_code AND v_allow_fc <> '1' THEN
+      NEW.friend_code := OLD.friend_code;
+    END IF;
+    IF NOT COALESCE(auth_is_admin(), false) THEN
+      IF NEW.is_admin IS DISTINCT FROM OLD.is_admin THEN
+        RAISE EXCEPTION 'Permission denied: cannot modify is_admin';
+      END IF;
+      IF NEW.auth_uid IS DISTINCT FROM OLD.auth_uid THEN
+        RAISE EXCEPTION 'Permission denied: cannot reassign auth_uid directly';
+      END IF;
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  RETURN NEW;
+END;
+$func$;
+
+-- 4. Friend Links Table (Mutual Opt-In + Bi-Directional Block, Zero Chat)
+CREATE TABLE IF NOT EXISTS public.friend_links (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  requester_id uuid NOT NULL REFERENCES public.profiles(player_id) ON DELETE CASCADE,
+  addressee_id uuid NOT NULL REFERENCES public.profiles(player_id) ON DELETE CASCADE,
+  status text NOT NULL CHECK (status IN ('pending', 'accepted', 'blocked')),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT friend_links_no_self CHECK (requester_id <> addressee_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_friend_links_canonical_pair
+  ON public.friend_links (LEAST(requester_id, addressee_id), GREATEST(requester_id, addressee_id));
+
+CREATE INDEX IF NOT EXISTS idx_friend_links_requester ON public.friend_links (requester_id, status);
+CREATE INDEX IF NOT EXISTS idx_friend_links_addressee ON public.friend_links (addressee_id, status);
+
+ALTER TABLE public.friend_links ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "friend_links_participant_select" ON public.friend_links;
+CREATE POLICY "friend_links_participant_select" ON public.friend_links
+  FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles p
+      WHERE p.auth_uid = auth.uid()
+        AND p.player_id IN (friend_links.requester_id, friend_links.addressee_id)
+    )
+    OR auth_is_admin()
+  );
+
+-- 5. Private H2H Rooms & Direct Friend/Leaderboard Challenges Table
+CREATE TABLE IF NOT EXISTS public.h2h_rooms (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  room_code text NOT NULL UNIQUE,
+  host_id uuid NOT NULL REFERENCES public.profiles(player_id) ON DELETE CASCADE,
+  guest_id uuid REFERENCES public.profiles(player_id) ON DELETE SET NULL,
+  target_player_id uuid REFERENCES public.profiles(player_id) ON DELETE CASCADE,
+  is_ranked boolean NOT NULL DEFAULT false,
+  tier int NOT NULL DEFAULT 6,
+  card_sequence_json jsonb,
+  status text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'matched', 'cancelled', 'declined', 'expired')),
+  match_id uuid REFERENCES public.matches(id) ON DELETE SET NULL,
+  expires_at timestamptz NOT NULL DEFAULT (now() + interval '5 minutes'),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_h2h_rooms_target_open
+  ON public.h2h_rooms (target_player_id, status, expires_at DESC)
+  WHERE target_player_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_h2h_rooms_host_open
+  ON public.h2h_rooms (host_id, status, expires_at DESC);
+
+ALTER TABLE public.h2h_rooms ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "h2h_rooms_participant_select" ON public.h2h_rooms;
+CREATE POLICY "h2h_rooms_participant_select" ON public.h2h_rooms
+  FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles p
+      WHERE p.auth_uid = auth.uid()
+        AND p.player_id IN (h2h_rooms.host_id, h2h_rooms.guest_id, h2h_rooms.target_player_id)
+    )
+    OR auth_is_admin()
+  );
+
+-- Helper to generate a unique 6-character room code (unambiguous chars)
+CREATE OR REPLACE FUNCTION public.generate_h2h_room_code()
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $func$
+DECLARE
+  v_chars text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  v_code text;
+  v_i int;
+  v_attempt int := 0;
+BEGIN
+  LOOP
+    v_attempt := v_attempt + 1;
+    v_code := '';
+    FOR v_i IN 1..6 LOOP
+      v_code := v_code || substr(v_chars, 1 + floor(random() * length(v_chars))::int, 1);
+    END LOOP;
+    IF NOT EXISTS (SELECT 1 FROM public.h2h_rooms WHERE room_code = v_code) THEN
+      RETURN v_code;
+    END IF;
+    IF v_attempt > 40 THEN
+      RETURN upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 6));
+    END IF;
+  END LOOP;
+END;
+$func$;
+
+-- 6. Friend Code & Privacy RPCs
+CREATE OR REPLACE FUNCTION public.friend_get_my_code(p_player_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $func$
+DECLARE
+  v_auth_uid uuid := auth.uid();
+  v_code text;
+  v_allow boolean;
+BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'friend_get_my_code: not authenticated';
+  END IF;
+  SELECT friend_code, COALESCE(allow_friend_requests, true)
+  INTO v_code, v_allow
+  FROM profiles
+  WHERE player_id = p_player_id AND auth_uid = v_auth_uid;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'friend_get_my_code: unauthorized player_id';
+  END IF;
+  IF v_code IS NULL THEN
+    PERFORM set_config('mapolis.allow_friend_code_update', '1', true);
+    v_code := public.generate_mapolis_friend_code();
+    UPDATE profiles SET friend_code = v_code WHERE player_id = p_player_id;
+  END IF;
+  RETURN jsonb_build_object('friend_code', v_code, 'allow_friend_requests', v_allow);
+END;
+$func$;
+
+CREATE OR REPLACE FUNCTION public.friend_rotate_code(p_player_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $func$
+DECLARE
+  v_auth_uid uuid := auth.uid();
+  v_code text;
+BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'friend_rotate_code: not authenticated';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id AND auth_uid = v_auth_uid) THEN
+    RAISE EXCEPTION 'friend_rotate_code: unauthorized player_id';
+  END IF;
+  PERFORM set_config('mapolis.allow_friend_code_update', '1', true);
+  v_code := public.generate_mapolis_friend_code();
+  UPDATE profiles SET friend_code = v_code, updated_at = now() WHERE player_id = p_player_id;
+  RETURN jsonb_build_object('friend_code', v_code);
+END;
+$func$;
+
+CREATE OR REPLACE FUNCTION public.friend_set_privacy(p_player_id uuid, p_allow boolean)
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $func$
+DECLARE
+  v_auth_uid uuid := auth.uid();
+BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'friend_set_privacy: not authenticated';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id AND auth_uid = v_auth_uid) THEN
+    RAISE EXCEPTION 'friend_set_privacy: unauthorized player_id';
+  END IF;
+  UPDATE profiles
+  SET allow_friend_requests = COALESCE(p_allow, true), updated_at = now()
+  WHERE player_id = p_player_id;
+  RETURN jsonb_build_object('allow_friend_requests', COALESCE(p_allow, true));
+END;
+$func$;
+
+-- 7. Exact-Match Player Lookup (Friend Code OR Exact Case-Insensitive Handle — NEVER wildcards)
+CREATE OR REPLACE FUNCTION public.friend_lookup_player(
+  p_player_id uuid,
+  p_query text
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $func$
+DECLARE
+  v_auth_uid uuid := auth.uid();
+  v_clean text;
+  v_code_norm text;
+  v_target RECORD;
+  v_link RECORD;
+  v_relation text := 'none';
+BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'friend_lookup_player: not authenticated';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id AND auth_uid = v_auth_uid) THEN
+    RAISE EXCEPTION 'friend_lookup_player: unauthorized player_id';
+  END IF;
+
+  v_clean := trim(COALESCE(p_query, ''));
+  IF length(v_clean) < 2 OR length(v_clean) > 40 THEN
+    RETURN jsonb_build_object('found', false, 'reason', 'invalid_query');
+  END IF;
+
+  -- Strip leading @ if user typed @handle
+  IF left(v_clean, 1) = '@' THEN
+    v_clean := trim(substr(v_clean, 2));
+  END IF;
+
+  v_code_norm := upper(regexp_replace(v_clean, '[^A-Za-z0-9]', '', 'g'));
+  IF length(v_code_norm) = 7 AND left(v_code_norm, 3) = 'MAP' THEN
+    v_code_norm := 'MAP-' || substr(v_code_norm, 4);
+  ELSIF length(v_code_norm) = 4 THEN
+    v_code_norm := 'MAP-' || v_code_norm;
+  ELSE
+    v_code_norm := upper(v_clean);
+  END IF;
+
+  SELECT
+    p.player_id, p.handle, p.country, p.avatar_face, p.avatar_svg,
+    COALESCE(p.allow_friend_requests, true) AS allow_friend_requests,
+    COALESCE((p.stats->'h2h'->>'rating')::int, cr.elo, 1200) AS rating,
+    COALESCE((p.stats->'h2h'->>'wins')::int, cr.wins, 0) AS wins,
+    COALESCE((p.stats->'h2h'->>'losses')::int, cr.losses, 0) AS losses,
+    COALESCE((p.stats->'h2h'->>'ties')::int, cr.ties, 0) AS ties,
+    COALESCE((p.stats->'h2h'->>'matches')::int, cr.matches_played, 0) AS matches
+  INTO v_target
+  FROM profiles p
+  LEFT JOIN competitive_ratings cr ON cr.profile_id = p.player_id
+  WHERE COALESCE(p.frozen, false) = false
+    AND (
+      p.friend_code = v_code_norm
+      OR lower(p.handle) = lower(v_clean)
+    )
+  ORDER BY (p.friend_code = v_code_norm) DESC
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('found', false, 'reason', 'not_found');
+  END IF;
+
+  IF v_target.player_id = p_player_id THEN
+    RETURN jsonb_build_object('found', false, 'reason', 'self');
+  END IF;
+
+  SELECT * INTO v_link
+  FROM friend_links
+  WHERE LEAST(requester_id, addressee_id) = LEAST(p_player_id, v_target.player_id)
+    AND GREATEST(requester_id, addressee_id) = GREATEST(p_player_id, v_target.player_id)
+  LIMIT 1;
+
+  IF FOUND THEN
+    IF v_link.status = 'blocked' THEN
+      -- Silent non-discovery if target blocked caller; show blocked_by_you if caller blocked target
+      IF v_link.requester_id = p_player_id THEN
+        v_relation := 'blocked_by_you';
+      ELSE
+        RETURN jsonb_build_object('found', false, 'reason', 'not_found');
+      END IF;
+    ELSIF v_link.status = 'accepted' THEN
+      v_relation := 'friends';
+    ELSIF v_link.status = 'pending' THEN
+      v_relation := CASE WHEN v_link.requester_id = p_player_id THEN 'pending_sent' ELSE 'pending_received' END;
+    END IF;
+  END IF;
+
+  -- Respect privacy toggle for non-friends
+  IF v_target.allow_friend_requests = false AND v_relation NOT IN ('friends', 'blocked_by_you') THEN
+    RETURN jsonb_build_object('found', false, 'reason', 'not_accepting');
+  END IF;
+
+  RETURN jsonb_build_object(
+    'found', true,
+    'relation_status', v_relation,
+    'player', jsonb_build_object(
+      'player_id', v_target.player_id,
+      'handle', v_target.handle,
+      'country', v_target.country,
+      'avatar_face', v_target.avatar_face,
+      'avatar_svg', v_target.avatar_svg,
+      'rating', v_target.rating,
+      'wins', v_target.wins,
+      'losses', v_target.losses,
+      'ties', v_target.ties,
+      'matches', v_target.matches,
+      'allow_friend_requests', v_target.allow_friend_requests
+    )
+  );
+END;
+$func$;
+
+-- 8. Safe Public Player Card RPC (used when clicking a Leaderboard row)
+CREATE OR REPLACE FUNCTION public.friend_get_player_card(
+  p_player_id uuid,
+  p_target_id uuid
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $func$
+DECLARE
+  v_auth_uid uuid := auth.uid();
+  v_target RECORD;
+  v_link RECORD;
+  v_relation text := 'none';
+BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'friend_get_player_card: not authenticated';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id AND auth_uid = v_auth_uid) THEN
+    RAISE EXCEPTION 'friend_get_player_card: unauthorized player_id';
+  END IF;
+  IF p_player_id = p_target_id THEN
+    RETURN jsonb_build_object('found', false, 'reason', 'self');
+  END IF;
+
+  SELECT
+    p.player_id, p.handle, p.country, p.avatar_face, p.avatar_svg,
+    COALESCE(p.allow_friend_requests, true) AS allow_friend_requests,
+    COALESCE((p.stats->'h2h'->>'rating')::int, cr.elo, 1200) AS rating,
+    COALESCE((p.stats->'h2h'->>'wins')::int, cr.wins, 0) AS wins,
+    COALESCE((p.stats->'h2h'->>'losses')::int, cr.losses, 0) AS losses,
+    COALESCE((p.stats->'h2h'->>'ties')::int, cr.ties, 0) AS ties,
+    COALESCE((p.stats->'h2h'->>'matches')::int, cr.matches_played, 0) AS matches
+  INTO v_target
+  FROM profiles p
+  LEFT JOIN competitive_ratings cr ON cr.profile_id = p.player_id
+  WHERE p.player_id = p_target_id AND COALESCE(p.frozen, false) = false
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('found', false, 'reason', 'not_found');
+  END IF;
+
+  SELECT * INTO v_link
+  FROM friend_links
+  WHERE LEAST(requester_id, addressee_id) = LEAST(p_player_id, p_target_id)
+    AND GREATEST(requester_id, addressee_id) = GREATEST(p_player_id, p_target_id)
+  LIMIT 1;
+
+  IF FOUND THEN
+    IF v_link.status = 'blocked' THEN
+      v_relation := CASE WHEN v_link.requester_id = p_player_id THEN 'blocked_by_you' ELSE 'blocked' END;
+    ELSIF v_link.status = 'accepted' THEN
+      v_relation := 'friends';
+    ELSIF v_link.status = 'pending' THEN
+      v_relation := CASE WHEN v_link.requester_id = p_player_id THEN 'pending_sent' ELSE 'pending_received' END;
+    END IF;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'found', true,
+    'relation_status', v_relation,
+    'can_interact', (v_relation NOT IN ('blocked', 'blocked_by_you') AND (v_relation = 'friends' OR v_target.allow_friend_requests = true)),
+    'player', jsonb_build_object(
+      'player_id', v_target.player_id,
+      'handle', v_target.handle,
+      'country', v_target.country,
+      'avatar_face', v_target.avatar_face,
+      'avatar_svg', v_target.avatar_svg,
+      'rating', v_target.rating,
+      'wins', v_target.wins,
+      'losses', v_target.losses,
+      'ties', v_target.ties,
+      'matches', v_target.matches,
+      'allow_friend_requests', v_target.allow_friend_requests
+    )
+  );
+END;
+$func$;
+
+-- 9. Friend Request / Respond / List RPCs
+CREATE OR REPLACE FUNCTION public.friend_request(
+  p_player_id uuid,
+  p_target_id uuid
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $func$
+DECLARE
+  v_auth_uid uuid := auth.uid();
+  v_target_allow boolean;
+  v_link RECORD;
+BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'friend_request: not authenticated';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id AND auth_uid = v_auth_uid) THEN
+    RAISE EXCEPTION 'friend_request: unauthorized player_id';
+  END IF;
+  IF p_player_id = p_target_id THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'cannot_add_self');
+  END IF;
+
+  SELECT COALESCE(allow_friend_requests, true) INTO v_target_allow
+  FROM profiles
+  WHERE player_id = p_target_id AND COALESCE(frozen, false) = false;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'not_found');
+  END IF;
+
+  SELECT * INTO v_link
+  FROM friend_links
+  WHERE LEAST(requester_id, addressee_id) = LEAST(p_player_id, p_target_id)
+    AND GREATEST(requester_id, addressee_id) = GREATEST(p_player_id, p_target_id)
+  FOR UPDATE;
+
+  IF FOUND THEN
+    IF v_link.status = 'blocked' THEN
+      RETURN jsonb_build_object('ok', false, 'error', 'unavailable');
+    ELSIF v_link.status = 'accepted' THEN
+      RETURN jsonb_build_object('ok', true, 'status', 'accepted');
+    ELSIF v_link.status = 'pending' THEN
+      IF v_link.addressee_id = p_player_id THEN
+        UPDATE friend_links SET status = 'accepted', updated_at = now() WHERE id = v_link.id;
+        RETURN jsonb_build_object('ok', true, 'status', 'accepted');
+      END IF;
+      RETURN jsonb_build_object('ok', true, 'status', 'pending');
+    END IF;
+  END IF;
+
+  IF v_target_allow = false THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'not_accepting');
+  END IF;
+
+  INSERT INTO friend_links (requester_id, addressee_id, status)
+  VALUES (p_player_id, p_target_id, 'pending');
+
+  RETURN jsonb_build_object('ok', true, 'status', 'pending');
+END;
+$func$;
+
+CREATE OR REPLACE FUNCTION public.friend_respond(
+  p_player_id uuid,
+  p_other_id uuid,
+  p_action text
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $func$
+DECLARE
+  v_auth_uid uuid := auth.uid();
+  v_link RECORD;
+BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'friend_respond: not authenticated';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id AND auth_uid = v_auth_uid) THEN
+    RAISE EXCEPTION 'friend_respond: unauthorized player_id';
+  END IF;
+  IF p_player_id = p_other_id THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'invalid_target');
+  END IF;
+
+  SELECT * INTO v_link
+  FROM friend_links
+  WHERE LEAST(requester_id, addressee_id) = LEAST(p_player_id, p_other_id)
+    AND GREATEST(requester_id, addressee_id) = GREATEST(p_player_id, p_other_id)
+  FOR UPDATE;
+
+  IF p_action = 'accept' THEN
+    IF FOUND AND v_link.status = 'pending' AND v_link.addressee_id = p_player_id THEN
+      UPDATE friend_links SET status = 'accepted', updated_at = now() WHERE id = v_link.id;
+      RETURN jsonb_build_object('ok', true, 'status', 'accepted');
+    END IF;
+    RETURN jsonb_build_object('ok', false, 'error', 'no_pending_request');
+  ELSIF p_action IN ('decline', 'remove', 'cancel') THEN
+    IF FOUND AND v_link.status <> 'blocked' THEN
+      DELETE FROM friend_links WHERE id = v_link.id;
+      RETURN jsonb_build_object('ok', true, 'status', 'removed');
+    END IF;
+    RETURN jsonb_build_object('ok', true, 'status', 'none');
+  ELSIF p_action = 'block' THEN
+    IF FOUND THEN
+      UPDATE friend_links
+      SET requester_id = p_player_id, addressee_id = p_other_id, status = 'blocked', updated_at = now()
+      WHERE id = v_link.id;
+    ELSE
+      INSERT INTO friend_links (requester_id, addressee_id, status)
+      VALUES (p_player_id, p_other_id, 'blocked');
+    END IF;
+    -- Cancel any open challenges between the pair
+    UPDATE h2h_rooms
+    SET status = 'cancelled'
+    WHERE status = 'open'
+      AND ((host_id = p_player_id AND target_player_id = p_other_id)
+        OR (host_id = p_other_id AND target_player_id = p_player_id));
+    RETURN jsonb_build_object('ok', true, 'status', 'blocked');
+  ELSIF p_action = 'unblock' THEN
+    IF FOUND AND v_link.status = 'blocked' AND v_link.requester_id = p_player_id THEN
+      DELETE FROM friend_links WHERE id = v_link.id;
+      RETURN jsonb_build_object('ok', true, 'status', 'unblocked');
+    END IF;
+    RETURN jsonb_build_object('ok', false, 'error', 'not_blocked_by_you');
+  END IF;
+
+  RETURN jsonb_build_object('ok', false, 'error', 'unknown_action');
+END;
+$func$;
+
+CREATE OR REPLACE FUNCTION public.friend_list(p_player_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $func$
+DECLARE
+  v_auth_uid uuid := auth.uid();
+  v_code text;
+  v_allow boolean;
+  v_friends jsonb := '[]'::jsonb;
+  v_incoming jsonb := '[]'::jsonb;
+  v_outgoing jsonb := '[]'::jsonb;
+  v_blocked jsonb := '[]'::jsonb;
+BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'friend_list: not authenticated';
+  END IF;
+  SELECT friend_code, COALESCE(allow_friend_requests, true)
+  INTO v_code, v_allow
+  FROM profiles
+  WHERE player_id = p_player_id AND auth_uid = v_auth_uid;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'friend_list: unauthorized player_id';
+  END IF;
+
+  IF v_code IS NULL THEN
+    PERFORM set_config('mapolis.allow_friend_code_update', '1', true);
+    v_code := public.generate_mapolis_friend_code();
+    UPDATE profiles SET friend_code = v_code WHERE player_id = p_player_id;
+  END IF;
+
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'player_id', p.player_id,
+    'handle', p.handle,
+    'country', p.country,
+    'avatar_face', p.avatar_face,
+    'avatar_svg', p.avatar_svg,
+    'rating', COALESCE((p.stats->'h2h'->>'rating')::int, cr.elo, 1200),
+    'wins', COALESCE((p.stats->'h2h'->>'wins')::int, cr.wins, 0),
+    'losses', COALESCE((p.stats->'h2h'->>'losses')::int, cr.losses, 0),
+    'ties', COALESCE((p.stats->'h2h'->>'ties')::int, cr.ties, 0),
+    'matches', COALESCE((p.stats->'h2h'->>'matches')::int, cr.matches_played, 0)
+  ) ORDER BY lower(p.handle)), '[]'::jsonb)
+  INTO v_friends
+  FROM friend_links fl
+  JOIN profiles p ON p.player_id = CASE WHEN fl.requester_id = p_player_id THEN fl.addressee_id ELSE fl.requester_id END
+  LEFT JOIN competitive_ratings cr ON cr.profile_id = p.player_id
+  WHERE fl.status = 'accepted'
+    AND (fl.requester_id = p_player_id OR fl.addressee_id = p_player_id)
+    AND COALESCE(p.frozen, false) = false;
+
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'player_id', p.player_id,
+    'handle', p.handle,
+    'country', p.country,
+    'avatar_face', p.avatar_face,
+    'avatar_svg', p.avatar_svg,
+    'rating', COALESCE((p.stats->'h2h'->>'rating')::int, cr.elo, 1200),
+    'created_at', fl.created_at
+  ) ORDER BY fl.created_at DESC), '[]'::jsonb)
+  INTO v_incoming
+  FROM friend_links fl
+  JOIN profiles p ON p.player_id = fl.requester_id
+  LEFT JOIN competitive_ratings cr ON cr.profile_id = p.player_id
+  WHERE fl.status = 'pending' AND fl.addressee_id = p_player_id
+    AND COALESCE(p.frozen, false) = false;
+
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'player_id', p.player_id,
+    'handle', p.handle,
+    'country', p.country,
+    'avatar_face', p.avatar_face,
+    'avatar_svg', p.avatar_svg,
+    'rating', COALESCE((p.stats->'h2h'->>'rating')::int, cr.elo, 1200),
+    'created_at', fl.created_at
+  ) ORDER BY fl.created_at DESC), '[]'::jsonb)
+  INTO v_outgoing
+  FROM friend_links fl
+  JOIN profiles p ON p.player_id = fl.addressee_id
+  LEFT JOIN competitive_ratings cr ON cr.profile_id = p.player_id
+  WHERE fl.status = 'pending' AND fl.requester_id = p_player_id
+    AND COALESCE(p.frozen, false) = false;
+
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'player_id', p.player_id,
+    'handle', p.handle,
+    'avatar_face', p.avatar_face,
+    'avatar_svg', p.avatar_svg
+  ) ORDER BY fl.updated_at DESC), '[]'::jsonb)
+  INTO v_blocked
+  FROM friend_links fl
+  JOIN profiles p ON p.player_id = fl.addressee_id
+  WHERE fl.status = 'blocked' AND fl.requester_id = p_player_id;
+
+  RETURN jsonb_build_object(
+    'friend_code', v_code,
+    'allow_friend_requests', v_allow,
+    'friends', v_friends,
+    'incoming', v_incoming,
+    'outgoing', v_outgoing,
+    'blocked', v_blocked
+  );
+END;
+$func$;
+
+-- 10. Private Room & Direct Challenge RPCs
+CREATE OR REPLACE FUNCTION public.h2h_create_room(
+  p_player_id uuid,
+  p_is_ranked boolean DEFAULT false,
+  p_tier int DEFAULT 6,
+  p_card_sequence jsonb DEFAULT NULL,
+  p_target_player_id uuid DEFAULT NULL
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $func$
+DECLARE
+  v_auth_uid uuid := auth.uid();
+  v_code text;
+  v_room RECORD;
+  v_target_allow boolean;
+  v_link_status text;
+BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'h2h_create_room: not authenticated';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id AND auth_uid = v_auth_uid) THEN
+    RAISE EXCEPTION 'h2h_create_room: unauthorized player_id';
+  END IF;
+
+  IF p_target_player_id IS NOT NULL THEN
+    IF p_target_player_id = p_player_id THEN
+      RETURN jsonb_build_object('ok', false, 'error', 'cannot_challenge_self');
+    END IF;
+    SELECT COALESCE(allow_friend_requests, true) INTO v_target_allow
+    FROM profiles WHERE player_id = p_target_player_id AND COALESCE(frozen, false) = false;
+    IF NOT FOUND THEN
+      RETURN jsonb_build_object('ok', false, 'error', 'target_not_found');
+    END IF;
+    SELECT status INTO v_link_status
+    FROM friend_links
+    WHERE LEAST(requester_id, addressee_id) = LEAST(p_player_id, p_target_player_id)
+      AND GREATEST(requester_id, addressee_id) = GREATEST(p_player_id, p_target_player_id)
+    LIMIT 1;
+    IF v_link_status = 'blocked' THEN
+      RETURN jsonb_build_object('ok', false, 'error', 'unavailable');
+    END IF;
+    IF v_target_allow = false AND COALESCE(v_link_status, '') <> 'accepted' THEN
+      RETURN jsonb_build_object('ok', false, 'error', 'not_accepting');
+    END IF;
+  END IF;
+
+  -- Expire/cancel any stale open room created by this host
+  UPDATE h2h_rooms
+  SET status = 'cancelled'
+  WHERE host_id = p_player_id AND status = 'open';
+
+  v_code := public.generate_h2h_room_code();
+
+  INSERT INTO h2h_rooms (room_code, host_id, target_player_id, is_ranked, tier, card_sequence_json, status, expires_at)
+  VALUES (v_code, p_player_id, p_target_player_id, COALESCE(p_is_ranked, false), COALESCE(p_tier, 6), p_card_sequence, 'open', now() + interval '5 minutes')
+  RETURNING * INTO v_room;
+
+  RETURN jsonb_build_object(
+    'ok', true,
+    'room_id', v_room.id,
+    'room_code', v_room.room_code,
+    'is_ranked', v_room.is_ranked,
+    'target_player_id', v_room.target_player_id,
+    'expires_at', v_room.expires_at
+  );
+END;
+$func$;
+
+CREATE OR REPLACE FUNCTION public.h2h_join_room(
+  p_player_id uuid,
+  p_room_code text,
+  p_tier int DEFAULT 6,
+  p_card_sequence jsonb DEFAULT NULL
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $func$
+DECLARE
+  v_auth_uid uuid := auth.uid();
+  v_code_norm text;
+  v_room h2h_rooms%ROWTYPE;
+  v_match_id uuid;
+  v_tier int;
+  v_seq jsonb;
+  v_host RECORD;
+  v_blocked boolean := false;
+BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'h2h_join_room: not authenticated';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id AND auth_uid = v_auth_uid) THEN
+    RAISE EXCEPTION 'h2h_join_room: unauthorized player_id';
+  END IF;
+
+  v_code_norm := upper(regexp_replace(COALESCE(p_room_code, ''), '[^A-Za-z0-9]', '', 'g'));
+  IF length(v_code_norm) <> 6 THEN
+    RETURN jsonb_build_object('status', 'error', 'error', 'invalid_code');
+  END IF;
+
+  SELECT * INTO v_room
+  FROM h2h_rooms
+  WHERE room_code = v_code_norm
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('status', 'error', 'error', 'not_found');
+  END IF;
+
+  IF v_room.status <> 'open' THEN
+    RETURN jsonb_build_object('status', 'error', 'error', 'room_closed');
+  END IF;
+
+  IF v_room.expires_at <= now() THEN
+    UPDATE h2h_rooms SET status = 'expired' WHERE id = v_room.id;
+    RETURN jsonb_build_object('status', 'error', 'error', 'room_expired');
+  END IF;
+
+  IF v_room.host_id = p_player_id THEN
+    RETURN jsonb_build_object('status', 'error', 'error', 'cannot_join_own_room');
+  END IF;
+
+  IF v_room.target_player_id IS NOT NULL AND v_room.target_player_id <> p_player_id THEN
+    RETURN jsonb_build_object('status', 'error', 'error', 'private_invite_only');
+  END IF;
+
+  SELECT EXISTS(
+    SELECT 1 FROM friend_links
+    WHERE status = 'blocked'
+      AND LEAST(requester_id, addressee_id) = LEAST(p_player_id, v_room.host_id)
+      AND GREATEST(requester_id, addressee_id) = GREATEST(p_player_id, v_room.host_id)
+  ) INTO v_blocked;
+  IF v_blocked THEN
+    RETURN jsonb_build_object('status', 'error', 'error', 'unavailable');
+  END IF;
+
+  v_tier := LEAST(COALESCE(v_room.tier, 6), COALESCE(p_tier, 6));
+  v_seq := COALESCE(v_room.card_sequence_json, p_card_sequence);
+
+  INSERT INTO matches (card_pool_tier, status, started_at, card_sequence_json, is_ranked)
+  VALUES (v_tier, 'active', now(), v_seq, COALESCE(v_room.is_ranked, false))
+  RETURNING id INTO v_match_id;
+
+  INSERT INTO match_players (match_id, profile_id)
+  VALUES (v_match_id, v_room.host_id), (v_match_id, p_player_id);
+
+  UPDATE h2h_rooms
+  SET status = 'matched', guest_id = p_player_id, match_id = v_match_id
+  WHERE id = v_room.id;
+
+  SELECT
+    p.player_id, p.handle, p.avatar_svg, p.avatar_face, p.avatar_selections, p.stats, p.country, p.birth_year,
+    COALESCE((p.stats->'h2h'->>'rating')::int, cr.elo, NULLIF(p.cr, 0), 1200) AS elo,
+    COALESCE((p.stats->'h2h'->>'matches')::int, cr.matches_played, 0) AS matches,
+    COALESCE((p.stats->'h2h'->>'wins')::int, cr.wins, 0) AS wins,
+    COALESCE((p.stats->'h2h'->>'losses')::int, cr.losses, 0) AS losses,
+    COALESCE((p.stats->'h2h'->>'ties')::int, cr.ties, 0) AS ties
+  INTO v_host
+  FROM profiles p
+  LEFT JOIN competitive_ratings cr ON cr.profile_id = p.player_id
+  WHERE p.player_id = v_room.host_id;
+
+  RETURN jsonb_build_object(
+    'status', 'matched',
+    'match_id', v_match_id,
+    'role', 'joiner',
+    'is_ranked', COALESCE(v_room.is_ranked, false),
+    'tier', v_tier,
+    'card_sequence', v_seq,
+    'started_at', now(),
+    'opponent', jsonb_build_object(
+      'player_id', v_host.player_id,
+      'handle', v_host.handle,
+      'avatar_svg', v_host.avatar_svg,
+      'avatar_face', v_host.avatar_face,
+      'avatar_selections', v_host.avatar_selections,
+      'stats', v_host.stats,
+      'country', v_host.country,
+      'birth_year', v_host.birth_year,
+      'rating', v_host.elo,
+      'matches', v_host.matches,
+      'wins', v_host.wins,
+      'losses', v_host.losses,
+      'ties', v_host.ties,
+      'tier', v_tier
+    )
+  );
+END;
+$func$;
+
+CREATE OR REPLACE FUNCTION public.h2h_poll_room(
+  p_player_id uuid,
+  p_room_id uuid
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $func$
+DECLARE
+  v_auth_uid uuid := auth.uid();
+  v_room h2h_rooms%ROWTYPE;
+  v_match matches%ROWTYPE;
+  v_guest RECORD;
+BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'h2h_poll_room: not authenticated';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id AND auth_uid = v_auth_uid) THEN
+    RAISE EXCEPTION 'h2h_poll_room: unauthorized player_id';
+  END IF;
+
+  SELECT * INTO v_room FROM h2h_rooms WHERE id = p_room_id AND host_id = p_player_id;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('status', 'expired');
+  END IF;
+
+  IF v_room.status = 'open' AND v_room.expires_at <= now() THEN
+    UPDATE h2h_rooms SET status = 'expired' WHERE id = v_room.id;
+    RETURN jsonb_build_object('status', 'expired');
+  END IF;
+
+  IF v_room.status IN ('cancelled', 'declined', 'expired') THEN
+    RETURN jsonb_build_object('status', v_room.status);
+  END IF;
+
+  IF v_room.status = 'matched' AND v_room.match_id IS NOT NULL AND v_room.guest_id IS NOT NULL THEN
+    SELECT * INTO v_match FROM matches WHERE id = v_room.match_id;
+    SELECT
+      p.player_id, p.handle, p.avatar_svg, p.avatar_face, p.avatar_selections, p.stats, p.country, p.birth_year,
+      COALESCE((p.stats->'h2h'->>'rating')::int, cr.elo, NULLIF(p.cr, 0), 1200) AS elo,
+      COALESCE((p.stats->'h2h'->>'matches')::int, cr.matches_played, 0) AS matches,
+      COALESCE((p.stats->'h2h'->>'wins')::int, cr.wins, 0) AS wins,
+      COALESCE((p.stats->'h2h'->>'losses')::int, cr.losses, 0) AS losses,
+      COALESCE((p.stats->'h2h'->>'ties')::int, cr.ties, 0) AS ties
+    INTO v_guest
+    FROM profiles p
+    LEFT JOIN competitive_ratings cr ON cr.profile_id = p.player_id
+    WHERE p.player_id = v_room.guest_id;
+
+    RETURN jsonb_build_object(
+      'status', 'matched',
+      'match_id', v_room.match_id,
+      'role', 'creator',
+      'is_ranked', COALESCE(v_match.is_ranked, v_room.is_ranked, false),
+      'tier', COALESCE(v_match.card_pool_tier, v_room.tier, 6),
+      'card_sequence', COALESCE(v_match.card_sequence_json, v_room.card_sequence_json),
+      'started_at', COALESCE(v_match.started_at, now()),
+      'opponent', jsonb_build_object(
+        'player_id', v_guest.player_id,
+        'handle', v_guest.handle,
+        'avatar_svg', v_guest.avatar_svg,
+        'avatar_face', v_guest.avatar_face,
+        'avatar_selections', v_guest.avatar_selections,
+        'stats', v_guest.stats,
+        'country', v_guest.country,
+        'birth_year', v_guest.birth_year,
+        'rating', v_guest.elo,
+        'matches', v_guest.matches,
+        'wins', v_guest.wins,
+        'losses', v_guest.losses,
+        'ties', v_guest.ties,
+        'tier', COALESCE(v_match.card_pool_tier, v_room.tier, 6)
+      )
+    );
+  END IF;
+
+  RETURN jsonb_build_object('status', 'open', 'expires_at', v_room.expires_at);
+END;
+$func$;
+
+CREATE OR REPLACE FUNCTION public.h2h_cancel_room(
+  p_player_id uuid,
+  p_room_id uuid
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $func$
+DECLARE
+  v_auth_uid uuid := auth.uid();
+BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'h2h_cancel_room: not authenticated';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id AND auth_uid = v_auth_uid) THEN
+    RAISE EXCEPTION 'h2h_cancel_room: unauthorized player_id';
+  END IF;
+  UPDATE h2h_rooms
+  SET status = 'cancelled'
+  WHERE id = p_room_id AND host_id = p_player_id AND status = 'open';
+  RETURN jsonb_build_object('ok', true);
+END;
+$func$;
+
+CREATE OR REPLACE FUNCTION public.h2h_list_incoming_challenges(p_player_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $func$
+DECLARE
+  v_auth_uid uuid := auth.uid();
+  v_rows jsonb := '[]'::jsonb;
+BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'h2h_list_incoming_challenges: not authenticated';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id AND auth_uid = v_auth_uid) THEN
+    RAISE EXCEPTION 'h2h_list_incoming_challenges: unauthorized player_id';
+  END IF;
+
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'room_id', r.id,
+    'room_code', r.room_code,
+    'is_ranked', r.is_ranked,
+    'expires_at', r.expires_at,
+    'created_at', r.created_at,
+    'host', jsonb_build_object(
+      'player_id', p.player_id,
+      'handle', p.handle,
+      'country', p.country,
+      'avatar_face', p.avatar_face,
+      'avatar_svg', p.avatar_svg,
+      'rating', COALESCE((p.stats->'h2h'->>'rating')::int, cr.elo, 1200)
+    )
+  ) ORDER BY r.created_at DESC), '[]'::jsonb)
+  INTO v_rows
+  FROM h2h_rooms r
+  JOIN profiles p ON p.player_id = r.host_id
+  LEFT JOIN competitive_ratings cr ON cr.profile_id = p.player_id
+  WHERE r.target_player_id = p_player_id
+    AND r.status = 'open'
+    AND r.expires_at > now()
+    AND COALESCE(p.frozen, false) = false
+    AND NOT EXISTS (
+      SELECT 1 FROM friend_links fl
+      WHERE fl.status = 'blocked'
+        AND LEAST(fl.requester_id, fl.addressee_id) = LEAST(p_player_id, r.host_id)
+        AND GREATEST(fl.requester_id, fl.addressee_id) = GREATEST(p_player_id, r.host_id)
+    );
+
+  RETURN jsonb_build_object('challenges', v_rows);
+END;
+$func$;
+
+CREATE OR REPLACE FUNCTION public.h2h_respond_challenge(
+  p_player_id uuid,
+  p_room_id uuid,
+  p_action text,
+  p_tier int DEFAULT 6,
+  p_card_sequence jsonb DEFAULT NULL
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $func$
+DECLARE
+  v_auth_uid uuid := auth.uid();
+  v_room h2h_rooms%ROWTYPE;
+BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'h2h_respond_challenge: not authenticated';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id AND auth_uid = v_auth_uid) THEN
+    RAISE EXCEPTION 'h2h_respond_challenge: unauthorized player_id';
+  END IF;
+
+  SELECT * INTO v_room
+  FROM h2h_rooms
+  WHERE id = p_room_id AND target_player_id = p_player_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('status', 'error', 'error', 'not_found');
+  END IF;
+
+  IF p_action = 'decline' THEN
+    IF v_room.status = 'open' THEN
+      UPDATE h2h_rooms SET status = 'declined' WHERE id = v_room.id;
+    END IF;
+    RETURN jsonb_build_object('status', 'declined');
+  ELSIF p_action = 'accept' THEN
+    RETURN public.h2h_join_room(p_player_id, v_room.room_code, p_tier, p_card_sequence);
+  END IF;
+
+  RETURN jsonb_build_object('status', 'error', 'error', 'unknown_action');
+END;
+$func$;
+
+-- 11. Update h2h_finalize_match (preserves 3-arg signature; honors is_ranked & 3/day per-pair ELO cap)
+CREATE OR REPLACE FUNCTION public.h2h_finalize_match(
+  p_match_id uuid,
+  p_player_id uuid,
+  p_final_score numeric
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $func$
+DECLARE
+  v_auth_uid uuid := auth.uid();
+  v_match matches%ROWTYPE;
+  v_existing_result match_results%ROWTYPE;
+  v_me match_players%ROWTYPE;
+  v_opp match_players%ROWTYPE;
+  v_my_elo int := 1200;
+  v_my_matches int := 0;
+  v_my_wins int := 0;
+  v_my_losses int := 0;
+  v_my_ties int := 0;
+  v_opp_elo int := 1200;
+  v_opp_matches int := 0;
+  v_opp_wins int := 0;
+  v_opp_losses int := 0;
+  v_opp_ties int := 0;
+  v_opp_correct int := 0;
+  v_opp_wrong int := 0;
+  v_my_score_float float;
+  v_my_expected float;
+  v_my_delta int := 0;
+  v_opp_delta int := 0;
+  v_winner uuid := NULL;
+  v_outcome text;
+  v_is_ranked boolean := true;
+  v_pair_ranked_24h int := 0;
+  v_elo_capped boolean := false;
+BEGIN
+  IF v_auth_uid IS NULL THEN
+    RAISE EXCEPTION 'h2h_finalize_match: not authenticated';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE player_id = p_player_id AND auth_uid = v_auth_uid) THEN
+    RAISE EXCEPTION 'h2h_finalize_match: unauthorized player_id';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM match_players WHERE match_id = p_match_id AND profile_id = p_player_id) THEN
+    RAISE EXCEPTION 'h2h_finalize_match: not a participant in match';
+  END IF;
+
+  UPDATE match_players
+  SET final_score = p_final_score,
+      finished_at = COALESCE(finished_at, now())
+  WHERE match_id = p_match_id AND profile_id = p_player_id;
+
+  SELECT * INTO v_match FROM matches WHERE id = p_match_id FOR UPDATE;
+  SELECT * INTO v_me FROM match_players WHERE match_id = p_match_id AND profile_id = p_player_id;
+  SELECT * INTO v_opp FROM match_players WHERE match_id = p_match_id AND profile_id != p_player_id;
+
+  v_is_ranked := COALESCE(v_match.is_ranked, true);
+
+  SELECT
+    COALESCE(cr.elo, (p.stats->'h2h'->>'rating')::int, NULLIF(p.cr, 0), 1200),
+    COALESCE(cr.matches_played, (p.stats->'h2h'->>'matches')::int, ((COALESCE((p.stats->'h2h'->>'wins')::int, 0) + COALESCE((p.stats->'h2h'->>'losses')::int, 0) + COALESCE((p.stats->'h2h'->>'ties')::int, 0))), 0),
+    COALESCE(cr.wins, (p.stats->'h2h'->>'wins')::int, 0),
+    COALESCE(cr.losses, (p.stats->'h2h'->>'losses')::int, 0),
+    COALESCE(cr.ties, (p.stats->'h2h'->>'ties')::int, 0)
+  INTO v_my_elo, v_my_matches, v_my_wins, v_my_losses, v_my_ties
+  FROM profiles p
+  LEFT JOIN competitive_ratings cr ON cr.profile_id = p.player_id
+  WHERE p.player_id = p_player_id;
+
+  SELECT
+    COALESCE(cr.elo, (p.stats->'h2h'->>'rating')::int, NULLIF(p.cr, 0), 1200),
+    COALESCE(cr.matches_played, (p.stats->'h2h'->>'matches')::int, ((COALESCE((p.stats->'h2h'->>'wins')::int, 0) + COALESCE((p.stats->'h2h'->>'losses')::int, 0) + COALESCE((p.stats->'h2h'->>'ties')::int, 0))), 0),
+    COALESCE(cr.wins, (p.stats->'h2h'->>'wins')::int, 0),
+    COALESCE(cr.losses, (p.stats->'h2h'->>'losses')::int, 0),
+    COALESCE(cr.ties, (p.stats->'h2h'->>'ties')::int, 0)
+  INTO v_opp_elo, v_opp_matches, v_opp_wins, v_opp_losses, v_opp_ties
+  FROM profiles p
+  LEFT JOIN competitive_ratings cr ON cr.profile_id = p.player_id
+  WHERE p.player_id = v_opp.profile_id;
+
+  SELECT
+    COALESCE(count(*) FILTER (WHERE correct = true), 0),
+    COALESCE(count(*) FILTER (WHERE correct = false), 0)
+  INTO v_opp_correct, v_opp_wrong
+  FROM match_events
+  WHERE match_id = p_match_id AND profile_id = v_opp.profile_id;
+
+  IF v_match.status = 'finished' THEN
+    SELECT * INTO v_existing_result
+    FROM match_results
+    WHERE match_id = p_match_id AND profile_id = p_player_id
+    LIMIT 1;
+
+    IF FOUND THEN
+      RETURN jsonb_build_object(
+        'outcome', v_existing_result.outcome,
+        'is_ranked', v_is_ranked,
+        'elo_capped', (v_is_ranked AND v_existing_result.score_delta = 0 AND v_existing_result.outcome <> 'tie'),
+        'elo_before', v_existing_result.elo_before,
+        'elo_after', v_existing_result.elo_after,
+        'rating_delta', v_existing_result.score_delta,
+        'your_score', v_existing_result.score,
+        'opp_score', v_existing_result.opponent_score,
+        'opp_elo_before', v_opp_elo,
+        'opp_elo_after', v_opp_elo,
+        'opp_rating_delta', -v_existing_result.score_delta,
+        'opp_matches', v_opp_matches,
+        'opp_wins', v_opp_wins,
+        'opp_losses', v_opp_losses,
+        'opp_ties', v_opp_ties,
+        'opp_correct', v_opp_correct,
+        'opp_wrong', v_opp_wrong
+      );
+    END IF;
+  END IF;
+
+  IF v_me.final_score > v_opp.final_score THEN
+    v_winner := p_player_id;
+    v_my_score_float := 1.0;
+    v_outcome := 'win';
+  ELSIF v_me.final_score < v_opp.final_score THEN
+    v_winner := v_opp.profile_id;
+    v_my_score_float := 0.0;
+    v_outcome := 'loss';
+  ELSE
+    v_winner := NULL;
+    v_my_score_float := 0.5;
+    v_outcome := 'tie';
+  END IF;
+
+  -- Server-side anti-boosting cap: max 3 ranked ELO matches per 24h between the exact same pair
+  IF v_is_ranked AND v_opp.profile_id IS NOT NULL THEN
+    SELECT count(*) INTO v_pair_ranked_24h
+    FROM matches m
+    JOIN match_players mp1 ON mp1.match_id = m.id AND mp1.profile_id = p_player_id
+    JOIN match_players mp2 ON mp2.match_id = m.id AND mp2.profile_id = v_opp.profile_id
+    WHERE m.id <> p_match_id
+      AND m.status = 'finished'
+      AND COALESCE(m.is_ranked, true) = true
+      AND m.ended_at > now() - interval '24 hours';
+
+    IF v_pair_ranked_24h >= 3 THEN
+      v_elo_capped := true;
+    END IF;
+  END IF;
+
+  IF v_is_ranked AND NOT v_elo_capped THEN
+    v_my_expected := 1.0 / (1.0 + power(10.0, (v_opp_elo - v_my_elo)::float / 400.0));
+    v_my_delta := round(32.0 * (v_my_score_float - v_my_expected))::int;
+    v_opp_delta := -v_my_delta;
+  ELSE
+    v_my_delta := 0;
+    v_opp_delta := 0;
+  END IF;
+
+  UPDATE matches
+  SET status = 'finished', ended_at = now(), winner_id = v_winner
+  WHERE id = p_match_id;
+
+  UPDATE match_players
+  SET finished_at = COALESCE(finished_at, now())
+  WHERE match_id = p_match_id AND profile_id = v_opp.profile_id AND finished_at IS NULL;
+
+  IF v_is_ranked AND NOT v_elo_capped THEN
+    INSERT INTO competitive_ratings (profile_id, elo, updated_at, matches_played, wins, losses, ties)
+    VALUES (
+      p_player_id,
+      GREATEST(0, v_my_elo + v_my_delta),
+      now(),
+      v_my_matches + 1,
+      v_my_wins + (CASE WHEN v_outcome = 'win' THEN 1 ELSE 0 END),
+      v_my_losses + (CASE WHEN v_outcome = 'loss' THEN 1 ELSE 0 END),
+      v_my_ties + (CASE WHEN v_outcome = 'tie' THEN 1 ELSE 0 END)
+    )
+    ON CONFLICT (profile_id) DO UPDATE SET
+      elo = GREATEST(0, competitive_ratings.elo + v_my_delta),
+      updated_at = now(),
+      matches_played = COALESCE(competitive_ratings.matches_played, v_my_matches) + 1,
+      wins = COALESCE(competitive_ratings.wins, v_my_wins) + (CASE WHEN v_outcome = 'win' THEN 1 ELSE 0 END),
+      losses = COALESCE(competitive_ratings.losses, v_my_losses) + (CASE WHEN v_outcome = 'loss' THEN 1 ELSE 0 END),
+      ties = COALESCE(competitive_ratings.ties, v_my_ties) + (CASE WHEN v_outcome = 'tie' THEN 1 ELSE 0 END);
+
+    INSERT INTO competitive_ratings (profile_id, elo, updated_at, matches_played, wins, losses, ties)
+    VALUES (
+      v_opp.profile_id,
+      GREATEST(0, v_opp_elo + v_opp_delta),
+      now(),
+      v_opp_matches + 1,
+      v_opp_wins + (CASE WHEN v_outcome = 'loss' THEN 1 ELSE 0 END),
+      v_opp_losses + (CASE WHEN v_outcome = 'win' THEN 1 ELSE 0 END),
+      v_opp_ties + (CASE WHEN v_outcome = 'tie' THEN 1 ELSE 0 END)
+    )
+    ON CONFLICT (profile_id) DO UPDATE SET
+      elo = GREATEST(0, competitive_ratings.elo + v_opp_delta),
+      updated_at = now(),
+      matches_played = COALESCE(competitive_ratings.matches_played, v_opp_matches) + 1,
+      wins = COALESCE(competitive_ratings.wins, v_opp_wins) + (CASE WHEN v_outcome = 'loss' THEN 1 ELSE 0 END),
+      losses = COALESCE(competitive_ratings.losses, v_opp_losses) + (CASE WHEN v_outcome = 'win' THEN 1 ELSE 0 END),
+      ties = COALESCE(competitive_ratings.ties, v_opp_ties) + (CASE WHEN v_outcome = 'tie' THEN 1 ELSE 0 END);
+
+    UPDATE profiles
+    SET stats = jsonb_set(
+      COALESCE(stats, '{}'::jsonb),
+      '{h2h}',
+      COALESCE(stats->'h2h', '{}'::jsonb) || jsonb_build_object(
+        'rating', GREATEST(0, v_my_elo + v_my_delta),
+        'matches', v_my_matches + 1,
+        'wins', v_my_wins + (CASE WHEN v_outcome = 'win' THEN 1 ELSE 0 END),
+        'losses', v_my_losses + (CASE WHEN v_outcome = 'loss' THEN 1 ELSE 0 END),
+        'ties', v_my_ties + (CASE WHEN v_outcome = 'tie' THEN 1 ELSE 0 END)
+      ),
+      true
+    )
+    WHERE player_id = p_player_id;
+
+    UPDATE profiles
+    SET stats = jsonb_set(
+      COALESCE(stats, '{}'::jsonb),
+      '{h2h}',
+      COALESCE(stats->'h2h', '{}'::jsonb) || jsonb_build_object(
+        'rating', GREATEST(0, v_opp_elo + v_opp_delta),
+        'matches', v_opp_matches + 1,
+        'wins', v_opp_wins + (CASE WHEN v_outcome = 'loss' THEN 1 ELSE 0 END),
+        'losses', v_opp_losses + (CASE WHEN v_outcome = 'win' THEN 1 ELSE 0 END),
+        'ties', v_opp_ties + (CASE WHEN v_outcome = 'tie' THEN 1 ELSE 0 END)
+      ),
+      true
+    )
+    WHERE player_id = v_opp.profile_id;
+  END IF;
+
+  INSERT INTO match_results (match_id, profile_id, outcome, elo_before, elo_after, score_delta, score, opponent_score)
+  VALUES
+    (p_match_id, p_player_id, v_outcome, v_my_elo, GREATEST(0, v_my_elo + v_my_delta), v_my_delta, v_me.final_score, v_opp.final_score),
+    (p_match_id, v_opp.profile_id, CASE WHEN v_outcome = 'win' THEN 'loss' WHEN v_outcome = 'loss' THEN 'win' ELSE 'tie' END, v_opp_elo, GREATEST(0, v_opp_elo + v_opp_delta), v_opp_delta, v_opp.final_score, v_me.final_score);
+
+  RETURN jsonb_build_object(
+    'outcome', v_outcome,
+    'is_ranked', (v_is_ranked AND NOT v_elo_capped),
+    'elo_capped', v_elo_capped,
+    'elo_before', v_my_elo,
+    'elo_after', GREATEST(0, v_my_elo + v_my_delta),
+    'rating_delta', v_my_delta,
+    'your_score', v_me.final_score,
+    'opp_score', v_opp.final_score,
+    'opp_elo_before', v_opp_elo,
+    'opp_elo_after', GREATEST(0, v_opp_elo + v_opp_delta),
+    'opp_rating_delta', v_opp_delta,
+    'opp_matches', CASE WHEN (v_is_ranked AND NOT v_elo_capped) THEN v_opp_matches + 1 ELSE v_opp_matches END,
+    'opp_wins', CASE WHEN (v_is_ranked AND NOT v_elo_capped) THEN v_opp_wins + (CASE WHEN v_outcome = 'loss' THEN 1 ELSE 0 END) ELSE v_opp_wins END,
+    'opp_losses', CASE WHEN (v_is_ranked AND NOT v_elo_capped) THEN v_opp_losses + (CASE WHEN v_outcome = 'win' THEN 1 ELSE 0 END) ELSE v_opp_losses END,
+    'opp_ties', CASE WHEN (v_is_ranked AND NOT v_elo_capped) THEN v_opp_ties + (CASE WHEN v_outcome = 'tie' THEN 1 ELSE 0 END) ELSE v_opp_ties END,
+    'opp_correct', v_opp_correct,
+    'opp_wrong', v_opp_wrong
+  );
+END;
+$func$;
+
+GRANT EXECUTE ON FUNCTION public.friend_get_my_code(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.friend_rotate_code(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.friend_set_privacy(uuid, boolean) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.friend_lookup_player(uuid, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.friend_get_player_card(uuid, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.friend_request(uuid, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.friend_respond(uuid, uuid, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.friend_list(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.h2h_create_room(uuid, boolean, int, jsonb, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.h2h_join_room(uuid, text, int, jsonb) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.h2h_poll_room(uuid, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.h2h_cancel_room(uuid, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.h2h_list_incoming_challenges(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.h2h_respond_challenge(uuid, uuid, text, int, jsonb) TO authenticated;
+
 -- NOTE: Post-production cutover (run AFTER pre-beta6 is merged to main AND an admin Supabase user has is_admin=true):
 -- DROP POLICY IF EXISTS "Anyone can read profiles" ON profiles;
 -- CREATE POLICY "Users can read own profile" ON profiles FOR SELECT USING (auth_uid = auth.uid() OR auth_is_admin());
@@ -1427,5 +2769,6 @@ $func$;
 -- DROP POLICY IF EXISTS "Allow anon insert player_notes" ON player_notes;
 -- DROP POLICY IF EXISTS "Allow anon update player_notes" ON player_notes;
 -- DROP POLICY IF EXISTS "Allow anon delete player_notes" ON player_notes;
+
 
 

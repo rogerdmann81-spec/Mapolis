@@ -473,6 +473,7 @@ function renderAdmin() {
     + '<button class="admin-tab' + (_adminTab==='profiles'?' active':'') + '" onclick="adminSetTab(\'profiles\')">👥 Profiles</button>'
     + '<button class="admin-tab' + (_adminTab==='analytics'?' active':'') + '" onclick="adminSetTab(\'analytics\')">📊 Analytics</button>'
     + '<button class="admin-tab' + (_adminTab==='notes'?' active':'') + '" onclick="adminSetTab(\'notes\')">📝 Notes' + (function(){ try { var n=getNotes().filter(function(x){return !x.read;}); return n.length ? '<span class="nsg-note-count">'+n.length+'</span>' : ''; } catch(e){ return ''; } })() + '</button>'
+    + '<button class="admin-tab' + (_adminTab==='genesis'?' active':'') + '" onclick="adminSetTab(\'genesis\')">📖 Genesis</button>'
     + '</div>'
     + '<div class="admin-content" id="admin-content">';
 
@@ -480,6 +481,8 @@ function renderAdmin() {
     html += renderAdminProfilesList(sorted, profiles);
   } else if (_adminTab === 'notes') {
     html += renderAdminNotes();
+  } else if (_adminTab === 'genesis') {
+    html += renderAdminGenesis();
   } else {
     html += renderAdminAnalytics(profiles);
   }
@@ -489,6 +492,8 @@ function renderAdmin() {
   if (_adminTab === 'analytics') renderAdminCharts(profiles);
 
   if (_adminTab === 'notes') wireAdminNotes();
+
+  if (_adminTab === 'genesis') wireAdminGenesis();
 
   root.querySelectorAll('.admin-prof-row').forEach(function(row) {
     row.addEventListener('click', function() {
@@ -505,7 +510,264 @@ async function adminSetTab(tab) {
   if (tab === 'notes') {
     await fetchAdminCloudNotes();
     if (_adminTab === 'notes') renderAdmin();
+  } else if (tab === 'genesis') {
+    await loadAdminGenesisData();
+    if (_adminTab === 'genesis') renderAdmin();
   }
+}
+
+// ── Admin Genesis Cards Review Workflow ─────────────────────────────────────
+var GENESIS_EDITS_KEY = 'mapolis_genesis_review_edits';
+var _adminGenesisData = null;
+var _adminGenesisLoading = false;
+var _adminGenesisFilter = { continent: 'all', status: 'all', priorityOnly: false, search: '' };
+var _adminGenesisSelectedId = null;
+
+function _getGenesisLocalEdits() {
+  try { return JSON.parse(localStorage.getItem(GENESIS_EDITS_KEY) || '{}') || {}; }
+  catch (_) { return {}; }
+}
+
+function _saveGenesisLocalEdits(edits) {
+  try { localStorage.setItem(GENESIS_EDITS_KEY, JSON.stringify(edits)); } catch (_) {}
+}
+
+async function loadAdminGenesisData() {
+  if (_adminGenesisData || _adminGenesisLoading) return _adminGenesisData;
+  _adminGenesisLoading = true;
+  try {
+    var resp = await fetch('/data/genesis-cards.json');
+    if (resp.ok) {
+      var raw = await resp.json();
+      var edits = _getGenesisLocalEdits();
+      if (raw && Array.isArray(raw.cards)) {
+        raw.cards = raw.cards.map(function(card) {
+          return edits[card.id] ? Object.assign({}, card, edits[card.id]) : card;
+        });
+      }
+      _adminGenesisData = raw;
+    }
+  } catch (e) {
+    console.warn('[Admin Genesis] load error:', e);
+  }
+  _adminGenesisLoading = false;
+  return _adminGenesisData;
+}
+
+function _escGen(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function _findAdminGenesisCard(cid) {
+  if (!_adminGenesisData || !Array.isArray(_adminGenesisData.cards)) return null;
+  return _adminGenesisData.cards.find(function(c) { return c.id === cid; }) || null;
+}
+
+function renderAdminGenesis() {
+  if (!_adminGenesisData || !Array.isArray(_adminGenesisData.cards)) {
+    return '<div style="text-align:center;padding:40px 20px;color:var(--dim);">Loading 200 Country Genesis Cards…</div>';
+  }
+  var allCards = _adminGenesisData.cards;
+  var approvedCount = allCards.filter(function(c) { return c.reviewStatus === 'approved'; }).length;
+  var priorityRem = allCards.filter(function(c) { return c.sensitivity === 'priority_review' && c.reviewStatus !== 'approved'; }).length;
+
+  var filtered = allCards.filter(function(c) {
+    if (_adminGenesisFilter.continent !== 'all' && c.continent !== _adminGenesisFilter.continent) return false;
+    if (_adminGenesisFilter.status !== 'all' && (c.reviewStatus || 'draft') !== _adminGenesisFilter.status) return false;
+    if (_adminGenesisFilter.priorityOnly && c.sensitivity !== 'priority_review') return false;
+    var q = (_adminGenesisFilter.search || '').trim().toLowerCase();
+    if (q) {
+      var hay = ((c.name || '') + ' ' + (c.capital || '') + ' ' + (c.id || '')).toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  }).sort(function(a, b) {
+    var pa = a.sensitivity === 'priority_review' ? 0 : 1;
+    var pb = b.sensitivity === 'priority_review' ? 0 : 1;
+    if (pa !== pb) return pa - pb;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+
+  var sel = _adminGenesisSelectedId ? _findAdminGenesisCard(_adminGenesisSelectedId) : null;
+  if (!sel) sel = filtered[0] || null;
+
+  var html = '<div style="padding:4px 0 24px;">';
+
+  // Progress bar & export actions
+  html += '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px;">'
+    + '<div style="display:flex;gap:18px;flex-wrap:wrap;">'
+    + '  <div><div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;">Approved</div><div style="font-family:\'Space Mono\',monospace;font-size:18px;font-weight:700;color:#4ade80;">' + approvedCount + ' / ' + allCards.length + '</div></div>'
+    + '  <div><div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;">Priority Remaining</div><div style="font-family:\'Space Mono\',monospace;font-size:18px;font-weight:700;color:#fbbf24;">' + priorityRem + '</div></div>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+    + '  <button id="gen-export-btn" style="background:rgba(59,110,248,.22);border:1px solid rgba(91,143,255,.5);color:#fff;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;">⬇ Export genesis-cards.json</button>'
+    + '</div>'
+    + '</div>';
+
+  // Filters
+  html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">'
+    + '<input id="gen-search" type="search" value="' + _escGen(_adminGenesisFilter.search) + '" placeholder="Search country or capital…" style="flex:1;min-width:160px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-deep);color:#fff;font-size:12px;">'
+    + '<select id="gen-cont" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-deep);color:#fff;font-size:12px;">'
+    + '  <option value="all"' + (_adminGenesisFilter.continent==='all'?' selected':'') + '>All Continents</option>'
+    + '  <option value="europe"' + (_adminGenesisFilter.continent==='europe'?' selected':'') + '>Europe</option>'
+    + '  <option value="africa"' + (_adminGenesisFilter.continent==='africa'?' selected':'') + '>Africa</option>'
+    + '  <option value="asia"' + (_adminGenesisFilter.continent==='asia'?' selected':'') + '>Asia</option>'
+    + '  <option value="north-america"' + (_adminGenesisFilter.continent==='north-america'?' selected':'') + '>North America</option>'
+    + '  <option value="south-america"' + (_adminGenesisFilter.continent==='south-america'?' selected':'') + '>South America</option>'
+    + '  <option value="oceania"' + (_adminGenesisFilter.continent==='oceania'?' selected':'') + '>Oceania</option>'
+    + '</select>'
+    + '<select id="gen-status" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-deep);color:#fff;font-size:12px;">'
+    + '  <option value="all"' + (_adminGenesisFilter.status==='all'?' selected':'') + '>All Statuses</option>'
+    + '  <option value="draft"' + (_adminGenesisFilter.status==='draft'?' selected':'') + '>Draft</option>'
+    + '  <option value="approved"' + (_adminGenesisFilter.status==='approved'?' selected':'') + '>Approved</option>'
+    + '</select>'
+    + '<label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#fde68a;cursor:pointer;padding:0 6px;">'
+    + '  <input id="gen-prio" type="checkbox"' + (_adminGenesisFilter.priorityOnly ? ' checked' : '') + '> Priority Review Only'
+    + '</label>'
+    + '</div>';
+
+  // Split view: country list + inline editor
+  html += '<div style="display:grid;grid-template-columns:minmax(200px,260px) 1fr;gap:12px;align-items:start;">';
+
+  // Left list
+  html += '<div style="max-height:540px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.02);">';
+  if (!filtered.length) {
+    html += '<div style="padding:20px;text-align:center;color:var(--dim);font-size:12px;">No matching entries.</div>';
+  } else {
+    filtered.forEach(function(c) {
+      var isSel = sel && sel.id === c.id;
+      var statusIcon = c.reviewStatus === 'approved' ? '✅' : (c.sensitivity === 'priority_review' ? '⚠️' : '📝');
+      html += '<button class="gen-list-row" data-cid="' + _escGen(c.id) + '" style="width:100%;text-align:left;padding:9px 11px;border:none;border-bottom:1px solid rgba(255,255,255,.06);background:' + (isSel ? 'rgba(59,110,248,.22)' : 'transparent') + ';color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;">'
+        + '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _escGen(c.flag || '') + ' ' + _escGen(c.name) + '</span>'
+        + '<span style="flex-shrink:0;font-size:11px;">' + statusIcon + '</span>'
+        + '</button>';
+    });
+  }
+  html += '</div>';
+
+  // Right editor
+  html += '<div style="border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.03);padding:14px;">';
+  if (!sel) {
+    html += '<div style="padding:30px;text-align:center;color:var(--dim);font-size:12px;">Select a country to review.</div>';
+  } else {
+    var _contLabels = { europe:'Europe', africa:'Africa', asia:'Asia', 'north-america':'North America', 'south-america':'South America', oceania:'Oceania' };
+    var _contPretty = _contLabels[sel.continent] || sel.continent || '';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">'
+      + '<div>'
+      + '  <div style="font-family:\'Fredoka One\',sans-serif;font-size:20px;color:#fff;">' + _escGen(sel.flag || '') + ' ' + _escGen(sel.name) + '</div>'
+      + '  <div style="font-size:11px;color:var(--dim);">' + _escGen(_contPretty) + ' · Capital: ' + _escGen(sel.capital || '') + ' · Status: <strong style="color:' + (sel.reviewStatus==='approved'?'#4ade80':'#fbbf24') + ';">' + _escGen(sel.reviewStatus || 'draft') + '</strong>' + (sel.sensitivity==='priority_review' ? ' · ⚠️ Priority Editorial Review' : '') + '</div>'
+      + '</div>'
+      + '<button id="gen-approve-btn" data-cid="' + _escGen(sel.id) + '" style="padding:8px 14px;border-radius:9px;border:none;background:' + (sel.reviewStatus==='approved' ? 'rgba(255,255,255,.12)' : '#22c55e') + ';color:' + (sel.reviewStatus==='approved' ? '#cbd5e1' : '#04120a') + ';font-size:12px;font-weight:800;cursor:pointer;">' + (sel.reviewStatus==='approved' ? 'Approved ✓ (Mark Draft)' : '✓ Mark Approved') + '</button>'
+      + '</div>';
+
+    html += '<div style="display:grid;grid-template-columns:120px 1fr 1fr;gap:8px;margin-bottom:10px;">'
+      + '<label style="font-size:11px;color:var(--dim);">Modern Year<input id="gen-ed-year" value="' + _escGen(sel.modernYear || '') + '" style="width:100%;margin-top:3px;padding:7px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg-deep);color:#fff;font-family:\'Space Mono\',monospace;font-size:12px;"></label>'
+      + '<label style="font-size:11px;color:var(--dim);">Origin Type<select id="gen-ed-origin" style="width:100%;margin-top:3px;padding:7px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg-deep);color:#fff;font-family:\'Nunito\',sans-serif;font-size:12px;">'
+      + ['continuity','unification','dissolution','decolonization','partition','treaty','federation'].map(function(ot){
+          return '<option value="' + ot + '"' + (sel.originType===ot?' selected':'') + '>' + ot + '</option>';
+        }).join('')
+      + '</select></label>'
+      + '<label style="font-size:11px;color:var(--dim);">Origin Label<input id="gen-ed-origin-lbl" value="' + _escGen(sel.originLabel || '') + '" style="width:100%;margin-top:3px;padding:7px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg-deep);color:#fff;font-family:\'Nunito\',sans-serif;font-size:12px;"></label>'
+      + '</div>';
+
+    html += '<label style="display:block;font-size:11px;color:var(--dim);margin-bottom:10px;">Border Story (2–3 sentences, 6th–8th grade reading level)<textarea id="gen-ed-story" rows="4" style="width:100%;margin-top:3px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-deep);color:#fff;font-family:\'Nunito\',sans-serif;font-size:13px;line-height:1.5;">' + _escGen(sel.story || '') + '</textarea></label>';
+
+    html += '<label style="display:block;font-size:11px;color:var(--dim);margin-bottom:10px;">Key Turning Point<input id="gen-ed-tp" value="' + _escGen(sel.turningPoint || '') + '" style="width:100%;margin-top:3px;padding:7px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg-deep);color:#fff;font-family:\'Nunito\',sans-serif;font-size:13px;"></label>';
+
+    html += '<label style="display:block;font-size:11px;color:var(--dim);margin-bottom:12px;">Contested Border Note (optional)<textarea id="gen-ed-contested" rows="2" style="width:100%;margin-top:3px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-deep);color:#fff;font-family:\'Nunito\',sans-serif;font-size:13px;line-height:1.45;">' + _escGen(sel.contestedNote || '') + '</textarea></label>';
+
+    html += '<div style="display:flex;justify-content:flex-end;gap:8px;">'
+      + '<button id="gen-save-btn" data-cid="' + _escGen(sel.id) + '" style="padding:8px 16px;border-radius:9px;border:1px solid rgba(91,143,255,.5);background:rgba(59,110,248,.22);color:#fff;font-size:12px;font-weight:700;cursor:pointer;">Save Edits</button>'
+      + '</div>';
+  }
+  html += '</div></div></div>';
+  return html;
+}
+
+function wireAdminGenesis() {
+  var root = document.getElementById('admin-content');
+  if (!root || !_adminGenesisData) return;
+
+  function persistCardEdit(cid, patch) {
+    var card = _findAdminGenesisCard(cid);
+    if (!card) return;
+    Object.assign(card, patch);
+    var edits = _getGenesisLocalEdits();
+    edits[cid] = Object.assign({}, edits[cid] || {}, patch);
+    _saveGenesisLocalEdits(edits);
+  }
+
+  function readEditorPatch() {
+    var contested = (root.querySelector('#gen-ed-contested')?.value || '').trim();
+    return {
+      modernYear: (root.querySelector('#gen-ed-year')?.value || '').trim(),
+      originType: root.querySelector('#gen-ed-origin')?.value || 'treaty',
+      originLabel: (root.querySelector('#gen-ed-origin-lbl')?.value || '').trim(),
+      story: (root.querySelector('#gen-ed-story')?.value || '').trim(),
+      turningPoint: (root.querySelector('#gen-ed-tp')?.value || '').trim(),
+      contestedNote: contested
+    };
+  }
+
+  var searchEl = root.querySelector('#gen-search');
+  if (searchEl) searchEl.addEventListener('input', function() {
+    _adminGenesisFilter.search = searchEl.value;
+    var pos = searchEl.selectionStart;
+    renderAdmin();
+    var next = document.getElementById('gen-search');
+    if (next) { next.focus(); try { next.setSelectionRange(pos, pos); } catch(_){} }
+  });
+  var contEl = root.querySelector('#gen-cont');
+  if (contEl) contEl.addEventListener('change', function() { _adminGenesisFilter.continent = contEl.value; renderAdmin(); });
+  var statEl = root.querySelector('#gen-status');
+  if (statEl) statEl.addEventListener('change', function() { _adminGenesisFilter.status = statEl.value; renderAdmin(); });
+  var prioEl = root.querySelector('#gen-prio');
+  if (prioEl) prioEl.addEventListener('change', function() { _adminGenesisFilter.priorityOnly = prioEl.checked; renderAdmin(); });
+
+  root.querySelectorAll('.gen-list-row').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      _adminGenesisSelectedId = btn.getAttribute('data-cid');
+      renderAdmin();
+    });
+  });
+
+  var saveBtn = root.querySelector('#gen-save-btn');
+  if (saveBtn) saveBtn.addEventListener('click', function() {
+    var cid = saveBtn.getAttribute('data-cid');
+    var cur = _findAdminGenesisCard(cid);
+    persistCardEdit(cid, readEditorPatch());
+    if (typeof showToast === 'function' && cur) showToast('Saved edits for ' + cur.name + ' ✓');
+    renderAdmin();
+  });
+
+  var approveBtn = root.querySelector('#gen-approve-btn');
+  if (approveBtn) approveBtn.addEventListener('click', function() {
+    var cid = approveBtn.getAttribute('data-cid');
+    var cur = _findAdminGenesisCard(cid);
+    var nextStatus = (cur && cur.reviewStatus === 'approved') ? 'draft' : 'approved';
+    var patch = readEditorPatch();
+    patch.reviewStatus = nextStatus;
+    persistCardEdit(cid, patch);
+    if (typeof showToast === 'function' && cur) showToast(cur.name + (nextStatus === 'approved' ? ' marked Approved ✓' : ' moved back to Draft'));
+    renderAdmin();
+  });
+
+  var expBtn = root.querySelector('#gen-export-btn');
+  if (expBtn) expBtn.addEventListener('click', function() {
+    var out = Object.assign({}, _adminGenesisData, { exportedAt: new Date().toISOString() });
+    var blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'genesis-cards.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+    if (typeof showToast === 'function') showToast('Exported genesis-cards.json ✓');
+  });
 }
 function adminSignOut() {
   var modal = document.getElementById('admin-pw-modal');

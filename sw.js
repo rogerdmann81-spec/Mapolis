@@ -1,7 +1,7 @@
 // Mapolis Service Worker - Offline Asset Pre-caching
-// Version: mapolis-v4-pre-beta6
+// Version: mapolis-v5-pre-beta6
 
-const CACHE_NAME = 'mapolis-cache-v4';
+const CACHE_NAME = 'mapolis-cache-v5';
 
 // Core assets required for 100% offline solo gameplay on classroom tablets
 const PRECACHE_ASSETS = [
@@ -13,9 +13,11 @@ const PRECACHE_ASSETS = [
   '/lib/topojson.min.js',
   '/assets/mapolis-globe.js',
   '/assets/shared.js',
+  '/assets/features-prebeta6.js',
   '/env.js',
-  // Required TopoJSON & Game Data for Solo Mode
+  // Required TopoJSON & Game Data for Solo Mode & World Atlas
   '/data/countries-50m.json',
+  '/data/genesis-cards.json',
   '/map-data.js',
   '/avatar-assets.js',
   // Manifest, icons, and Title/Solidarity imagery
