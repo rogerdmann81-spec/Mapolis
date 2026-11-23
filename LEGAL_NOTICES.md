@@ -17,14 +17,14 @@ It explicitly cites the statutory provisions, permissive open-source license ter
 
 ## 2. Open-Source Asset Register & License Provisions
 
-### 2.1 Microsoft Fluent Emoji 3D (Animal Preserve & Achievement Badges)
-* **Author / Copyright Holder**: Microsoft Corporation
-* **Package Origin**: `@lobehub/fluent-emoji-3d` (derived from `microsoft/fluentui-emoji`)
-* **Local Storage Path**: `/assets/badges/*.webp` (93 localized files)
-* **Governing License**: **MIT License**
+### 2.1 Microsoft Fluent Emoji 3D & Original Wildlife Art (Animal Preserve & Achievement Badges)
+* **Author / Copyright Holder**: Microsoft Corporation (Fluent Emoji 3D) & Gnapoley LLC (Original Custom Wildlife Icons)
+* **Package Origin**: `microsoft/fluentui-emoji` (MIT) & original Gnapoley wildlife assets (`a_*.webp`)
+* **Local Storage Path**: `/assets/badges/*.webp` (121 localized files)
+* **Governing License**: **MIT License** (Fluent Emoji 3D) & **Original / Proprietary** (Gnapoley LLC custom wildlife icons)
 * **Statutory Legal Coverage Grant**:
   > *"Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the 'Software'), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software."*
-* **Compliance Status**: **100% Compliant**. The MIT notice is displayed in the application under `Credits & Acknowledgments` (`s-credits`). Self-hosting these WebP images directly in the repository is explicitly authorized.
+* **Compliance Status**: **100% Compliant**. The MIT notice and Gnapoley original art citation are displayed in the application under `Credits & Acknowledgments` (`s-credits`). Self-hosting these WebP images directly in the repository is explicitly authorized.
 
 ---
 

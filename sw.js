@@ -1,7 +1,7 @@
 // Mapolis Service Worker - Offline Asset Pre-caching
-// Version: mapolis-v3-pre-beta6
+// Version: mapolis-v4-pre-beta6
 
-const CACHE_NAME = 'mapolis-cache-v3';
+const CACHE_NAME = 'mapolis-cache-v4';
 
 // Core assets required for 100% offline solo gameplay on classroom tablets
 const PRECACHE_ASSETS = [

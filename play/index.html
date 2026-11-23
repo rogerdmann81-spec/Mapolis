@@ -441,8 +441,9 @@
 
     <!-- ANIMAL ART -->
     <div class="credits-heading">🦊 Animal Art</div>
-    <p class="credits-body">Animal Preserve &amp; Achievement Badge illustrations from <strong style="color:rgba(255,255,255,.85);">Microsoft Fluent Emoji 3D</strong> via @lobehub/fluent-emoji-3d (self-hosted locally).</p>
+    <p class="credits-body">Animal Preserve &amp; Achievement Badge illustrations from <strong style="color:rgba(255,255,255,.85);">Microsoft Fluent Emoji 3D</strong> (self-hosted locally), paired with original custom wildlife art created for Mapolis.</p>
     <div class="credits-item"><span><strong>Fluent Emoji 3D</strong> — Microsoft Corporation</span><span class="credits-license">MIT</span></div>
+    <div class="credits-item"><span><strong>Custom Wildlife Icons</strong> — Original art by Gnapoley</span><span class="credits-license">Original</span></div>
 
     <!-- TYPOGRAPHY -->
     <div class="credits-heading">✏️ Typography</div>
@@ -10281,7 +10282,7 @@ const BADGE_DEFS = [
 ];
 
 const ANIMAL_PRESERVE = [
-  // ── Africa ──
+  // ── Africa (10) ──
   { id:'a_lion', name:'Lion', cp:'1f981', cost:200, continent:'africa', link:'Kenya', linkType:'country', desc:'King of the savanna' },
   { id:'a_elephant', name:'Elephant', cp:'1f418', cost:300, continent:'africa', link:'Botswana', linkType:'country', desc:'Largest land animal' },
   { id:'a_gorilla', name:'Mountain Gorilla', cp:'1f98d', cost:500, continent:'africa', link:'Rwanda', linkType:'country', desc:'Misty mountain dweller' },
@@ -10290,44 +10291,63 @@ const ANIMAL_PRESERVE = [
   { id:'a_flamingo', name:'Flamingo', cp:'1f9a9', cost:300, continent:'africa', link:'Kenya', linkType:'country', desc:'Pink lake dancer' },
   { id:'a_rhino', name:'Rhinoceros', cp:'1f98f', cost:450, continent:'africa', link:'South Africa', linkType:'country', desc:'Armored herbivore' },
   { id:'a_zebra', name:'Zebra', cp:'1f993', cost:250, continent:'africa', link:'Kenya', linkType:'country', desc:'Striped savanna grazer' },
-  // ── Asia ──
+  { id:'a_fennec', name:'Fennec Fox', cp:'a_fennec', cost:350, continent:'africa', link:'Morocco', linkType:'country', desc:'Big-eared desert fox' },
+  { id:'a_shark', name:'Great White Shark', cp:'1f988', cost:450, continent:'africa', link:'South Africa', linkType:'country', desc:'Apex ocean hunter' },
+  // ── Asia (10) ──
   { id:'a_panda', name:'Giant Panda', cp:'1f43c', cost:400, continent:'asia', link:'China', linkType:'country', desc:'Bamboo forest treasure' },
   { id:'a_tiger', name:'Bengal Tiger', cp:'1f405', cost:500, continent:'asia', link:'India', linkType:'country', desc:'Jungle apex predator' },
-  { id:'a_leopard', name:'Snow Leopard', cp:'1f406', cost:600, continent:'asia', link:'Nepal', linkType:'country', desc:'Ghost of the mountains' },
-  { id:'a_dragon', name:'Komodo Dragon', cp:'1f98e', cost:450, continent:'asia', link:'Indonesia', linkType:'country', desc:'Island mega-lizard' },
+  { id:'a_leopard', name:'Snow Leopard', cp:'a_leopard', cost:600, continent:'asia', link:'Nepal', linkType:'country', desc:'Ghost of the mountains' },
+  { id:'a_dragon', name:'Komodo Dragon', cp:'a_dragon', cost:450, continent:'asia', link:'Indonesia', linkType:'country', desc:'Island mega-lizard' },
   { id:'a_orangutan', name:'Orangutan', cp:'1f9a7', cost:500, continent:'asia', link:'Indonesia', linkType:'country', desc:'Rainforest great ape' },
-  { id:'a_camel', name:'Camel', cp:'1f42b', cost:250, continent:'asia', link:'Saudi Arabia', linkType:'country', desc:'Ship of the desert' },
+  { id:'a_camel', name:'Camel', cp:'1f42a', cost:250, continent:'asia', link:'Saudi Arabia', linkType:'country', desc:'Ship of the desert' },
   { id:'a_peacock', name:'Peacock', cp:'1f99a', cost:300, continent:'asia', link:'India', linkType:'country', desc:'India\'s national bird' },
-  // ── Europe ──
+  { id:'a_redpanda', name:'Red Panda', cp:'a_redpanda', cost:450, continent:'asia', link:'Nepal', linkType:'country', desc:'Himalayan treetop climber' },
+  { id:'a_waterbuffalo', name:'Water Buffalo', cp:'1f403', cost:250, continent:'asia', link:'Vietnam', linkType:'country', desc:'Wetland powerhouse' },
+  { id:'a_octopus', name:'Pacific Octopus', cp:'1f419', cost:400, continent:'asia', link:'Japan', linkType:'country', desc:'Clever eight-armed master' },
+  // ── Europe (10) ──
   { id:'a_bear', name:'Brown Bear', cp:'1f43b', cost:300, continent:'europe', link:'Finland', linkType:'country', desc:'Northern forest roamer' },
   { id:'a_wolf', name:'Grey Wolf', cp:'1f43a', cost:350, continent:'europe', link:'Romania', linkType:'country', desc:'Pack hunter of the Carpathians' },
   { id:'a_hedgehog', name:'Hedgehog', cp:'1f994', cost:150, continent:'europe', link:'United Kingdom', linkType:'country', desc:'Beloved garden visitor' },
   { id:'a_deer', name:'Red Deer', cp:'1f98c', cost:250, continent:'europe', link:'United Kingdom', linkType:'country', desc:'Highland icon' },
   { id:'a_swan', name:'Mute Swan', cp:'1f9a2', cost:200, continent:'europe', link:'Denmark', linkType:'country', desc:'Royal waterbird' },
   { id:'a_owl', name:'Eagle Owl', cp:'1f989', cost:350, continent:'europe', link:'Norway', linkType:'country', desc:'Silent night hunter' },
-  // ── North America ──
+  { id:'a_fox', name:'Red Fox', cp:'1f98a', cost:250, continent:'europe', link:'United Kingdom', linkType:'country', desc:'Clever woodland trickster' },
+  { id:'a_badger', name:'European Badger', cp:'1f9a1', cost:250, continent:'europe', link:'United Kingdom', linkType:'country', desc:'Striped burrow builder' },
+  { id:'a_seal', name:'Harp Seal', cp:'1f9ad', cost:300, continent:'europe', link:'Iceland', linkType:'country', desc:'Playful North Atlantic swimmer' },
+  { id:'a_puffin', name:'Atlantic Puffin', cp:'a_puffin', cost:400, continent:'europe', link:'Iceland', linkType:'country', desc:'Colorful sea cliff diver' },
+  // ── North America (10) ──
   { id:'a_eagle', name:'Bald Eagle', cp:'1f985', cost:300, continent:'north-america', link:'United States', linkType:'country', desc:'Symbol of freedom' },
   { id:'a_bison', name:'Bison', cp:'1f9ac', cost:350, continent:'north-america', link:'United States', linkType:'country', desc:'Great Plains thunder' },
-  { id:'a_moose', name:'Moose', cp:'1fae8', cost:300, continent:'north-america', link:'Canada', linkType:'country', desc:'Largest deer species' },
-  { id:'a_turtle', name:'Sea Turtle', cp:'1f422', cost:250, continent:'north-america', link:'Mexico', linkType:'country', desc:'Ancient ocean voyager' },
+  { id:'a_moose', name:'Moose', cp:'1face', cost:300, continent:'north-america', link:'Canada', linkType:'country', desc:'Largest deer species' },
+  { id:'a_turtle', name:'Sea Turtle', cp:'a_turtle', cost:250, continent:'north-america', link:'Mexico', linkType:'country', desc:'Ancient ocean voyager' },
   { id:'a_raccoon', name:'Raccoon', cp:'1f99d', cost:150, continent:'north-america', link:'United States', linkType:'country', desc:'Masked night explorer' },
   { id:'a_beaver', name:'Beaver', cp:'1f9ab', cost:300, continent:'north-america', link:'Canada', linkType:'country', desc:'Nature\'s engineer' },
   { id:'a_turkey', name:'Wild Turkey', cp:'1f983', cost:200, continent:'north-america', link:'United States', linkType:'country', desc:'Ben Franklin\'s choice' },
-  // ── South America ──
-  { id:'a_jaguar', name:'Jaguar', cp:'1f406', cost:500, continent:'south-america', link:'Brazil', linkType:'country', desc:'Amazon apex predator' },
+  { id:'a_polarbear', name:'Polar Bear', cp:'1f43b-200d-2744-fe0f', cost:500, continent:'north-america', link:'Canada', linkType:'country', desc:'Arctic sea-ice king' },
+  { id:'a_otter', name:'Sea Otter', cp:'1f9a6', cost:300, continent:'north-america', link:'United States', linkType:'country', desc:'Kelp forest floater' },
+  { id:'a_axolotl', name:'Axolotl', cp:'a_axolotl', cost:450, continent:'north-america', link:'Mexico', linkType:'country', desc:'Smiling lake salamander' },
+  // ── South America (10) ──
+  { id:'a_jaguar', name:'Jaguar', cp:'a_jaguar', cost:500, continent:'south-america', link:'Brazil', linkType:'country', desc:'Amazon apex predator' },
   { id:'a_llama', name:'Llama', cp:'1f999', cost:250, continent:'south-america', link:'Peru', linkType:'country', desc:'Andean pack animal' },
   { id:'a_parrot', name:'Macaw', cp:'1f99c', cost:300, continent:'south-america', link:'Brazil', linkType:'country', desc:'Rainforest rainbow' },
   { id:'a_sloth', name:'Sloth', cp:'1f9a5', cost:200, continent:'south-america', link:'Colombia', linkType:'country', desc:'Slow-life champion' },
-  { id:'a_toucan', name:'Toucan', cp:'1f426', cost:350, continent:'south-america', link:'Brazil', linkType:'country', desc:'Oversized-beak wonder' },
+  { id:'a_toucan', name:'Toucan', cp:'a_toucan', cost:350, continent:'south-america', link:'Brazil', linkType:'country', desc:'Oversized-beak wonder' },
   { id:'a_penguin', name:'Magellanic Penguin', cp:'1f427', cost:400, continent:'south-america', link:'Argentina', linkType:'country', desc:'Patagonian waddler' },
-  // ── Oceania ──
+  { id:'a_capybara', name:'Capybara', cp:'a_capybara', cost:350, continent:'south-america', link:'Brazil', linkType:'country', desc:'World\'s chillest giant rodent' },
+  { id:'a_tortoise', name:'Galápagos Tortoise', cp:'1f422', cost:450, continent:'south-america', link:'Ecuador', linkType:'country', desc:'Centuries-old island giant' },
+  { id:'a_butterfly', name:'Jungle Butterfly', cp:'1f98b', cost:200, continent:'south-america', link:'Colombia', linkType:'country', desc:'Vibrant rainforest wing-glider' },
+  { id:'a_anaconda', name:'Green Anaconda', cp:'1f40d', cost:350, continent:'south-america', link:'Brazil', linkType:'country', desc:'Giant river constrictor' },
+  // ── Oceania (10) ──
   { id:'a_kangaroo', name:'Kangaroo', cp:'1f998', cost:200, continent:'oceania', link:'Australia', linkType:'country', desc:'Outback bounder' },
   { id:'a_koala', name:'Koala', cp:'1f428', cost:250, continent:'oceania', link:'Australia', linkType:'country', desc:'Eucalyptus dreamer' },
-  { id:'a_kiwi', name:'Kiwi Bird', cp:'1f426', cost:300, continent:'oceania', link:'New Zealand', linkType:'country', desc:'Flightless national icon' },
+  { id:'a_kiwi', name:'Kiwi Bird', cp:'a_kiwi', cost:300, continent:'oceania', link:'New Zealand', linkType:'country', desc:'Flightless national icon' },
   { id:'a_croc', name:'Saltwater Crocodile', cp:'1f40a', cost:450, continent:'oceania', link:'Australia', linkType:'country', desc:'Prehistoric predator' },
   { id:'a_whale', name:'Humpback Whale', cp:'1f40b', cost:500, continent:'oceania', link:'Australia', linkType:'country', desc:'Pacific ocean singer' },
-  { id:'a_clownfish', name:'Clownfish', cp:'1f420', cost:300, continent:'oceania', link:'Australia', linkType:'country', desc:'Reef dweller' },
-  { id:'a_dingo', name:'Dingo', cp:'1f415', cost:350, continent:'oceania', link:'Australia', linkType:'country', desc:'Wild outback canine' },
+  { id:'a_clownfish', name:'Clownfish', cp:'a_clownfish', cost:300, continent:'oceania', link:'Australia', linkType:'country', desc:'Reef dweller' },
+  { id:'a_dingo', name:'Dingo', cp:'a_dingo', cost:350, continent:'oceania', link:'Australia', linkType:'country', desc:'Wild outback canine' },
+  { id:'a_platypus', name:'Platypus', cp:'a_platypus', cost:450, continent:'oceania', link:'Australia', linkType:'country', desc:'Duck-billed river marvel' },
+  { id:'a_dolphin', name:'Bottlenose Dolphin', cp:'1f42c', cost:350, continent:'oceania', link:'New Zealand', linkType:'country', desc:'Acrobatic coastal pod-mate' },
+  { id:'a_jellyfish', name:'Moon Jellyfish', cp:'1fabc', cost:300, continent:'oceania', link:'Palau', linkType:'country', desc:'Glowing reef drifter' },
 ];
 
 const CONTINENT_ANIMAL_LABELS = {
@@ -10339,8 +10359,8 @@ const CONTINENT_ANIMAL_LABELS = {
 const ACCESSORY_UNLOCKS = ANIMAL_PRESERVE;
 
 // ── Animal image rendering ──
-// Each animal carries a Fluent Emoji codepoint (`cp`) that maps directly to a
-// Microsoft Fluent Emoji 3D WebP file assets.
+// Each animal carries an icon key (`cp`) that maps directly to a localized
+// 256x256 WebP asset (Microsoft Fluent Emoji 3D or original Mapolis wildlife art).
 const FLUENT3D_BASE = '/assets/badges/';
 function animalImgHtml(animal, sizePx) {
   const safeName = (animal.name || '').replace(/"/g, '&quot;');
