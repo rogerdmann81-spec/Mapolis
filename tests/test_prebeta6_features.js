@@ -118,14 +118,18 @@ test('friendStore exposes all required compliance-safe RPC methods', () => {
   }
 });
 
-test('Israel Genesis Card covers the Nakba, West Bank settlements, and ethnic cleansing', () => {
+test('Israel Genesis Card covers Zionism, diverse Jewish viewpoints, the Nakba, West Bank settlements, ethnic cleansing, and genocide', () => {
   const genesisData = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'genesis-cards.json'), 'utf8'));
   const israel = prebeta6.resolveGenesisCard(genesisData, 'israel');
   assert.ok(israel, 'Israel card must exist');
   const combined = `${israel.turningPoint} ${israel.story} ${israel.contestedNote}`.toLowerCase();
+  assert.ok(combined.includes('zionism'), 'Israel card must mention Zionism');
+  assert.ok(combined.includes('europe') && combined.includes('united states'), 'Israel card must connect Zionism to Europe and the United States');
+  assert.ok(combined.includes('opposing viewpoints') && combined.includes('jewish communities'), 'Israel card must note opposing viewpoints in Jewish communities worldwide');
   assert.ok(combined.includes('nakba'), 'Israel card must mention the Nakba');
   assert.ok(combined.includes('west bank') && combined.includes('settlement'), 'Israel card must mention West Bank settlements');
   assert.ok(combined.includes('ethnic cleansing'), 'Israel card must mention continued ethnic cleansing');
+  assert.ok(combined.includes('genocide'), 'Israel card must include the term genocide');
 });
 
 test('findAtlasCountryAtLonLat prioritizes smaller overlapping polygons, falls back to microstate centroids, and ignores ocean', () => {
