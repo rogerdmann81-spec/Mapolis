@@ -144,17 +144,87 @@
     }).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   }
 
+  const ATLAS_GLOBE_TARGETS = {
+    all:             { rotate: [-15, -20, 0], zoom: 1.0 },
+    europe:          { rotate: [-15, -50, 0], zoom: 1.8 },
+    africa:          { rotate: [-20, -4,  0], zoom: 1.3 },
+    asia:            { rotate: [-88, -32, 0], zoom: 1.25 },
+    'north-america': { rotate: [98,  -40, 0], zoom: 1.3 },
+    'south-america': { rotate: [60,  16,  0], zoom: 1.4 },
+    oceania:         { rotate: [-140, 22, 0], zoom: 1.45 }
+  };
+
+  function angularDistanceDeg(a, b) {
+    if (!a || !b || a.length < 2 || b.length < 2) return Infinity;
+    const rad = Math.PI / 180;
+    const lat1 = a[1] * rad;
+    const lat2 = b[1] * rad;
+    const dLon = (b[0] - a[0]) * rad;
+    const cosD = Math.sin(lat1) * Math.sin(lat2) + Math.cos(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    return Math.acos(Math.max(-1, Math.min(1, cosD))) / rad;
+  }
+
+  function findAtlasCountryAtLonLat(lonLat, features, cardsByNumId, geoContainsFn, geoCentroidFn, geoAreaFn, maxDegFallback) {
+    if (!lonLat || !Array.isArray(features) || !cardsByNumId) return null;
+    const exactMatches = [];
+    if (typeof geoContainsFn === 'function') {
+      for (let i = 0; i < features.length; i++) {
+        const feat = features[i];
+        if (!feat) continue;
+        const card = cardsByNumId[Number(feat.id)];
+        if (!card) continue;
+        try {
+          if (geoContainsFn(feat, lonLat)) {
+            const area = typeof geoAreaFn === 'function' ? geoAreaFn(feat) : 1;
+            exactMatches.push({ feature: feat, card, area });
+          }
+        } catch (_) {}
+      }
+    }
+    if (exactMatches.length > 0) {
+      exactMatches.sort((a, b) => a.area - b.area);
+      return exactMatches[0];
+    }
+
+    // Proximity fallback for small island nations & microstates
+    const threshold = typeof maxDegFallback === 'number' ? maxDegFallback : 2.6;
+    if (typeof geoCentroidFn === 'function' && threshold > 0) {
+      let best = null;
+      let bestDist = threshold;
+      for (let i = 0; i < features.length; i++) {
+        const feat = features[i];
+        if (!feat) continue;
+        const card = cardsByNumId[Number(feat.id)];
+        if (!card) continue;
+        try {
+          const c = feat._atlasCentroid || (feat._atlasCentroid = geoCentroidFn(feat));
+          if (!c || !Number.isFinite(c[0]) || !Number.isFinite(c[1])) continue;
+          const dist = angularDistanceDeg(lonLat, c);
+          if (dist < bestDist) {
+            bestDist = dist;
+            best = { feature: feat, card, area: 0 };
+          }
+        } catch (_) {}
+      }
+      return best;
+    }
+    return null;
+  }
+
   // Export pure helpers immediately for Node unit tests
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
       ORIGIN_META,
       CONTINENT_META,
       CONTINENT_LABELS,
+      ATLAS_GLOBE_TARGETS,
       normalizeFriendQuery,
       normalizeRoomCodeInput,
       formatRoomCodeDisplay,
       resolveGenesisCard,
-      filterGenesisCards
+      filterGenesisCards,
+      angularDistanceDeg,
+      findAtlasCountryAtLonLat
     };
   }
 
@@ -1212,10 +1282,37 @@
   var _genesisPromise = null;
   var _topoCache = null;
   var _atlasState = {
+    view: 'list', // 'list' | 'globe'
     continent: 'all',
     originType: 'all',
     search: ''
   };
+
+  var _atlasGlobe = {
+    rafId: null,
+    cleanupFns: [],
+    rotation: [-15, -20, 0],
+    zoom: 1.0,
+    spinning: true,
+    suspendedUntil: 0,
+    hoveredNumId: null,
+    selectedNumId: null,
+    tween: null,
+    lastFrame: 0,
+    api: null
+  };
+
+  function stopAtlasGlobe() {
+    if (_atlasGlobe.rafId) {
+      cancelAnimationFrame(_atlasGlobe.rafId);
+      _atlasGlobe.rafId = null;
+    }
+    _atlasGlobe.tween = null;
+    while (_atlasGlobe.cleanupFns.length) {
+      try { _atlasGlobe.cleanupFns.pop()(); } catch (_) {}
+    }
+    _atlasGlobe.api = null;
+  }
 
   async function loadGenesisData() {
     if (_genesisCache) return _genesisCache;
@@ -1318,58 +1415,84 @@
   }
 
   function paintAtlasDOM(rootEl, data) {
+    stopAtlasGlobe();
     var allCards = _getCardsArray(data);
     var filtered = filterGenesisCards(allCards, _atlasState);
+    var isGlobe = _atlasState.view === 'globe';
 
-    var html = '<div style="max-width:760px;margin:0 auto;padding:14px 16px 40px;color:#eef2ff;">';
+    var html = '<div style="width:100%;max-width:760px;margin:0 auto;padding:14px 14px 40px;box-sizing:border-box;color:#eef2ff;overflow-x:hidden;">';
 
     // Top row
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">' +
-      '<button id="btn-atlas-back" style="background:none;border:none;color:var(--dim);font-size:13px;font-weight:700;padding:6px 0;cursor:pointer;">← Back</button>' +
-      '<div style="font-family:\'Space Mono\',monospace;font-size:11px;color:var(--dim);">' + filtered.length + ' / ' + allCards.length + ' entries</div>' +
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;width:100%;">' +
+      '<button id="btn-atlas-back" style="background:none;border:none;color:var(--dim);font-size:13px;font-weight:700;padding:6px 0;cursor:pointer;flex-shrink:0;">← Back</button>' +
+      '<div style="font-family:\'Space Mono\',monospace;font-size:11px;color:var(--dim);white-space:nowrap;">' + (isGlobe ? allCards.length + ' countries on globe' : (filtered.length + ' / ' + allCards.length + ' entries')) + '</div>' +
       '</div>';
 
     // Header
-    html += '<div style="margin-bottom:14px;">' +
-      '<h2 style="font-family:\'Fredoka One\',sans-serif;font-size:26px;color:#fff;margin:0;">World Atlas</h2>' +
-      '<div style="font-size:13px;color:var(--dim);margin-top:3px;">How every modern country and territory on the Mapolis map got its borders.</div>' +
+    html += '<div style="margin-bottom:12px;">' +
+      '<h2 style="font-family:\'Fredoka One\',sans-serif;font-size:25px;color:#fff;margin:0;line-height:1.15;">World Atlas</h2>' +
+      '<div style="font-size:13px;color:var(--dim);margin-top:4px;line-height:1.4;">How every modern country and territory on the Mapolis map got its borders.</div>' +
       '</div>';
 
-    // Search + Origin Filter row
-    html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">' +
-      '<input id="atlas-search" type="search" value="' + esc(_atlasState.search) + '" placeholder="Search country, capital, or year…" style="flex:1;min-width:180px;padding:10px 12px;border-radius:11px;border:1px solid var(--border);background:var(--bg-panel);color:#fff;font-size:13px;">' +
-      '<select id="atlas-origin-filter" aria-label="Filter by border origin" style="padding:10px 12px;border-radius:11px;border:1px solid var(--border);background:var(--bg-panel);color:#e2e8f0;font-size:12px;font-weight:700;cursor:pointer;">' +
-      '  <option value="all"' + (_atlasState.originType === 'all' ? ' selected' : '') + '>All Origins</option>';
-    Object.keys(ORIGIN_META).forEach(function (key) {
-      var meta = ORIGIN_META[key];
-      html += '<option value="' + key + '"' + (_atlasState.originType === key ? ' selected' : '') + '>' + meta.icon + ' ' + esc(meta.label) + '</option>';
-    });
-    html += '</select></div>';
+    // View Mode Switcher (A-Z List vs Spinning Globe)
+    html += '<div role="tablist" aria-label="World Atlas view mode" style="display:flex;width:100%;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:12px;padding:3px;gap:4px;margin-bottom:12px;box-sizing:border-box;">' +
+      '<button id="atlas-view-list" role="tab" aria-selected="' + (!isGlobe ? 'true' : 'false') + '" style="flex:1;min-width:0;padding:9px 10px;border-radius:9px;border:none;font-size:13px;font-weight:800;cursor:pointer;background:' + (!isGlobe ? 'var(--blue)' : 'transparent') + ';color:' + (!isGlobe ? '#fff' : 'var(--dim)') + ';">📋 A–Z List</button>' +
+      '<button id="atlas-view-globe" role="tab" aria-selected="' + (isGlobe ? 'true' : 'false') + '" style="flex:1;min-width:0;padding:9px 10px;border-radius:9px;border:none;font-size:13px;font-weight:800;cursor:pointer;background:' + (isGlobe ? 'var(--blue)' : 'transparent') + ';color:' + (isGlobe ? '#fff' : 'var(--dim)') + ';">🌍 Spinning Globe</button>' +
+      '</div>';
 
-    // Interactive Continent Filter Tabs
-    html += '<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:12px;scrollbar-width:none;">';
+    if (!isGlobe) {
+      // Search + Origin Filter row (wraps cleanly on narrow mobile screens)
+      html += '<div style="display:flex;gap:8px;flex-wrap:wrap;width:100%;margin-bottom:10px;box-sizing:border-box;">' +
+        '<input id="atlas-search" type="search" value="' + esc(_atlasState.search) + '" placeholder="Search country, capital, or year…" style="flex:1 1 175px;min-width:0;width:100%;padding:10px 12px;border-radius:11px;border:1px solid var(--border);background:var(--bg-panel);color:#fff;font-size:13px;box-sizing:border-box;">' +
+        '<select id="atlas-origin-filter" aria-label="Filter by border origin" style="flex:1 1 140px;min-width:0;max-width:100%;padding:10px 12px;border-radius:11px;border:1px solid var(--border);background:var(--bg-panel);color:#e2e8f0;font-size:12px;font-weight:700;cursor:pointer;box-sizing:border-box;">' +
+        '  <option value="all"' + (_atlasState.originType === 'all' ? ' selected' : '') + '>All Origins</option>';
+      Object.keys(ORIGIN_META).forEach(function (key) {
+        var meta = ORIGIN_META[key];
+        html += '<option value="' + key + '"' + (_atlasState.originType === key ? ' selected' : '') + '>' + meta.icon + ' ' + esc(meta.label) + '</option>';
+      });
+      html += '</select></div>';
+    }
+
+    // Interactive Continent Filter / Jump Tabs
+    html += '<div style="display:flex;gap:6px;overflow-x:auto;max-width:100%;padding-bottom:6px;margin-bottom:12px;scrollbar-width:none;-webkit-overflow-scrolling:touch;box-sizing:border-box;">';
     CONTINENT_META.forEach(function (c) {
       var active = _atlasState.continent === c.id;
-      html += '<button class="atlas-cont-tab" data-cont="' + c.id + '" style="flex-shrink:0;padding:7px 12px;border-radius:9px;border:1px solid ' + (active ? 'var(--blue)' : 'var(--border)') + ';background:' + (active ? 'var(--blue)' : 'var(--bg-panel)') + ';color:' + (active ? '#fff' : 'var(--dim)') + ';font-size:12px;font-weight:700;cursor:pointer;">' + esc(c.label) + '</button>';
+      html += '<button class="atlas-cont-tab" data-cont="' + c.id + '" style="flex-shrink:0;padding:7px 12px;border-radius:9px;border:1px solid ' + (active ? 'var(--blue)' : 'var(--border)') + ';background:' + (active ? 'var(--blue)' : 'var(--bg-panel)') + ';color:' + (active ? '#fff' : 'var(--dim)') + ';font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">' + esc(c.label) + '</button>';
     });
     html += '</div>';
 
-    // Country Grid (single-elevation cards, unboxed metadata — zero static pill clutter)
-    if (filtered.length === 0) {
+    if (isGlobe) {
+      html += '<div style="width:100%;background:var(--bg-panel);border:1px solid var(--border);border-radius:18px;padding:14px 12px 16px;box-sizing:border-box;text-align:center;">' +
+        '<div style="font-size:12px;color:#a8c8e0;margin-bottom:10px;">Drag to spin · Pinch or use +/− to zoom · Tap any country to open its card</div>' +
+        '<div id="atlas-globe-stage" style="position:relative;width:min(100%, 400px);aspect-ratio:1/1;margin:0 auto;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;">' +
+        '  <canvas id="atlas-globe-canvas" style="width:100%;height:100%;display:block;border-radius:50%;"></canvas>' +
+        '  <div id="atlas-globe-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--dim);pointer-events:none;">Loading globe…</div>' +
+        '</div>' +
+        '<div id="atlas-globe-readout" style="margin-top:12px;min-height:22px;font-size:13px;font-weight:700;color:#e2e8f0;">Tap any country on the globe to read its story</div>' +
+        '<div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:12px;">' +
+        '  <button id="atlas-zoom-out" aria-label="Zoom out" style="width:36px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--bg-deep);color:#fff;font-family:\'Space Mono\',monospace;font-size:16px;font-weight:700;cursor:pointer;">−</button>' +
+        '  <span id="atlas-zoom-val" style="min-width:44px;font-family:\'Space Mono\',monospace;font-size:12px;color:#cbd5e1;">1.0×</span>' +
+        '  <button id="atlas-zoom-in" aria-label="Zoom in" style="width:36px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--bg-deep);color:#fff;font-family:\'Space Mono\',monospace;font-size:16px;font-weight:700;cursor:pointer;">+</button>' +
+        '  <button id="atlas-spin-toggle" style="padding:7px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg-deep);color:#cbd5e1;font-size:12px;font-weight:700;cursor:pointer;">' + (_atlasGlobe.spinning ? '⏸ Pause' : '▶ Spin') + '</button>' +
+        '  <button id="atlas-globe-reset" style="padding:7px 12px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--dim);font-size:12px;font-weight:700;cursor:pointer;">↺ Reset</button>' +
+        '</div>' +
+        '</div>';
+    } else if (filtered.length === 0) {
       html += '<div style="text-align:center;padding:40px 16px;color:var(--dim);font-size:13px;">No countries match that filter.</div>';
     } else {
-      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;">';
+      // Country Grid (single-elevation cards, unboxed metadata — zero horizontal clipping at any width)
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(210px,100%),1fr));gap:10px;width:100%;box-sizing:border-box;">';
       filtered.forEach(function (card) {
         var om = ORIGIN_META[card.originType] || { icon: '🗺️', label: 'Modern Borders' };
         var contName = CONTINENT_LABELS[card.continent] || card.continent;
         var originDisplay = card.originLabel || om.label;
-        html += '<button class="atlas-card-btn" data-cid="' + esc(card.id) + '" style="text-align:left;background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:13px 14px;cursor:pointer;color:#eef2ff;display:flex;flex-direction:column;gap:5px;transition:border-color .15s,transform .12s;">' +
-          '<div style="display:flex;align-items:center;gap:8px;">' +
-          '  <span style="font-size:22px;line-height:1;">' + esc(card.flag || '🏳️') + '</span>' +
-          '  <span style="font-weight:800;font-size:14px;color:#fff;line-height:1.2;">' + esc(card.name) + '</span>' +
+        html += '<button class="atlas-card-btn" data-cid="' + esc(card.id) + '" style="width:100%;min-width:0;box-sizing:border-box;text-align:left;background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:13px 14px;cursor:pointer;color:#eef2ff;display:flex;flex-direction:column;gap:5px;transition:border-color .15s,transform .12s;overflow:hidden;">' +
+          '<div style="display:flex;align-items:center;gap:8px;min-width:0;">' +
+          '  <span style="font-size:22px;line-height:1;flex-shrink:0;">' + esc(card.flag || '🏳️') + '</span>' +
+          '  <span style="font-weight:800;font-size:14px;color:#fff;line-height:1.25;overflow-wrap:anywhere;">' + esc(card.name) + '</span>' +
           '</div>' +
           '<div style="font-size:11px;color:var(--dim);">' + esc(contName) + ' · <span style="font-family:\'Space Mono\',monospace;color:#cbd5e1;">' + esc(card.modernYear || '') + '</span></div>' +
-          '<div style="font-size:11px;color:#93c5fd;font-weight:700;margin-top:2px;">' + om.icon + ' ' + esc(originDisplay) + '</div>' +
+          '<div style="font-size:11px;color:#93c5fd;font-weight:700;margin-top:2px;line-height:1.3;">' + om.icon + ' ' + esc(originDisplay) + '</div>' +
           '</button>';
       });
       html += '</div>';
@@ -1380,8 +1503,23 @@
 
     var backBtn = rootEl.querySelector('#btn-atlas-back');
     if (backBtn) backBtn.addEventListener('click', function () {
+      stopAtlasGlobe();
       if (typeof window.goBack === 'function') window.goBack();
       else if (typeof window.go === 'function') window.go('s-setup');
+    });
+
+    var listTab = rootEl.querySelector('#atlas-view-list');
+    if (listTab) listTab.addEventListener('click', function () {
+      if (_atlasState.view === 'list') return;
+      _atlasState.view = 'list';
+      paintAtlasDOM(rootEl, data);
+    });
+
+    var globeTab = rootEl.querySelector('#atlas-view-globe');
+    if (globeTab) globeTab.addEventListener('click', function () {
+      if (_atlasState.view === 'globe') return;
+      _atlasState.view = 'globe';
+      paintAtlasDOM(rootEl, data);
     });
 
     var searchEl = rootEl.querySelector('#atlas-search');
@@ -1408,8 +1546,19 @@
 
     rootEl.querySelectorAll('.atlas-cont-tab').forEach(function (tab) {
       tab.addEventListener('click', function () {
-        _atlasState.continent = tab.getAttribute('data-cont');
-        paintAtlasDOM(rootEl, data);
+        var cont = tab.getAttribute('data-cont');
+        _atlasState.continent = cont;
+        if (_atlasState.view === 'globe' && _atlasGlobe.api) {
+          rootEl.querySelectorAll('.atlas-cont-tab').forEach(function (b) {
+            var act = b.getAttribute('data-cont') === cont;
+            b.style.borderColor = act ? 'var(--blue)' : 'var(--border)';
+            b.style.background = act ? 'var(--blue)' : 'var(--bg-panel)';
+            b.style.color = act ? '#fff' : 'var(--dim)';
+          });
+          _atlasGlobe.api.flyToContinent(cont);
+        } else {
+          paintAtlasDOM(rootEl, data);
+        }
       });
     });
 
@@ -1418,6 +1567,498 @@
         openGenesisCard(btn.getAttribute('data-cid'));
       });
     });
+
+    if (isGlobe) {
+      mountAtlasGlobe(rootEl, data);
+    }
+  }
+
+  async function mountAtlasGlobe(rootEl, data) {
+    var stage = rootEl.querySelector('#atlas-globe-stage');
+    var canvas = rootEl.querySelector('#atlas-globe-canvas');
+    var loadingEl = rootEl.querySelector('#atlas-globe-loading');
+    var readoutEl = rootEl.querySelector('#atlas-globe-readout');
+    var zoomValEl = rootEl.querySelector('#atlas-zoom-val');
+    var spinBtn = rootEl.querySelector('#atlas-spin-toggle');
+    if (!stage || !canvas || !window.d3) {
+      if (loadingEl) loadingEl.textContent = 'Globe unavailable offline.';
+      return;
+    }
+
+    var allCards = _getCardsArray(data);
+    var cardsByNumId = {};
+    allCards.forEach(function (c) {
+      if (c && c.numId != null) cardsByNumId[Number(c.numId)] = c;
+    });
+
+    var rawFeatures = await loadTopoFeatures();
+    if (!document.body.contains(canvas)) return; // User switched view while loading
+    if (!rawFeatures || !rawFeatures.length) {
+      if (loadingEl) loadingEl.textContent = 'Could not load map geometry.';
+      return;
+    }
+    if (loadingEl) loadingEl.style.display = 'none';
+
+    var features = rawFeatures.slice();
+    if (window.EURO_KOSOVO_FEATURE && !features.some(function (f) { return Number(f.id) === 383; })) {
+      features.push(window.EURO_KOSOVO_FEATURE);
+    }
+    if (window.SA_FRENCH_GUIANA_FEATURE && !features.some(function (f) { return Number(f.id) === 254; })) {
+      features.push(window.SA_FRENCH_GUIANA_FEATURE);
+    }
+
+    var ctx = canvas.getContext('2d');
+    var graticule = window.d3.geoGraticule10();
+    var cssSize = 360;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var baseRadius = 172;
+
+    function decimateRing(ring) {
+      if (!Array.isArray(ring) || ring.length <= 32) return ring;
+      var step = ring.length > 180 ? 4 : (ring.length > 72 ? 3 : 2);
+      var out = [];
+      for (var k = 0; k < ring.length - 1; k += step) out.push(ring[k]);
+      out.push(ring[ring.length - 1]);
+      return out.length >= 4 ? out : ring;
+    }
+
+    function decimateFeature(feat) {
+      if (!feat || !feat.geometry) return feat;
+      var g = feat.geometry;
+      if (g.type === 'Polygon') {
+        return { type: 'Feature', id: feat.id, geometry: { type: 'Polygon', coordinates: g.coordinates.map(decimateRing) } };
+      }
+      if (g.type === 'MultiPolygon') {
+        return {
+          type: 'Feature',
+          id: feat.id,
+          geometry: {
+            type: 'MultiPolygon',
+            coordinates: g.coordinates.map(function (poly) { return poly.map(decimateRing); })
+          }
+        };
+      }
+      return feat;
+    }
+
+    var renderFeatures = features.map(decimateFeature);
+    var projection = window.d3.geoOrthographic()
+      .clipAngle(90)
+      .precision(2.5);
+    var pathGen = window.d3.geoPath(projection, ctx);
+
+    function syncCanvasSize() {
+      var rect = stage.getBoundingClientRect();
+      cssSize = Math.max(220, Math.round(rect.width || 340));
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(cssSize * dpr);
+      canvas.height = Math.round(cssSize * dpr);
+      baseRadius = (cssSize / 2) - 6;
+      projection
+        .translate([cssSize / 2, cssSize / 2])
+        .scale(baseRadius * _atlasGlobe.zoom)
+        .rotate(_atlasGlobe.rotation);
+    }
+
+    function updateZoomLabel() {
+      if (zoomValEl) zoomValEl.textContent = _atlasGlobe.zoom.toFixed(1) + '×';
+    }
+
+    function drawGlobe() {
+      if (!ctx) return;
+      projection
+        .scale(baseRadius * _atlasGlobe.zoom)
+        .rotate(_atlasGlobe.rotation);
+
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, cssSize, cssSize);
+
+      var cx = cssSize / 2;
+      var cy = cssSize / 2;
+      var sphereR = Math.min(baseRadius * _atlasGlobe.zoom, baseRadius);
+
+      // Clip to circular globe viewport when zoomed in
+      ctx.beginPath();
+      ctx.arc(cx, cy, baseRadius, 0, Math.PI * 2);
+      ctx.save();
+      ctx.clip();
+
+      // Ocean fill with subtle 3D radial lighting matching MapolisGlobe
+      var grad = ctx.createRadialGradient(cx - baseRadius * 0.28, cy - baseRadius * 0.28, baseRadius * 0.08, cx, cy, baseRadius);
+      grad.addColorStop(0, '#234c91');
+      grad.addColorStop(0.65, '#1a3a70');
+      grad.addColorStop(1, '#10244a');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, sphereR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Graticule
+      ctx.beginPath();
+      pathGen(graticule);
+      ctx.strokeStyle = 'rgba(255,255,255,0.09)';
+      ctx.lineWidth = 0.55;
+      ctx.stroke();
+
+      // Countries — batch standard countries into 1 fill+stroke pass (100x faster on mobile)
+      var borderWidth = Math.max(0.45, Math.min(1.1, 0.65 * Math.sqrt(_atlasGlobe.zoom)));
+      var hoveredFeat = null;
+      var selectedFeat = null;
+
+      ctx.beginPath();
+      for (var i = 0; i < renderFeatures.length; i++) {
+        var feat = renderFeatures[i];
+        var numId = Number(feat.id);
+        if (_atlasGlobe.selectedNumId === numId) { selectedFeat = feat; continue; }
+        if (_atlasGlobe.hoveredNumId === numId && cardsByNumId[numId]) { hoveredFeat = feat; continue; }
+        pathGen(feat);
+      }
+      ctx.fillStyle = 'rgba(100,190,80,0.78)';
+      ctx.strokeStyle = 'rgba(195,248,180,0.58)';
+      ctx.lineWidth = borderWidth;
+      ctx.fill();
+      ctx.stroke();
+
+      if (hoveredFeat) {
+        ctx.beginPath();
+        pathGen(hoveredFeat);
+        ctx.fillStyle = 'rgba(255,225,53,0.52)';
+        ctx.strokeStyle = '#ffe135';
+        ctx.lineWidth = 1.2;
+        ctx.fill();
+        ctx.stroke();
+      }
+      if (selectedFeat) {
+        ctx.beginPath();
+        pathGen(selectedFeat);
+        ctx.fillStyle = '#ffe135';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.4;
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      ctx.restore(); // end clip
+
+      // Subtle atmospheric rim stroke
+      ctx.beginPath();
+      ctx.arc(cx, cy, baseRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(142,218,118,0.48)';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function setZoom(nextZoom) {
+      _atlasGlobe.zoom = Math.max(1.0, Math.min(4.5, nextZoom));
+      updateZoomLabel();
+      drawGlobe();
+    }
+
+    function flyToContinent(contId) {
+      var target = ATLAS_GLOBE_TARGETS[contId] || ATLAS_GLOBE_TARGETS.all;
+      _atlasGlobe.suspendedUntil = performance.now() + 4500;
+      _atlasGlobe.tween = {
+        startTime: performance.now(),
+        duration: 550,
+        fromRot: _atlasGlobe.rotation.slice(),
+        toRot: target.rotate.slice(),
+        fromZoom: _atlasGlobe.zoom,
+        toZoom: target.zoom
+      };
+      ensureTick();
+    }
+
+    function hitTestClientPoint(clientX, clientY) {
+      var rect = canvas.getBoundingClientRect();
+      var px = clientX - rect.left;
+      var py = clientY - rect.top;
+      var dx = px - cssSize / 2;
+      var dy = py - cssSize / 2;
+      if (dx * dx + dy * dy > baseRadius * baseRadius) return null;
+      var lonLat = projection.invert([px, py]);
+      if (!lonLat || !Number.isFinite(lonLat[0]) || !Number.isFinite(lonLat[1])) return null;
+      var fallbackDeg = Math.max(1.0, 3.0 / _atlasGlobe.zoom);
+      return findAtlasCountryAtLonLat(
+        lonLat,
+        features,
+        cardsByNumId,
+        window.d3.geoContains,
+        window.d3.geoCentroid,
+        window.d3.geoArea,
+        fallbackDeg
+      );
+    }
+
+    // Drag, pinch-zoom, wheel-zoom, hover & tap handlers
+    var isDragging = false;
+    var hasMoved = false;
+    var downX = 0, downY = 0;
+    var startRot = [0, 0, 0];
+    var pinchStartDist = 0;
+    var pinchStartZoom = 1;
+
+    function onMouseDown(e) {
+      if (e.button !== 0) return;
+      isDragging = true;
+      hasMoved = false;
+      downX = e.clientX;
+      downY = e.clientY;
+      startRot = _atlasGlobe.rotation.slice();
+      _atlasGlobe.tween = null;
+      stage.style.cursor = 'grabbing';
+    }
+
+    function onMouseMove(e) {
+      if (isDragging) {
+        var dx = e.clientX - downX;
+        var dy = e.clientY - downY;
+        if (Math.abs(dx) + Math.abs(dy) > 5) hasMoved = true;
+        if (!hasMoved) return;
+        var sens = 0.38 / _atlasGlobe.zoom;
+        _atlasGlobe.rotation = [
+          startRot[0] + dx * sens,
+          Math.max(-85, Math.min(85, startRot[1] - dy * sens)),
+          0
+        ];
+        _atlasGlobe.suspendedUntil = performance.now() + 3500;
+        drawGlobe();
+        return;
+      }
+      // Subtle hover preview when pointer is over the canvas
+      if (e.target === canvas) {
+        var hit = hitTestClientPoint(e.clientX, e.clientY);
+        var nextHover = hit ? Number(hit.feature.id) : null;
+        if (nextHover !== _atlasGlobe.hoveredNumId) {
+          _atlasGlobe.hoveredNumId = nextHover;
+          if (readoutEl) {
+            readoutEl.textContent = hit
+              ? ((hit.card.flag || '') + ' ' + hit.card.name + ' · Tap to open Genesis Card')
+              : 'Tap any country on the globe to read its story';
+          }
+          drawGlobe();
+        }
+      }
+    }
+
+    function handleTapAt(clientX, clientY) {
+      var hit = hitTestClientPoint(clientX, clientY);
+      if (!hit || !hit.card) {
+        if (readoutEl) readoutEl.textContent = 'Ocean — try zooming in (+) or tapping a landmass';
+        return;
+      }
+      _atlasGlobe.selectedNumId = Number(hit.feature.id);
+      _atlasGlobe.suspendedUntil = performance.now() + 5000;
+      if (readoutEl) {
+        readoutEl.textContent = (hit.card.flag || '') + ' ' + hit.card.name + ' (' + (hit.card.modernYear || '') + ')';
+      }
+      drawGlobe();
+      if (typeof window.AudioMgr !== 'undefined' && window.AudioMgr.slideIn) {
+        try { window.AudioMgr.slideIn(); } catch (_) {}
+      }
+      openGenesisCard(hit.card.id);
+    }
+
+    function onMouseUp(e) {
+      if (!isDragging) return;
+      isDragging = false;
+      stage.style.cursor = 'grab';
+      _atlasGlobe.suspendedUntil = performance.now() + 3500;
+      if (!hasMoved) {
+        handleTapAt(downX, downY);
+      }
+    }
+
+    function touchDist(touches) {
+      var dx = touches[0].clientX - touches[1].clientX;
+      var dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function onTouchStart(e) {
+      if (e.cancelable) e.preventDefault();
+      _atlasGlobe.tween = null;
+      if (e.touches.length >= 2) {
+        isDragging = false;
+        hasMoved = true;
+        pinchStartDist = touchDist(e.touches);
+        pinchStartZoom = _atlasGlobe.zoom;
+        return;
+      }
+      if (e.touches.length === 1) {
+        isDragging = true;
+        hasMoved = false;
+        downX = e.touches[0].clientX;
+        downY = e.touches[0].clientY;
+        startRot = _atlasGlobe.rotation.slice();
+      }
+    }
+
+    function onTouchMove(e) {
+      if (e.touches.length >= 2 && pinchStartDist > 0) {
+        if (e.cancelable) e.preventDefault();
+        var ratio = touchDist(e.touches) / pinchStartDist;
+        _atlasGlobe.suspendedUntil = performance.now() + 4000;
+        setZoom(pinchStartZoom * ratio);
+        return;
+      }
+      if (!isDragging || e.touches.length !== 1) return;
+      if (e.cancelable) e.preventDefault();
+      var dx = e.touches[0].clientX - downX;
+      var dy = e.touches[0].clientY - downY;
+      if (Math.abs(dx) + Math.abs(dy) > 7) hasMoved = true;
+      if (!hasMoved) return;
+      var sens = 0.42 / _atlasGlobe.zoom;
+      _atlasGlobe.rotation = [
+        startRot[0] + dx * sens,
+        Math.max(-85, Math.min(85, startRot[1] - dy * sens)),
+        0
+      ];
+      _atlasGlobe.suspendedUntil = performance.now() + 3500;
+      drawGlobe();
+    }
+
+    function onTouchEnd(e) {
+      if (e.touches.length < 2) pinchStartDist = 0;
+      if (!isDragging) return;
+      if (e.touches.length === 0) {
+        isDragging = false;
+        _atlasGlobe.suspendedUntil = performance.now() + 3500;
+        if (!hasMoved) {
+          handleTapAt(downX, downY);
+        }
+      }
+    }
+
+    function onWheel(e) {
+      e.preventDefault();
+      var delta = e.deltaY < 0 ? 0.25 : -0.25;
+      _atlasGlobe.suspendedUntil = performance.now() + 3500;
+      setZoom(_atlasGlobe.zoom + delta);
+    }
+
+    function onResize() {
+      syncCanvasSize();
+      drawGlobe();
+    }
+
+    canvas.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd, { passive: false });
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('resize', onResize);
+
+    _atlasGlobe.cleanupFns.push(function () {
+      canvas.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      canvas.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      canvas.removeEventListener('wheel', onWheel);
+      window.removeEventListener('resize', onResize);
+    });
+
+    // Control buttons
+    var zoomInBtn = rootEl.querySelector('#atlas-zoom-in');
+    var zoomOutBtn = rootEl.querySelector('#atlas-zoom-out');
+    var resetBtn = rootEl.querySelector('#atlas-globe-reset');
+    if (zoomInBtn) zoomInBtn.addEventListener('click', function () { setZoom(_atlasGlobe.zoom + 0.5); });
+    if (zoomOutBtn) zoomOutBtn.addEventListener('click', function () { setZoom(_atlasGlobe.zoom - 0.5); });
+    if (spinBtn) spinBtn.addEventListener('click', function () {
+      _atlasGlobe.spinning = !_atlasGlobe.spinning;
+      _atlasGlobe.suspendedUntil = 0;
+      spinBtn.textContent = _atlasGlobe.spinning ? '⏸ Pause' : '▶ Spin';
+      if (_atlasGlobe.spinning) {
+        ensureTick();
+      } else if (!_atlasGlobe.tween && _atlasGlobe.rafId) {
+        cancelAnimationFrame(_atlasGlobe.rafId);
+        _atlasGlobe.rafId = null;
+      }
+    });
+    if (resetBtn) resetBtn.addEventListener('click', function () {
+      _atlasState.continent = 'all';
+      _atlasGlobe.selectedNumId = null;
+      _atlasGlobe.spinning = true;
+      if (spinBtn) spinBtn.textContent = '⏸ Pause';
+      flyToContinent('all');
+      rootEl.querySelectorAll('.atlas-cont-tab').forEach(function (b) {
+        var act = b.getAttribute('data-cont') === 'all';
+        b.style.borderColor = act ? 'var(--blue)' : 'var(--border)';
+        b.style.background = act ? 'var(--blue)' : 'var(--bg-panel)';
+        b.style.color = act ? '#fff' : 'var(--dim)';
+      });
+      if (readoutEl) readoutEl.textContent = 'Tap any country on the globe to read its story';
+    });
+
+    _atlasGlobe.api = {
+      flyToContinent: flyToContinent,
+      setZoom: setZoom,
+      selectPoint: handleTapAt
+    };
+
+    var lastSpinDraw = 0;
+    function ensureTick() {
+      if (_atlasGlobe.rafId) return;
+      _atlasGlobe.lastFrame = performance.now();
+      _atlasGlobe.rafId = requestAnimationFrame(tick);
+    }
+
+    function tick(now) {
+      if (!document.body.contains(canvas)) {
+        stopAtlasGlobe();
+        return;
+      }
+      var dt = Math.min(now - _atlasGlobe.lastFrame, 50);
+      _atlasGlobe.lastFrame = now;
+      var needsDraw = false;
+
+      if (_atlasGlobe.tween) {
+        var tw = _atlasGlobe.tween;
+        var t = Math.min(1, (now - tw.startTime) / tw.duration);
+        var ease = 1 - Math.pow(1 - t, 3);
+        _atlasGlobe.rotation = [
+          tw.fromRot[0] + (tw.toRot[0] - tw.fromRot[0]) * ease,
+          tw.fromRot[1] + (tw.toRot[1] - tw.fromRot[1]) * ease,
+          0
+        ];
+        _atlasGlobe.zoom = tw.fromZoom + (tw.toZoom - tw.fromZoom) * ease;
+        updateZoomLabel();
+        if (t >= 1) _atlasGlobe.tween = null;
+        needsDraw = true;
+      } else if (_atlasGlobe.spinning && !isDragging && now > _atlasGlobe.suspendedUntil && !document.getElementById('mapolis-genesis-card-modal')) {
+        if (now - lastSpinDraw >= 32) {
+          var stepDt = Math.min(now - lastSpinDraw, 80);
+          lastSpinDraw = now;
+          var speed = 0.014 / Math.sqrt(_atlasGlobe.zoom);
+          _atlasGlobe.rotation[0] = ((_atlasGlobe.rotation[0] + stepDt * speed + 540) % 360) - 180;
+          needsDraw = true;
+        }
+      }
+
+      if (needsDraw) drawGlobe();
+
+      if (_atlasGlobe.tween || _atlasGlobe.spinning) {
+        _atlasGlobe.rafId = requestAnimationFrame(tick);
+      } else {
+        _atlasGlobe.rafId = null;
+      }
+    }
+
+    syncCanvasSize();
+    updateZoomLabel();
+    if (_atlasState.continent && _atlasState.continent !== 'all') {
+      flyToContinent(_atlasState.continent);
+    }
+    drawGlobe();
+    if (_atlasGlobe.spinning || _atlasGlobe.tween) {
+      ensureTick();
+    }
   }
 
   async function openGenesisCard(countryIdOrName) {
@@ -1517,14 +2158,17 @@
     openPublicPlayerCard: openPublicPlayerCard,
     startIncomingChallengePoller: startIncomingChallengePoller,
     renderAtlasScreen: renderAtlasScreen,
+    stopAtlasGlobe: stopAtlasGlobe,
     openGenesisCard: openGenesisCard,
-    loadGenesisData: loadGenesisData
+    loadGenesisData: loadGenesisData,
+    findAtlasCountryAtLonLat: findAtlasCountryAtLonLat
   };
 
   window.openH2HModePicker = openH2HModePicker;
   window.renderFriendsScreen = renderFriendsScreen;
   window.openPublicPlayerCard = openPublicPlayerCard;
   window.renderAtlasScreen = renderAtlasScreen;
+  window.stopAtlasGlobe = stopAtlasGlobe;
   window.openGenesisCard = openGenesisCard;
 
   // Start lightweight incoming challenge poller after page boot

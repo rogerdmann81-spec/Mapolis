@@ -2594,3 +2594,15 @@ body.impersonating .screen { padding-bottom: 54px !important; }
   background: rgba(255, 255, 255, 0.16) !important;
   color: #ffffff !important;
 }
+
+#s-atlas, #s-friends {
+  width: 100%;
+  align-items: stretch;
+}
+#atlas-root, #friends-root {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+

@@ -998,6 +998,9 @@ let currentScreen = 's-title';
 let screenHistory = [];
 
 function updateScreenGlobe(screenId) {
+  if (screenId !== 's-atlas' && typeof window.stopAtlasGlobe === 'function') {
+    window.stopAtlasGlobe();
+  }
   if (!window.MapolisGlobe) return;
   if (screenId === 's-title') {
     window.MapolisGlobe.mount('title-globe-mount', 'title');

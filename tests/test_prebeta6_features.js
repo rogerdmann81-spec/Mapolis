@@ -117,3 +117,48 @@ test('friendStore exposes all required compliance-safe RPC methods', () => {
     assert.equal(typeof shared.friendStore[m], 'function', `friendStore.${m} must be a function`);
   }
 });
+
+test('Israel Genesis Card covers the Nakba, West Bank settlements, and ethnic cleansing', () => {
+  const genesisData = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'genesis-cards.json'), 'utf8'));
+  const israel = prebeta6.resolveGenesisCard(genesisData, 'israel');
+  assert.ok(israel, 'Israel card must exist');
+  const combined = `${israel.turningPoint} ${israel.story} ${israel.contestedNote}`.toLowerCase();
+  assert.ok(combined.includes('nakba'), 'Israel card must mention the Nakba');
+  assert.ok(combined.includes('west bank') && combined.includes('settlement'), 'Israel card must mention West Bank settlements');
+  assert.ok(combined.includes('ethnic cleansing'), 'Israel card must mention continued ethnic cleansing');
+});
+
+test('findAtlasCountryAtLonLat prioritizes smaller overlapping polygons, falls back to microstate centroids, and ignores ocean', () => {
+  const feats = [
+    { id: 710, name: 'South Africa' },
+    { id: 426, name: 'Lesotho' },
+    { id: 702, name: 'Singapore' }
+  ];
+  const cards = {
+    710: { id: 'south_africa', name: 'South Africa' },
+    426: { id: 'lesotho', name: 'Lesotho' },
+    702: { id: 'singapore', name: 'Singapore' }
+  };
+  const contains = (feat, pt) => {
+    if (pt[0] === 28.2 && pt[1] === -29.6) return feat.id === 710 || feat.id === 426;
+    return false;
+  };
+  const centroid = (feat) => {
+    if (feat.id === 710) return [24, -29];
+    if (feat.id === 426) return [28.2, -29.6];
+    if (feat.id === 702) return [103.82, 1.35];
+    return [0, 0];
+  };
+  const area = (feat) => (feat.id === 710 ? 0.1 : feat.id === 426 ? 0.002 : 0.0001);
+
+  const enclaveHit = prebeta6.findAtlasCountryAtLonLat([28.2, -29.6], feats, cards, contains, centroid, area, 2.5);
+  assert.equal(enclaveHit.card.id, 'lesotho');
+
+  const microHit = prebeta6.findAtlasCountryAtLonLat([104.2, 1.5], feats, cards, contains, centroid, area, 2.5);
+  assert.equal(microHit.card.id, 'singapore');
+
+  const oceanHit = prebeta6.findAtlasCountryAtLonLat([-150, -30], feats, cards, contains, centroid, area, 2.5);
+  assert.equal(oceanHit, null);
+});
+
+
