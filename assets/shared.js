@@ -363,6 +363,10 @@ const syncStore = {
       linkCode: row.link_code || null,
       passwordHash: row.password_hash || null,
       parentEmail: row.parent_email || null,
+      parentConsentStatus: (row.stats && row.stats.parentConsentStatus) || null,
+      parentConsentVerifiedAt: (row.stats && row.stats.parentConsentVerifiedAt) || null,
+      localOnly: false,
+      _syncedFromCloud: true,
       auth_uid: authUid,
       frozen: row.frozen === true,
       isAdmin: row.is_admin === true,
@@ -474,6 +478,9 @@ const syncStore = {
 
   syncProfile(profile) {
     if (!profile || !profile.id) return;
+    if (typeof window !== 'undefined' && window.MapolisCompliance && !window.MapolisCompliance.isCloudSyncAllowed(profile)) {
+      return;
+    }
     const entry = this._buildProfileRow(profile);
     this._enqueue({ table: 'profiles', payload: entry });
     this.processQueue();
@@ -595,7 +602,10 @@ const syncStore = {
       handle: p.handle || null,
       country: p.country || null,
       birth_year: p.birthYear || null,
-      stats: p.stats || {},
+      stats: Object.assign({}, p.stats || {},
+        p.parentConsentStatus ? { parentConsentStatus: p.parentConsentStatus } : {},
+        p.parentConsentVerifiedAt ? { parentConsentVerifiedAt: p.parentConsentVerifiedAt } : {}
+      ),
       cr: (p.stats && typeof p.stats.cr === 'number') ? p.stats.cr : 0,
       badges: p.badges || [],
       accessories: p.accessories || [],

@@ -146,6 +146,11 @@ async function handleWelcomeNotice(body) {
       `• No Data Sharing: Mapolis never collects or shares behavioral data, never sells any user data including email addresses, or trains AI on gameplay data.\n\n` +
       `WHY YOUR EMAIL IS LINKED:\n` +
       `This address acts as a safety net—if your child ever forgets their username or needs to restore their profile on a new device, you can recover their account using this email address.\n\n` +
+      `WRITTEN DATA RETENTION & DELETION SCHEDULE:\n` +
+      `• Unconfirmed under-13 consent requests expire automatically after 72 hours (zero cloud data stored before approval).\n` +
+      `• Active under-13 cloud profiles are retained only while active and automatically deleted after 24 months of inactivity.\n` +
+      `• Deletion requests are executed immediately in our live database and purged from automated backups within 30 days.\n` +
+      `• Password recovery links expire after 15 minutes (single-use); parental opt-out links remain valid for 90 days.\n\n` +
       `PARENTAL CONTROL & OPT-OUT:\n` +
       `If you did not authorize this account or would like this profile removed, you can request immediate account deletion here:\n` +
       `${deleteUrl}\n\n` +
@@ -179,8 +184,16 @@ async function handleWelcomeNotice(body) {
       <ul style="font-size:13px;line-height:1.6;color:#475569;padding-left:20px;margin:0 0 20px;">
         <li><strong>Strict Data Minimization:</strong> We only store an anonymous username, birth year (to select grade-appropriate map cards), country, and game scores.</li>
         <li><strong>Zero Sensitive PII:</strong> We never collect real names, phone numbers, street addresses, or player location.</li>
-        <li><strong>No Open Messaging:</strong> Players cannot chat, send direct messages, or communicate with strangers.</li>
+        <li><strong>No Open Messaging:</strong> Players cannot chat, send direct messages, or communicate with strangers. External links &amp; developer notes are disabled for all players under 14.</li>
         <li><strong>No Data Sharing:</strong> Mapolis never collects or shares behavioral data, never sells any user data including email addresses, or trains AI on gameplay data.</li>
+      </ul>
+
+      <h3 style="font-size:14px;color:#0f172a;margin:20px 0 8px;text-transform:uppercase;letter-spacing:0.05em;">Data Retention &amp; Deletion Schedule:</h3>
+      <ul style="font-size:12.5px;line-height:1.6;color:#475569;padding-left:20px;margin:0 0 20px;">
+        <li><strong>Unconfirmed under-13 consent requests:</strong> Expire automatically after <strong>72 hours</strong> (zero cloud data is stored before parent approval).</li>
+        <li><strong>Inactive under-13 cloud profiles:</strong> Retained only while active and automatically deleted after <strong>24 months of inactivity</strong>.</li>
+        <li><strong>Deletion requests:</strong> Deleted <strong>immediately</strong> from our live database and purged from automated backups within <strong>30 days</strong>.</li>
+        <li><strong>Security links:</strong> Recovery tokens expire in <strong>15 minutes</strong> (single-use); parental opt-out links remain valid for <strong>90 days</strong>.</li>
       </ul>
 
       <p style="font-size:13px;line-height:1.6;color:#475569;">

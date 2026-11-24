@@ -231,6 +231,133 @@ test('all 200 flags are self-hosted locally in assets/flags/*.svg with zero exte
   }
 });
 
+test('under-14 external link and Notes to Dev Team gating blocks guests and ages under 14', () => {
+  const compliance = require('../assets/compliance-helpers.js');
+  const yr = 2026;
+
+  // Logged-out / guest / missing birthYear
+  assert.equal(compliance.canAccessExternalLinks(null, yr), false);
+  assert.equal(compliance.canAccessDevNotes(null, yr), false);
+  assert.equal(compliance.canAccessExternalLinks({ handle: 'NoYear' }, yr), false);
+  assert.equal(compliance.canAccessDevNotes({ handle: 'NoYear', birthYear: null }, yr), false);
+
+  // Under 14 (ages 8, 12, 13)
+  for (const by of [2018, 2014, 2013]) {
+    assert.equal(compliance.canAccessExternalLinks({ birthYear: by }, yr), false, `Expected external links blocked for birthYear ${by}`);
+    assert.equal(compliance.canAccessDevNotes({ birthYear: by }, yr), false, `Expected dev notes blocked for birthYear ${by}`);
+  }
+
+  // 14+ allowed (ages 14, 17, 30)
+  for (const by of [2012, 2009, 1996]) {
+    assert.equal(compliance.canAccessExternalLinks({ birthYear: by }, yr), true, `Expected external links allowed for birthYear ${by}`);
+    assert.equal(compliance.canAccessDevNotes({ birthYear: by }, yr), true, `Expected dev notes allowed for birthYear ${by}`);
+  }
+});
+
+test('under-13 COPPA cloud sync defaults to local-only and requires verified Email Plus consent', () => {
+  const compliance = require('../assets/compliance-helpers.js');
+  const yr = 2026;
+
+  // Under-13 without parent email -> local_only
+  const kidLocal = { birthYear: 2016, parentEmail: null, localOnly: true, parentConsentStatus: 'local_only' };
+  assert.equal(compliance.getCloudSyncStatus(kidLocal, yr), 'local_only');
+  assert.equal(compliance.isCloudSyncAllowed(kidLocal, yr), false);
+
+  // Under-13 with pending parent consent -> pending_consent (still blocked from cloud sync)
+  const kidPending = { birthYear: 2016, parentEmail: 'parent@example.com', localOnly: true, parentConsentStatus: 'pending' };
+  assert.equal(compliance.getCloudSyncStatus(kidPending, yr), 'pending_consent');
+  assert.equal(compliance.isCloudSyncAllowed(kidPending, yr), false);
+
+  // Under-13 after parent clicks Email Plus approval -> allowed
+  const kidVerified = { birthYear: 2016, parentEmail: 'parent@example.com', localOnly: false, parentConsentStatus: 'verified' };
+  assert.equal(compliance.getCloudSyncStatus(kidVerified, yr), 'allowed');
+  assert.equal(compliance.isCloudSyncAllowed(kidVerified, yr), true);
+
+  // Age 13+ -> allowed by default
+  const teen = { birthYear: 2013, parentEmail: null, localOnly: false };
+  assert.equal(compliance.getCloudSyncStatus(teen, yr), 'allowed');
+  assert.equal(compliance.isCloudSyncAllowed(teen, yr), true);
+});
+
+test('Email Plus 72-hour HMAC consent token verifies valid tokens and rejects tampered or expired tokens', async () => {
+  const consentFn = require('../netlify/functions/parent-consent.js');
+  const secret = 'test-signing-secret-32-chars-minimum';
+  const nowMs = Date.UTC(2026, 10, 24, 12, 0, 0);
+  const pid = '11111111-2222-4333-8444-555555555555';
+
+  const token = consentFn.buildConsentToken(secret, {
+    playerId: pid,
+    handle: 'AtlasKid',
+    email: 'Parent@Example.com',
+    birthYear: 2016,
+    country: 'United States'
+  }, nowMs);
+
+  // Valid right away and at 71h59m
+  const ok1 = consentFn.verifyConsentToken(token, secret, nowMs + 1000);
+  assert.equal(ok1.valid, true);
+  assert.equal(ok1.payload.playerId, pid);
+  assert.equal(ok1.payload.email, 'parent@example.com');
+  assert.equal(ok1.payload.handle, 'AtlasKid');
+
+  const ok2 = consentFn.verifyConsentToken(token, secret, nowMs + (71 * 3600 + 3500) * 1000);
+  assert.equal(ok2.valid, true);
+
+  // Expired after 72h + 1s
+  const expired = consentFn.verifyConsentToken(token, secret, nowMs + (72 * 3600 + 2) * 1000);
+  assert.equal(expired.valid, false);
+  assert.equal(expired.reason, 'expired');
+
+  // Tampered signature rejected
+  const tampered = token.slice(0, -1) + (token.endsWith('A') ? 'B' : 'A');
+  const badSig = consentFn.verifyConsentToken(tampered, secret, nowMs + 1000);
+  assert.equal(badSig.valid, false);
+  assert.equal(badSig.reason, 'invalid');
+
+  // Wrong secret rejected
+  const wrongKey = consentFn.verifyConsentToken(token, 'different-secret', nowMs + 1000);
+  assert.equal(wrongKey.valid, false);
+
+  // Handler rejects missing confirmed checkbox
+  const prevSecret = process.env.CONSENT_SIGNING_SECRET;
+  const prevSvc = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.CONSENT_SIGNING_SECRET = secret;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = secret;
+  try {
+    const resNoCheck = await consentFn.handleConfirmParentConsent({ token, confirmed: false });
+    assert.equal(resNoCheck.status, 400);
+    assert.equal(resNoCheck.data.ok, false);
+  } finally {
+    if (prevSecret === undefined) delete process.env.CONSENT_SIGNING_SECRET; else process.env.CONSENT_SIGNING_SECRET = prevSecret;
+    if (prevSvc === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = prevSvc;
+  }
+});
+
+test('s-compliance, RETENTION_POLICY, and parent email notices include explicit written data retention timeframes and accurate gating copy', () => {
+  const compliance = require('../assets/compliance-helpers.js');
+  const playHtml = fs.readFileSync(path.join(__dirname, '..', 'play', 'index.html'), 'utf8');
+  const welcomeSrc = fs.readFileSync(path.join(__dirname, '..', 'netlify', 'functions', 'send-welcome-notice.js'), 'utf8');
+  const consentSrc = fs.readFileSync(path.join(__dirname, '..', 'netlify', 'functions', 'parent-consent.js'), 'utf8');
+  const retentionText = compliance.RETENTION_POLICY.summaryBullets.join('\n');
+
+  // Written retention timeframes present in policy helper, s-compliance, and welcome notice
+  for (const [name, src] of [['compliance-helpers.js', retentionText], ['play/index.html', playHtml], ['send-welcome-notice.js', welcomeSrc]]) {
+    assert.match(src, /72\s*hours/i, `${name} must mention 72-hour unconfirmed consent expiry`);
+    assert.match(src, /24\s*months/i, `${name} must mention 24-month inactive under-13 retention limit`);
+    assert.match(src, /30\s*days/i, `${name} must mention 30-day backup purge window`);
+  }
+  assert.match(consentSrc, /buildRetentionHtmlList\(\)/, 'parent-consent.js must embed RETENTION_POLICY HTML list');
+  assert.match(consentSrc, /buildRetentionPlainList\(\)/, 'parent-consent.js must embed RETENTION_POLICY plain-text list');
+
+  // No stale false claim about already having a cognitive parental gate live on external links
+  assert.ok(!/Parental gate is a real cognitive task, not a speed bump/i.test(playHtml), 's-compliance must not claim a cognitive parental gate is currently active');
+  // Solidarity charity cards must NOT hardcode static href links in initial HTML (set dynamically for 14+ only)
+  assert.ok(!/<a\s+href="https:\/\/www\.pcrf\.net\/"/i.test(playHtml), 's-solidarity PCRF card must not hardcode static href');
+  assert.ok(!/<a\s+href="https:\/\/www\.culturalsurvival\.org\/"/i.test(playHtml), 's-solidarity Cultural Survival card must not hardcode static href');
+  assert.ok(!/<a\s+href="https:\/\/linktr\.ee\/moco_irc"/i.test(playHtml), 's-solidarity MoCo IRC card must not hardcode static href');
+});
+
+
 
 
 

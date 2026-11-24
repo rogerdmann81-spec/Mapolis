@@ -94,6 +94,23 @@ const parentOptOutHandler = async (req, res) => {
     res.status(500).json({ ok: false, error: 'Internal server error' });
   }
 };
+const parentConsentHandler = async (req, res) => {
+  try {
+    const fn = require('./netlify/functions/parent-consent').handler;
+    const event = {
+      httpMethod: 'POST',
+      body: JSON.stringify(req.body),
+      headers: req.headers
+    };
+    const result = await fn(event);
+    res.status(result.statusCode).json(JSON.parse(result.body));
+  } catch (err) {
+    console.error('[server] Parent consent route error:', err);
+    res.status(500).json({ ok: false, error: 'Internal server error' });
+  }
+};
+app.post('/api/parent-consent', parentConsentHandler);
+app.post('/.netlify/functions/parent-consent', parentConsentHandler);
 app.post('/api/parent-opt-out', parentOptOutHandler);
 app.post('/.netlify/functions/parent-opt-out', parentOptOutHandler);
 app.post('/api/send-welcome-notice', welcomeNoticeHandler);

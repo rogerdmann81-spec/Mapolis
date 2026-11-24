@@ -1,7 +1,7 @@
 // Mapolis Service Worker - Offline Asset Pre-caching
 // Version: mapolis-v5-pre-beta6
 
-const CACHE_NAME = 'mapolis-cache-v11';
+const CACHE_NAME = 'mapolis-cache-v12';
 
 // Core assets required for 100% offline solo gameplay on classroom tablets
 const PRECACHE_ASSETS = [
@@ -12,6 +12,7 @@ const PRECACHE_ASSETS = [
   '/lib/d3.min.js',
   '/lib/topojson.min.js',
   '/assets/mapolis-globe.js',
+  '/assets/compliance-helpers.js',
   '/assets/shared.js',
   '/assets/features-prebeta6.js',
   '/env.js',

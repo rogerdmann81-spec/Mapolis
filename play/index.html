@@ -63,6 +63,7 @@
 
 
   <script src="/env.js"></script>
+  <script src="/assets/compliance-helpers.js"></script>
   <script src="/assets/shared.js"></script>
   <script src="/assets/features-prebeta6.js"></script>
 </head>
@@ -490,14 +491,14 @@
     <div class="credits-commit-row"><div class="credits-commit-icon">📍</div><div><div class="credits-commit-title">No location data, ever</div><div class="credits-commit-desc">We ask your home country once, for the leaderboard. No GPS, no IP-based location, nothing precise.</div></div></div>
 
     <div class="credits-heading">🇺🇸 US Federal</div>
-    <div class="credits-subheading">COPPA <span class="credits-license">Met</span></div>
-    <p class="credits-body">Children's Online Privacy Protection Act. Anonymous profiles, data minimization, no third-party behavioral tracking, parental email for under-18 accounts. 2024 amendments (AI training restrictions, tighter consent) satisfied by architecture.</p>
+    <div class="credits-subheading">COPPA (incl. April 2026 Amendments) <span class="credits-license">Met</span></div>
+    <p class="credits-body">Children's Online Privacy Protection Act. Profiles under 13 default to 100% local-only play on the device with zero server storage. Optional cloud sync, recovery, Friends, and Head-to-Head for under-13 accounts require verifiable parental consent via the FTC "Email Plus" method (a 72-hour signed approval link followed by a confirmatory email with one-click deletion). No behavioral tracking, no third-party data sharing, no AI training, and persistent IDs are used solely for internal game state and sync.</p>
     <div class="credits-subheading">FERPA <span class="credits-license" style="background:rgba(90,98,133,.2);color:#8899bb;border-color:rgba(90,98,133,.3);">Educator Integration Ready</span></div>
     <p class="credits-body">Family Educational Rights and Privacy Act. Educational vendor standards and student privacy architecture are in place and ready for future educator integrations.</p>
     <div class="credits-subheading">FTC Act §5 <span class="credits-license">Met</span></div>
-    <p class="credits-body">Prohibits deceptive data practices and dark patterns. Privacy posture matches privacy policy exactly. Parental gate is a real cognitive task, not a speed bump.</p>
+    <p class="credits-body">Prohibits deceptive data practices and dark patterns. Privacy posture matches our written policy exactly. External links and developer feedback forms are disabled for logged-out visitors and profiles under 14.</p>
     <div class="credits-subheading">CIPA <span class="credits-license">Met</span></div>
-    <p class="credits-body">Children's Internet Protection Act. No harmful content, no open-form communication, no external links from the player experience, fully moderated handles.</p>
+    <p class="credits-body">Children's Internet Protection Act. No harmful content, no open-form player-to-player communication, no external links or feedback forms for guests or players under 14, and moderated handles.</p>
 
     <div class="credits-heading">🏛️ US State Laws</div>
     <div class="credits-subheading">CCPA / CPRA <span class="credits-license" style="background:rgba(255,176,32,.12);color:#ffb020;border-color:rgba(255,176,32,.3);">Monitoring</span></div>
@@ -517,9 +518,9 @@
 
     <div class="credits-heading">📱 Platform Policies</div>
     <div class="credits-subheading">Apple App Store §1.3, §5.1.4 <span class="credits-license">Met</span></div>
-    <p class="credits-body">No disallowed SDKs. Parental gate before purchases and external links. No PII to third parties. 2025 rating system completed at iOS submission. Declared Age Range API planned for native build.</p>
+    <p class="credits-body">No disallowed SDKs. External links and feedback forms are disabled for logged-out visitors and profiles under 14; paid features are not active in beta and will require a cognitive parental gate before any future in-app purchases. No PII to third parties. Declared Age Range API planned for native build.</p>
     <div class="credits-subheading">Google Play Families Policy <span class="credits-license">Met</span></div>
-    <p class="credits-body">No persistent advertising identifiers. Data minimization throughout. Parental gate before purchases. IARC questionnaire completed at Android submission.</p>
+    <p class="credits-body">No persistent advertising identifiers. Data minimization throughout. External links disabled for profiles under 14; future in-app purchases will require a cognitive parental gate. IARC questionnaire completed at Android submission.</p>
     <div class="credits-subheading">Child-Directed Contextual Ads &amp; Ad-Free Option <span class="credits-license" style="background:rgba(255,176,32,.12);color:#ffb020;border-color:rgba(255,176,32,.3);">At Launch</span></div>
     <p class="credits-body">Ads fully stubbed in beta. At public launch: child-directed flags enabled, strictly non-targeted contextual units only, with an optional nominal yearly subscription to remove all ads.</p>
 
@@ -536,6 +537,13 @@
     <div class="credits-item"><span>📸 <strong>Collect real names or photos</strong> — handles and avatars only</span></div>
     <div class="credits-item"><span>🤖 <strong>Train AI on your data</strong> — gameplay stats never used for ML training</span></div>
     <div class="credits-item"><span>👁️ <strong>Let third parties watch</strong> — no analytics SDKs or trackers in the app</span></div>
+
+    <div class="credits-heading">🗓️ Written Data Retention &amp; Deletion Schedule</div>
+    <div class="credits-item"><span>⏱️ <strong>Unconfirmed under-13 consent requests (72 hours):</strong> Approval links expire automatically after 72 hours. Zero personal data is stored in our cloud database prior to parent approval.</span></div>
+    <div class="credits-item"><span>🧹 <strong>Inactive under-13 cloud profiles (24 months):</strong> Children's cloud profiles are retained only while active and are automatically deleted after 24 months of inactivity.</span></div>
+    <div class="credits-item"><span>🗑️ <strong>On-demand deletion (Immediate / 30 days backups):</strong> Deleting a profile or clicking a parental opt-out link removes all live database records immediately; automated database backups are purged within 30 days.</span></div>
+    <div class="credits-item"><span>🔑 <strong>Security &amp; recovery tokens:</strong> Password recovery links expire after 15 minutes (single-use); parental opt-out links remain active for 90 days.</span></div>
+    <div class="credits-item"><span>🛡️ <strong>Internal-operations safeguard:</strong> Random player IDs and local device storage are used strictly to save gameplay progress, prevent abuse, and sync opted-in profiles—never for behavioral profiling, advertising, or contacting individuals.</span></div>
 
     <div class="credits-heading">📋 Your Data Rights</div>
     <div class="credits-right-grid">
@@ -610,7 +618,7 @@
     </p>
 
     <!-- PLEDGE 1: GAZA RELIEF (PCRF) -->
-    <a href="https://www.pcrf.net/" target="_blank" rel="noopener noreferrer" class="credits-standards-card solidarity-charity-card" style="margin-bottom:14px;border-left:4px solid #38bdf8;background:linear-gradient(135deg,rgba(56,189,248,0.06) 0%,rgba(12,22,59,0.95) 100%);">
+    <a data-ext-url="https://www.pcrf.net/" class="credits-standards-card solidarity-charity-card" style="margin-bottom:14px;border-left:4px solid #38bdf8;background:linear-gradient(135deg,rgba(56,189,248,0.06) 0%,rgba(12,22,59,0.95) 100%);">
       <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;">
         <img src="/assets/pcrf-logo.jpeg" alt="Palestine Children's Relief Fund" style="width:68px;height:68px;border-radius:12px;background:#0369a1;object-fit:cover;border:2px solid rgba(255,255,255,0.15);flex-shrink:0;">
         <div>
@@ -625,7 +633,7 @@
     </a>
 
     <!-- PLEDGE 2: CULTURAL SURVIVAL -->
-    <a href="https://www.culturalsurvival.org/" target="_blank" rel="noopener noreferrer" class="credits-standards-card solidarity-charity-card" style="margin-bottom:14px;border-left:4px solid #f59e0b;background:linear-gradient(135deg,rgba(245,158,11,0.06) 0%,rgba(12,22,59,0.95) 100%);">
+    <a data-ext-url="https://www.culturalsurvival.org/" class="credits-standards-card solidarity-charity-card" style="margin-bottom:14px;border-left:4px solid #f59e0b;background:linear-gradient(135deg,rgba(245,158,11,0.06) 0%,rgba(12,22,59,0.95) 100%);">
       <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;">
         <img src="/assets/cs-logo.png" alt="Cultural Survival" style="width:68px;height:68px;border-radius:12px;background:#fbf7ee;object-fit:contain;border:2px solid rgba(255,255,255,0.15);flex-shrink:0;">
         <div>
@@ -640,7 +648,7 @@
     </a>
 
     <!-- PLEDGE 3: MOCO IRC -->
-    <a href="https://linktr.ee/moco_irc" target="_blank" rel="noopener noreferrer" class="credits-standards-card solidarity-charity-card" style="margin-bottom:14px;border-left:4px solid #10b981;background:linear-gradient(135deg,rgba(16,185,129,0.06) 0%,rgba(12,22,59,0.95) 100%);">
+    <a data-ext-url="https://linktr.ee/moco_irc" class="credits-standards-card solidarity-charity-card" style="margin-bottom:14px;border-left:4px solid #10b981;background:linear-gradient(135deg,rgba(16,185,129,0.06) 0%,rgba(12,22,59,0.95) 100%);">
       <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;">
         <img src="/assets/moco-irc.jpeg" alt="MoCo Immigrant Rights Collective" style="width:68px;height:68px;border-radius:12px;background:#fbf7ee;object-fit:contain;border:2px solid rgba(255,255,255,0.15);flex-shrink:0;">
         <div>
@@ -653,6 +661,10 @@
         Supporting grassroots legal defense, emergency mutual aid, and human dignity for immigrant and refugee neighbors navigating borders and seeking asylum.
       </div>
     </a>
+
+    <p id="solidarity-ext-notice" class="credits-body" style="display:none;margin-top:10px;font-size:11.5px;color:#94a3b8;text-align:center;line-height:1.5;">
+      External organization links are disabled for guests and player profiles under 14.
+    </p>
 
     <p class="credits-body" style="margin-top:28px; font-size:10px; opacity:.35; text-align:center;">
       Mapolis • People Over Borders • © 2026 Gnapoley LLC
@@ -1048,6 +1060,9 @@ function go(id) {
 
   if (id !== 's-title') updateAvatarBars();
   updateScreenGlobe(id);
+  if (id === 's-solidarity' && typeof updateSolidarityScreenForAge === 'function') {
+    updateSolidarityScreenForAge();
+  }
 
   if (id === 's-game') {
     setTimeout(() => window.dispatchEvent(new Event('resize')), 100);
@@ -1067,6 +1082,9 @@ function triggerScreenRefresh(screenId) {
   updateScreenGlobe(screenId);
   if (screenId !== 's-title' && typeof updateAvatarBars === 'function') {
     updateAvatarBars();
+  }
+  if (screenId === 's-solidarity' && typeof updateSolidarityScreenForAge === 'function') {
+    updateSolidarityScreenForAge();
   }
   if (screenId === 's-profile' && typeof renderProfile === 'function') {
     renderProfile();
@@ -1412,11 +1430,13 @@ function initApp() {
   window.addEventListener('online', updateOnlineStatus);
 
   window.addEventListener('offline', updateOnlineStatus);
-  window.addEventListener('hashchange', function() { checkRecoveryToken(); checkParentOptOutAction(); checkInitialHashRoute(); });
-  window.addEventListener('popstate', function() { checkRecoveryToken(); checkParentOptOutAction(); });
+  window.addEventListener('hashchange', function() { checkRecoveryToken(); checkParentOptOutAction(); checkParentConsentAction(); checkInitialHashRoute(); });
+  window.addEventListener('popstate', function() { checkRecoveryToken(); checkParentOptOutAction(); checkParentConsentAction(); });
   checkRecoveryToken();
   checkParentOptOutAction();
+  checkParentConsentAction();
   checkInitialHashRoute();
+  if (typeof updateSolidarityScreenForAge === 'function') updateSolidarityScreenForAge();
 
   updateOnlineStatus();
 
@@ -2483,6 +2503,287 @@ function checkParentOptOutAction() {
   return false;
 }
 
+function updateSolidarityScreenForAge() {
+  var allowed = (window.MapolisCompliance && typeof window.MapolisCompliance.canAccessExternalLinks === 'function')
+    ? window.MapolisCompliance.canAccessExternalLinks(window.activeProfile)
+    : false;
+  var cards = document.querySelectorAll('#s-solidarity .solidarity-charity-card');
+  cards.forEach(function(card) {
+    var extUrl = card.getAttribute('data-ext-url') || '';
+    var extArrow = card.querySelector('.solidarity-charity-ext');
+    if (allowed && /^https:\/\//i.test(extUrl)) {
+      card.setAttribute('href', extUrl);
+      card.setAttribute('target', '_blank');
+      card.setAttribute('rel', 'noopener noreferrer');
+      card.setAttribute('aria-disabled', 'false');
+      card.style.cursor = 'pointer';
+      if (extArrow) extArrow.style.display = '';
+    } else {
+      card.removeAttribute('href');
+      card.removeAttribute('target');
+      card.removeAttribute('rel');
+      card.setAttribute('aria-disabled', 'true');
+      card.style.cursor = 'default';
+      if (extArrow) extArrow.style.display = 'none';
+    }
+    if (!card.dataset.ageGateBound) {
+      card.dataset.ageGateBound = '1';
+      card.addEventListener('click', function(ev) {
+        var canOpen = (window.MapolisCompliance && typeof window.MapolisCompliance.canAccessExternalLinks === 'function')
+          ? window.MapolisCompliance.canAccessExternalLinks(window.activeProfile)
+          : false;
+        if (!canOpen) {
+          ev.preventDefault();
+          ev.stopPropagation();
+        }
+      });
+    }
+  });
+  var notice = document.getElementById('solidarity-ext-notice');
+  if (notice) {
+    notice.style.display = allowed ? 'none' : 'block';
+  }
+}
+window.updateSolidarityScreenForAge = updateSolidarityScreenForAge;
+
+function _decodeConsentTokenPreview(token) {
+  try {
+    var parts = String(token || '').split('.');
+    if (parts.length !== 2) return null;
+    var b64 = parts[0].replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    var json = JSON.parse(atob(b64));
+    if (json && json.v === 1 && json.h && json.e) return json;
+  } catch (_) {}
+  return null;
+}
+
+function openParentConsentModal(token) {
+  if (!token) return;
+  if (document.getElementById('parent-consent-overlay') || window._activeParentConsentToken === token) return;
+  window._activeParentConsentToken = token;
+
+  var preview = _decodeConsentTokenPreview(token) || {};
+  var handle = preview.h || 'Player';
+  var email = preview.e || '';
+
+  var overlay = document.createElement('div');
+  overlay.id = 'parent-consent-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);backdrop-filter:blur(8px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto;';
+
+  var panel = document.createElement('div');
+  panel.style.cssText = 'background:var(--bg-card, #0c163b);border:1px solid rgba(59,130,246,0.5);border-radius:18px;max-width:460px;width:100%;padding:24px;box-shadow:0 16px 40px rgba(0,0,0,0.7);text-align:left;color:#fff;';
+
+  panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h2 style="font-family:'Fredoka One',sans-serif;font-size:20px;color:#60a5fa;margin:0;display:flex;align-items:center;gap:8px;">
+        <span>🛡️</span>
+        <span>Parental Consent Verification</span>
+      </h2>
+      <button id="pc-close" aria-label="Close" style="background:none;color:var(--dim);font-size:22px;padding:2px 8px;border:none;cursor:pointer;">×</button>
+    </div>
+
+    <div id="pc-initial-view">
+      <p style="font-size:13px;color:#cbd5e1;line-height:1.5;margin-top:0;">
+        Review and approve optional <strong>Cloud Sync, account recovery, Friends, and Head-to-Head</strong> for this child profile. No data is stored on our servers until you approve.
+      </p>
+
+      <div style="background:#1e293b;border-left:4px solid #3b82f6;border-radius:8px;padding:12px 14px;margin:12px 0;">
+        <div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">Requested Profile</div>
+        <div style="font-size:18px;font-weight:800;color:#fff;margin-top:2px;">${escHtml(handle)}</div>
+        ${email ? `<div style="font-size:12px;color:#94a3b8;margin-top:4px;">Parent Email: <span style="color:#cbd5e1;">${escHtml(email)}</span></div>` : ''}
+      </div>
+
+      <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.28);border-radius:10px;padding:11px 13px;margin:12px 0;font-size:11.5px;color:#cbd5e1;line-height:1.5;">
+        <strong style="color:#93c5fd;">Written Data Retention &amp; Safeguards (COPPA):</strong>
+        <ul style="margin:6px 0 0;padding-left:17px;">
+          <li>Only anonymous username, birth year, home country, scores, and parent email are stored. Zero chat, ads, tracking, or third-party sharing.</li>
+          <li>Unconfirmed links expire in <strong>72 hours</strong>; inactive under-13 accounts are auto-deleted after <strong>24 months</strong>.</li>
+          <li>You will receive a follow-up confirmation email with a one-click button to revoke consent &amp; delete immediately (backups purged within <strong>30 days</strong>).</li>
+        </ul>
+      </div>
+
+      <label style="display:flex;align-items:flex-start;gap:10px;margin:14px 0;font-size:12.5px;color:#e2e8f0;line-height:1.45;cursor:pointer;">
+        <input type="checkbox" id="pc-confirm-check" style="margin-top:3px;width:16px;height:16px;accent-color:#3b82f6;flex-shrink:0;">
+        <span>I confirm I am the parent or legal guardian and consent to enabling Cloud Sync for <strong>${escHtml(handle)}</strong> under Mapolis's Privacy &amp; Safety Policy.</span>
+      </label>
+
+      <div id="pc-error-msg" style="display:none;background:rgba(239,68,68,0.14);border:1px solid rgba(239,68,68,0.35);color:#fca5a5;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:12px;"></div>
+
+      <div style="display:flex;gap:10px;margin-top:16px;">
+        <button id="pc-decline-btn" style="flex:1;background:var(--bg-panel);color:var(--text);border:1px solid var(--border);font-size:13px;font-weight:700;border-radius:var(--pill);padding:11px;cursor:pointer;">
+          Decline (Keep Local)
+        </button>
+        <button id="pc-approve-btn" style="flex:1.4;background:#2563eb;color:#fff;font-family:'Fredoka One',sans-serif;font-size:13px;border:none;border-radius:var(--pill);padding:11px;cursor:pointer;">
+          Approve Cloud Sync ✓
+        </button>
+      </div>
+    </div>
+
+    <div id="pc-result-view" style="display:none;text-align:center;padding:10px 0;">
+      <div id="pc-result-icon" style="font-size:42px;margin-bottom:10px;">✅</div>
+      <h3 id="pc-result-title" style="font-family:'Fredoka One',sans-serif;font-size:18px;color:#fff;margin:0 0 10px;">Cloud Sync Approved</h3>
+      <p id="pc-result-msg" style="font-size:13px;color:#cbd5e1;line-height:1.5;margin-bottom:18px;"></p>
+      <button id="pc-done-btn" class="btn-primary" style="background:var(--yellow);color:#111;font-family:'Fredoka One',sans-serif;font-size:14px;border:none;border-radius:var(--pill);padding:10px 24px;cursor:pointer;">
+        Continue to Mapolis
+      </button>
+    </div>
+  `;
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  function cleanupUrl() {
+    try {
+      if (window.history && window.history.replaceState) {
+        var cleanUrl = window.location.pathname + (window.location.hash || '');
+        window.history.replaceState(null, '', cleanUrl);
+      }
+    } catch (_) {}
+  }
+
+  function close() {
+    window._activeParentConsentToken = null;
+    overlay.remove();
+    cleanupUrl();
+  }
+
+  document.getElementById('pc-close').addEventListener('click', close);
+  document.getElementById('pc-done-btn').addEventListener('click', function() {
+    close();
+    if (typeof renderProfile === 'function' && currentScreen === 's-profile') renderProfile();
+    if (typeof renderGlobePage === 'function' && currentScreen === 's-setup') renderGlobePage();
+  });
+
+  document.getElementById('pc-decline-btn').addEventListener('click', function() {
+    document.getElementById('pc-initial-view').style.display = 'none';
+    document.getElementById('pc-result-icon').textContent = '📱';
+    document.getElementById('pc-result-title').textContent = 'Kept Local-Only';
+    document.getElementById('pc-result-msg').textContent = 'No cloud account was created and zero personal data was stored on our servers. The profile can continue playing locally on the child\'s device.';
+    document.getElementById('pc-result-view').style.display = 'block';
+    cleanupUrl();
+  });
+
+  document.getElementById('pc-approve-btn').addEventListener('click', async function() {
+    var checkEl = document.getElementById('pc-confirm-check');
+    var errEl = document.getElementById('pc-error-msg');
+    var btn = document.getElementById('pc-approve-btn');
+    if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+
+    if (!checkEl || !checkEl.checked) {
+      if (errEl) {
+        errEl.textContent = 'Please check the box confirming you are the parent or legal guardian.';
+        errEl.style.display = 'block';
+      }
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Verifying...';
+
+    try {
+      var res = await fetch('/api/parent-consent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'confirm', token: token, confirmed: true })
+      });
+      var data = await res.json().catch(function() { return {}; });
+      if (!res.ok || !data || !data.ok || !data.approved) {
+        throw new Error((data && data.error) || ('Server returned HTTP ' + res.status));
+      }
+
+      // If this browser holds the child's local profile, unlock Cloud Sync immediately
+      var matched = allProfiles.find(function(p) { return p && p.id === data.playerId; });
+      if (matched) {
+        matched.localOnly = false;
+        matched.parentEmail = data.email || matched.parentEmail;
+        matched.parentConsentStatus = 'verified';
+        matched.parentConsentVerifiedAt = data.verifiedAt || new Date().toISOString();
+        if (!matched.stats) matched.stats = {};
+        matched.stats.parentConsentStatus = 'verified';
+        matched.stats.parentConsentVerifiedAt = matched.parentConsentVerifiedAt;
+        matched.updatedAt = new Date().toISOString();
+        if (activeProfile && activeProfile.id === matched.id) activeProfile = matched;
+        saveProfiles();
+        if (typeof syncStore !== 'undefined') syncStore.syncProfile(matched);
+      }
+
+      document.getElementById('pc-initial-view').style.display = 'none';
+      document.getElementById('pc-result-icon').textContent = '✅';
+      document.getElementById('pc-result-title').textContent = 'Parental Consent Approved!';
+      document.getElementById('pc-result-msg').textContent = 'Cloud Sync is now active for "' + (data.handle || handle) + '". A follow-up confirmation email with a one-click Revoke & Delete link has been sent to ' + (data.email || email || 'your email') + '.';
+      document.getElementById('pc-result-view').style.display = 'block';
+      cleanupUrl();
+    } catch (err) {
+      if (errEl) {
+        errEl.textContent = (err && err.message) || 'Could not verify parental approval link. It may have expired.';
+        errEl.style.display = 'block';
+      }
+      btn.disabled = false;
+      btn.textContent = 'Approve Cloud Sync ✓';
+    }
+  });
+}
+
+function checkParentConsentAction() {
+  if (document.getElementById('parent-consent-overlay')) return true;
+  try {
+    var sp = new URLSearchParams(window.location.search);
+    if (sp.get('action') === 'parent-consent') {
+      var token = sp.get('token') || '';
+      if (token) {
+        openParentConsentModal(token);
+        return true;
+      }
+    }
+  } catch (e) {
+    console.warn('[parent-consent] Check action exception:', e);
+  }
+  return false;
+}
+
+async function checkParentConsentStatusForProfile(profile, showFeedback) {
+  if (!profile || !profile.id) return false;
+  var email = (profile.parentEmail || profile.parent_email || '').trim().toLowerCase();
+  if (!email) {
+    if (showFeedback && typeof openRecoveryEmailModal === 'function') openRecoveryEmailModal(profile);
+    return false;
+  }
+  try {
+    var res = await fetch('/api/parent-consent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'status', playerId: profile.id, email: email })
+    });
+    var data = await res.json().catch(function() { return {}; });
+    if (res.ok && data && data.ok && data.approved) {
+      profile.localOnly = false;
+      profile.parentConsentStatus = 'verified';
+      profile.parentConsentVerifiedAt = data.verifiedAt || new Date().toISOString();
+      if (!profile.stats) profile.stats = {};
+      profile.stats.parentConsentStatus = 'verified';
+      profile.stats.parentConsentVerifiedAt = profile.parentConsentVerifiedAt;
+      profile.updatedAt = new Date().toISOString();
+      var idx = allProfiles.findIndex(function(p) { return p.id === profile.id; });
+      if (idx >= 0) allProfiles[idx] = profile;
+      if (activeProfile && activeProfile.id === profile.id) activeProfile = profile;
+      saveProfiles();
+      if (typeof syncStore !== 'undefined') syncStore.syncProfile(profile);
+      if (showFeedback) showToast('Parent approval confirmed! Cloud Sync is now active 🛡️', 3500);
+      if (currentScreen === 's-profile' && typeof renderProfile === 'function') renderProfile();
+      if (currentScreen === 's-setup' && typeof renderGlobePage === 'function') renderGlobePage();
+      if (currentScreen === 's-friends' && typeof renderFriendsScreen === 'function') renderFriendsScreen(true);
+      return true;
+    }
+    if (showFeedback) {
+      showToast('Still waiting for parent approval — ask them to check their email (link valid 72h).', 3500);
+    }
+  } catch (e) {
+    if (showFeedback) showToast('Could not check approval status right now — try again when online.', 3000);
+  }
+  return false;
+}
+window.checkParentConsentStatusForProfile = checkParentConsentStatusForProfile;
 
 async function selectProfile(index) {
 
@@ -2495,8 +2796,12 @@ async function selectProfile(index) {
     return;
   }
 
-  // Check Supabase for current profile info before loading the profile
-  if (navigator.onLine && typeof syncStore !== 'undefined' && syncStore.fetchProfileById && p.id) {
+  const _canSyncSelected = (window.MapolisCompliance && typeof window.MapolisCompliance.isCloudSyncAllowed === 'function')
+    ? window.MapolisCompliance.isCloudSyncAllowed(p)
+    : true;
+
+  // Check Supabase for current profile info only when cloud sync is permitted
+  if (_canSyncSelected && navigator.onLine && typeof syncStore !== 'undefined' && syncStore.fetchProfileById && p.id) {
     try {
       const fetchPromise = syncStore.fetchProfileById(p.id);
       const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 2500));
@@ -2516,6 +2821,8 @@ async function selectProfile(index) {
     } catch (err) {
       console.warn('[selectProfile] Supabase check failed, continuing with local cache:', err);
     }
+  } else if (!_canSyncSelected && navigator.onLine && window.MapolisCompliance && window.MapolisCompliance.getCloudSyncStatus(p) === 'pending_consent') {
+    checkParentConsentStatusForProfile(p, false);
   }
 
   activeProfile = allProfiles[index] || p;
@@ -2523,6 +2830,7 @@ async function selectProfile(index) {
   localStorage.setItem(ACTIVE_KEY, activeProfile.id);
 
   updateAvatarBars();
+  if (typeof updateSolidarityScreenForAge === 'function') updateSolidarityScreenForAge();
 
   go('s-setup');
 
@@ -2735,8 +3043,17 @@ function renderCreateStep() {
             🔑 We'll use your recovery email and password to help you sign in on any device and recover your account if you forget your password.
           </div>
         `;
+      } else if (age < 13) {
+        // Under-13 COPPA path: local-only default or optional Email Plus parental consent for Cloud Sync
+        section.innerHTML = `
+          <div class="field-lbl">Parent or Guardian Email <span style="color:var(--dim);font-weight:400;">(optional — for Cloud Sync)</span></div>
+          <input class="field-in" type="email" id="c-parent-email" placeholder="parent@example.com" maxlength="254" autocomplete="off" spellcheck="false">
+          <div style="font-size:10.5px;color:#93c5fd;margin-top:6px;line-height:1.45;">
+            📱 <strong>Local-Only by default:</strong> Leave blank to play 100% locally on this device (zero cloud data). Enter a parent's email to send a 72-hour approval link that unlocks Cloud Sync, Friends, and Head-to-Head.
+          </div>
+        `;
       } else {
-        // Minor path: optional parent email
+        // Ages 13–17: optional parent email for recovery
         section.innerHTML = `
           <div class="field-lbl">Parent or Guardian Email <span style="color:var(--dim);font-weight:400;">(optional)</span></div>
           <input class="field-in" type="email" id="c-parent-email" placeholder="parent@example.com" maxlength="254" autocomplete="off" spellcheck="false">
@@ -2840,12 +3157,23 @@ function renderCreateStep() {
         }
       }
 
+      const isUnder13 = (age !== null && age < 13);
+
       newProfile.handle = h;
       newProfile.birthYear = parseInt(y, 10);
       newProfile.country = co;
-      newProfile.parentEmail  = parentEmail;   // null if not provided or adult
+      newProfile.parentEmail  = parentEmail;   // null if not provided
       newProfile.passwordHash   = passwordHash;  // null if skipped (adults only)
       newProfile.recoveryCreatedAt = (passwordHash || parentEmail) ? new Date().toISOString() : null;
+      // Under-13 COPPA: stay local-only until parent approves via 72-hour Email Plus link
+      if (isUnder13) {
+        newProfile.localOnly = true;
+        newProfile.parentConsentStatus = parentEmail ? 'pending' : 'local_only';
+        newProfile.parentConsentRequestedAt = parentEmail ? new Date().toISOString() : null;
+      } else {
+        newProfile.localOnly = false;
+        newProfile.parentConsentStatus = null;
+      }
       // Snapshot the consent age at creation so later age-gate decisions
       // don't drift if CONSENT_AGE_THRESHOLD changes in a future build.
       newProfile.consentAgeAtCreate = CONSENT_AGE_THRESHOLD;
@@ -2874,9 +3202,13 @@ async function finalizeProfile(goToAvatar) {
   newProfile.createdAt = new Date().toISOString();
   newProfile.updatedAt = newProfile.createdAt;
 
-  // Step 5.2.1 — persist to Supabase via create_profile RPC.
-  // Wait for it so we can catch uniqueness errors BEFORE saving locally.
-  if (typeof createProfile === 'function') {
+  const allowCloudNow = (window.MapolisCompliance && typeof window.MapolisCompliance.isCloudSyncAllowed === 'function')
+    ? window.MapolisCompliance.isCloudSyncAllowed(newProfile)
+    : true;
+
+  // Persist to Supabase ONLY when COPPA cloud-sync is allowed (13+ or verified parent consent).
+  // Under-13 profiles without verified consent write ZERO rows to Supabase.
+  if (allowCloudNow && typeof createProfile === 'function') {
     try {
       await createProfile({
         playerId:     newProfile.id,
@@ -2899,25 +3231,45 @@ async function finalizeProfile(goToAvatar) {
 
   saveProfiles();
 
-  // If a parent or recovery email was provided during creation, dispatch welcome notice
+  // Dispatch appropriate email notice
   if (newProfile.parentEmail) {
     var _initAge = newProfile.birthYear ? computeAgeFromBirthYear(newProfile.birthYear) : null;
-    var _initUnder18 = (_initAge === null || _initAge < CONSENT_AGE_THRESHOLD);
-    fetch('/api/send-welcome-notice', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: newProfile.parentEmail,
-        handle: newProfile.handle,
-        playerId: newProfile.id,
-        isUnder18: _initUnder18,
-        birthYear: newProfile.birthYear,
-        origin: window.location.origin
-      })
-    }).catch(function(e) { console.warn('[finalizeProfile] Welcome notice failed:', e); });
+    if (_initAge !== null && _initAge < 13 && newProfile.parentConsentStatus === 'pending') {
+      // FTC COPPA "Email Plus" Step 1: 72-hour signed parental approval link (zero cloud data yet)
+      fetch('/api/parent-consent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'request',
+          email: newProfile.parentEmail,
+          handle: newProfile.handle,
+          playerId: newProfile.id,
+          birthYear: newProfile.birthYear,
+          country: newProfile.country
+        })
+      }).catch(function(e) { console.warn('[finalizeProfile] Parent consent request failed:', e); });
+      showToast('Playing locally! 72-hour parent approval link sent 🛡️', 4000);
+    } else {
+      var _initUnder18 = (_initAge === null || _initAge < CONSENT_AGE_THRESHOLD);
+      fetch('/api/send-welcome-notice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: newProfile.parentEmail,
+          handle: newProfile.handle,
+          playerId: newProfile.id,
+          isUnder18: _initUnder18,
+          birthYear: newProfile.birthYear,
+          origin: window.location.origin
+        })
+      }).catch(function(e) { console.warn('[finalizeProfile] Welcome notice failed:', e); });
+    }
+  } else if (!allowCloudNow) {
+    showToast('Local-Only Mode active — zero data leaves this device 📱', 3500);
   }
 
   activeProfile = newProfile;
+  if (typeof updateSolidarityScreenForAge === 'function') updateSolidarityScreenForAge();
   window.activeProfile = newProfile;
 
   localStorage.setItem(ACTIVE_KEY, activeProfile.id);
@@ -5912,6 +6264,17 @@ var _candidateOpponents = [];
 function startH2HQueue() {
   var profile = window.activeProfile;
   if (!profile) { showToast('No profile loaded', 1500); return; }
+  if (window.MapolisCompliance && !window.MapolisCompliance.isCloudSyncAllowed(profile)) {
+    var _h2hSyncStatus = window.MapolisCompliance.getCloudSyncStatus(profile);
+    if (_h2hSyncStatus === 'pending_consent') {
+      showToast('Head-to-Head unlocks once your parent clicks the 72-hour approval email link ⏳', 3500);
+      if (typeof checkParentConsentStatusForProfile === 'function') checkParentConsentStatusForProfile(profile, false);
+    } else {
+      showToast('Local-Only Mode: Ask a parent to verify their email to unlock Head-to-Head 🛡️', 3500);
+      if (typeof openRecoveryEmailModal === 'function') openRecoveryEmailModal(profile);
+    }
+    return;
+  }
   if (!profile.stats) profile.stats = {};
   if (!profile.stats.h2h) profile.stats.h2h = { rating: 1200, matches: 0, wins: 0, losses: 0, ties: 0, currentStreak: 0, bestStreak: 0 };
 
@@ -9355,16 +9718,28 @@ function renderGlobePage() {
   html += '<div class="gp-title">Pick a region</div>';
   html += '<div class="gp-sub">Tap a continent on the globe</div>';
   html += '<div class="gp-globe-wrap" id="gp-globe-wrap"></div>';
-    const _gpProf = window.activeProfile;
-  if (_gpProf && !_gpProf.parentEmail && !_gpProf.parent_email) {
+  const _gpProf = window.activeProfile;
+  const _gpSyncStatus = (_gpProf && window.MapolisCompliance)
+    ? window.MapolisCompliance.getCloudSyncStatus(_gpProf)
+    : 'allowed';
+  if (_gpProf && (_gpSyncStatus === 'local_only' || _gpSyncStatus === 'pending_consent' || (!_gpProf.parentEmail && !_gpProf.parent_email))) {
     const _gpAge = _gpProf.birthYear ? computeAgeFromBirthYear(_gpProf.birthYear) : null;
     const _gpUnder18 = (_gpAge === null || _gpAge < CONSENT_AGE_THRESHOLD);
-    html += '<div id="gp-safety-pill" style="margin:8px auto;max-width:320px;background:rgba(18,24,58,0.85);border:1px solid rgba(96,165,250,0.3);border-radius:12px;padding:6px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;box-shadow:0 2px 10px rgba(0,0,0,0.3);cursor:pointer;">';
+    const _gpIcon = _gpSyncStatus === 'pending_consent' ? '⏳' : (_gpSyncStatus === 'local_only' ? '📱' : (_gpUnder18 ? '🛡️' : '✉️'));
+    const _gpText = _gpSyncStatus === 'pending_consent'
+      ? 'Awaiting parent approval (72h link sent)'
+      : (_gpSyncStatus === 'local_only'
+        ? 'Local-Only Mode · Add Parent Email for Cloud Sync'
+        : (_gpUnder18 ? 'Add Parent Email for account recovery' : 'Add Recovery Email for password recovery'));
+    const _gpActionLbl = _gpSyncStatus === 'pending_consent' ? 'Check' : 'Add';
+    const _gpBorder = _gpSyncStatus === 'pending_consent' ? 'rgba(251,191,36,0.45)' : 'rgba(96,165,250,0.3)';
+    const _gpBtnColor = _gpSyncStatus === 'pending_consent' ? '#fbbf24' : '#60a5fa';
+    html += '<div id="gp-safety-pill" style="margin:8px auto;max-width:330px;background:rgba(18,24,58,0.85);border:1px solid ' + _gpBorder + ';border-radius:12px;padding:6px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;box-shadow:0 2px 10px rgba(0,0,0,0.3);cursor:pointer;">';
     html += '  <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#c7d2fe;text-align:left;line-height:1.2;">';
-    html += '    <span>' + (_gpUnder18 ? '🛡️' : '✉️') + '</span>';
-    html += '    <span>' + (_gpUnder18 ? 'Add Parent Email for account recovery' : 'Add Recovery Email for password recovery') + '</span>';
+    html += '    <span>' + _gpIcon + '</span>';
+    html += '    <span>' + _gpText + '</span>';
     html += '  </div>';
-    html += '  <span style="font-size:10px;font-weight:700;color:#60a5fa;border:1px solid rgba(96,165,250,0.5);border-radius:6px;padding:2px 6px;">Add</span>';
+    html += '  <span style="font-size:10px;font-weight:700;color:' + _gpBtnColor + ';border:1px solid ' + _gpBorder + ';border-radius:6px;padding:2px 6px;flex-shrink:0;">' + _gpActionLbl + '</span>';
     html += '</div>';
   }
   html += '<div class="gp-actions">';
@@ -9397,7 +9772,11 @@ function renderGlobePage() {
   const safetyPill = document.getElementById('gp-safety-pill');
   if (safetyPill) {
     safetyPill.addEventListener('click', () => {
-      openRecoveryEmailModal(window.activeProfile);
+      if (_gpSyncStatus === 'pending_consent' && typeof checkParentConsentStatusForProfile === 'function') {
+        checkParentConsentStatusForProfile(window.activeProfile, true);
+      } else {
+        openRecoveryEmailModal(window.activeProfile);
+      }
     });
   }
   const backBtn = document.getElementById('gp-back');
@@ -10724,7 +11103,9 @@ function renderResults() {
         payload.session.category = gr.continent || 'geo';
         payload.session.mode = gr.mode || 'solo';
       }
-      submitRound(payload);
+      if (!window.MapolisCompliance || window.MapolisCompliance.isCloudSyncAllowed(profile)) {
+        submitRound(payload);
+      }
     }
   }
 
@@ -10996,14 +11377,17 @@ function openRecoveryEmailModal(targetProfile) {
   if (existing) existing.remove();
 
   var age = prof.birthYear ? computeAgeFromBirthYear(prof.birthYear) : null;
+  var isUnder13 = (age !== null && age < 13);
   var isUnder18 = (age === null || age < CONSENT_AGE_THRESHOLD);
   var currentEmail = prof.parentEmail || prof.parent_email || '';
 
-  var titleText = isUnder18 ? 'Link Parent Email' : 'Link Recovery Email';
+  var titleText = isUnder13 ? 'Parent Approval for Cloud Sync' : (isUnder18 ? 'Link Parent Email' : 'Link Recovery Email');
   var icon = isUnder18 ? '🛡️' : '✉️';
-  var subtext = isUnder18
-    ? 'A safety net in case you ever forget your username or need to restore your profile on a new device. We will send a welcome notice to your parent confirming your account.'
-    : 'Update recovery email in case you ever forget your username or password.';
+  var subtext = isUnder13
+    ? 'Your profile currently stays 100% local on this device. Enter a parent or guardian email to send a 72-hour FTC "Email Plus" approval link that unlocks Cloud Sync, recovery, Friends, and Head-to-Head.'
+    : (isUnder18
+      ? 'A safety net in case you ever forget your username or need to restore your profile on a new device. We will send a welcome notice to your parent confirming your account.'
+      : 'Update recovery email in case you ever forget your username or password.');
   var fieldLabel = isUnder18 ? "Parent's Email Address" : "Recovery Email Address";
   var placeholder = isUnder18 ? 'parent@example.com' : 'you@example.com';
 
@@ -11028,11 +11412,11 @@ function openRecoveryEmailModal(targetProfile) {
     <div class="field-lbl" style="font-size:11px;font-weight:700;color:#94a3b8;margin-bottom:6px;">${fieldLabel}</div>
     <input class="field-in" type="email" id="rec-email-input" placeholder="${placeholder}" value="${escHtml(currentEmail)}" autocomplete="email" spellcheck="false" style="width:100%;box-sizing:border-box;padding:12px;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:10px;color:#fff;font-size:14px;">
     <div style="font-size:11px;color:#64748b;margin-top:8px;line-height:1.4;">
-      🔒 <strong>Privacy Guarantee:</strong> We don't share email addresses or any user data.
+      🔒 <strong>Privacy Guarantee:</strong> We don't share email addresses or any user data.${isUnder13 ? ' Unconfirmed links expire in 72 hours with zero cloud data stored.' : ''}
     </div>
     <div style="display:flex;gap:10px;margin-top:18px;">
       <button id="rec-email-cancel" style="flex:1;background:var(--bg-panel);color:var(--text);border:1px solid var(--border);font-size:13px;font-weight:700;border-radius:var(--pill);padding:10px;cursor:pointer;">Cancel</button>
-      <button id="rec-email-submit" class="btn-primary" style="flex:1.5;background:var(--yellow);color:#111;font-family:'Fredoka One',sans-serif;font-size:14px;border:none;border-radius:var(--pill);padding:10px;cursor:pointer;">SAVE</button>
+      <button id="rec-email-submit" class="btn-primary" style="flex:1.5;background:var(--yellow);color:#111;font-family:'Fredoka One',sans-serif;font-size:14px;border:none;border-radius:var(--pill);padding:10px;cursor:pointer;">${isUnder13 ? 'SEND APPROVAL LINK' : 'SAVE'}</button>
     </div>
   `;
 
@@ -11072,45 +11456,80 @@ function openRecoveryEmailModal(targetProfile) {
 
     var normalized = typeof normalizeEmail === 'function' ? normalizeEmail(raw) : raw.toLowerCase();
     var submitBtn = document.getElementById('rec-email-submit');
-    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'SAVING...'; }
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = isUnder13 ? 'SENDING...' : 'SAVING...'; }
 
     prof.parentEmail = normalized;
     prof.updatedAt = new Date().toISOString();
-    if (window.activeProfile && prof.id === window.activeProfile.id) {
-      window.activeProfile.parentEmail = normalized;
-      window.activeProfile.updatedAt = prof.updatedAt;
-    }
-    var idx = allProfiles.findIndex(function(p) { return p.id === prof.id; });
-    if (idx >= 0) allProfiles[idx] = prof;
-    saveProfiles();
 
-    if (typeof syncStore !== 'undefined') {
-      try {
-        if (!window.activeProfile || prof.id !== window.activeProfile.id) {
-          syncStore.syncProfile(prof);
-        }
-        await syncStore.processQueue();
-      } catch (e) {
-        console.warn('[openRecoveryEmailModal] Sync before welcome notice failed:', e);
+    if (isUnder13 && (!window.MapolisCompliance || !window.MapolisCompliance.isCloudSyncAllowed(prof) || normalized !== currentEmail.toLowerCase())) {
+      // Under-13 COPPA: stay local-only until parent clicks the 72-hour signed approval link
+      prof.localOnly = true;
+      prof.parentConsentStatus = 'pending';
+      prof.parentConsentRequestedAt = new Date().toISOString();
+      if (window.activeProfile && prof.id === window.activeProfile.id) {
+        window.activeProfile.parentEmail = normalized;
+        window.activeProfile.localOnly = true;
+        window.activeProfile.parentConsentStatus = 'pending';
+        window.activeProfile.parentConsentRequestedAt = prof.parentConsentRequestedAt;
+        window.activeProfile.updatedAt = prof.updatedAt;
       }
+      var idx13 = allProfiles.findIndex(function(p) { return p.id === prof.id; });
+      if (idx13 >= 0) allProfiles[idx13] = prof;
+      saveProfiles();
+
+      fetch('/api/parent-consent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'request',
+          email: normalized,
+          handle: prof.handle,
+          playerId: prof.id,
+          birthYear: prof.birthYear,
+          country: prof.country || ''
+        })
+      }).catch(function(e) { console.warn('[parent-consent] Request failed:', e); });
+
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'SEND APPROVAL LINK'; }
+      close();
+      showToast('72-hour parent approval link sent! Playing locally until approved 🛡️', 4000);
+    } else {
+      if (window.activeProfile && prof.id === window.activeProfile.id) {
+        window.activeProfile.parentEmail = normalized;
+        window.activeProfile.updatedAt = prof.updatedAt;
+      }
+      var idx = allProfiles.findIndex(function(p) { return p.id === prof.id; });
+      if (idx >= 0) allProfiles[idx] = prof;
+      saveProfiles();
+
+      if (typeof syncStore !== 'undefined') {
+        try {
+          if (!window.activeProfile || prof.id !== window.activeProfile.id) {
+            syncStore.syncProfile(prof);
+          }
+          await syncStore.processQueue();
+        } catch (e) {
+          console.warn('[openRecoveryEmailModal] Sync before welcome notice failed:', e);
+        }
+      }
+
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'SAVE'; }
+
+      fetch('/api/send-welcome-notice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: normalized,
+          handle: prof.handle,
+          playerId: prof.id,
+          isUnder18: isUnder18,
+          birthYear: prof.birthYear
+        })
+      }).catch(function(e) { console.warn('[send-welcome-notice] Request failed:', e); });
+
+      close();
+      showToast(isUnder18 ? 'Parent email linked! Safety net active 🛡️' : 'Recovery email linked! ✉️', 3500);
     }
-
-    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'SAVE'; }
-
-    fetch('/api/send-welcome-notice', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: normalized,
-        handle: prof.handle,
-        playerId: prof.id,
-        isUnder18: isUnder18,
-        birthYear: prof.birthYear
-      })
-    }).catch(function(e) { console.warn('[send-welcome-notice] Request failed:', e); });
-
-    close();
-    showToast(isUnder18 ? 'Parent email linked! Safety net active 🛡️' : 'Recovery email linked! ✉️', 3500);
 
     if (typeof currentScreen !== 'undefined') {
       if (currentScreen === 's-profile' && typeof renderProfile === 'function') {
@@ -11282,8 +11701,46 @@ function renderProfile() {
     const _secAge = profile.birthYear ? computeAgeFromBirthYear(profile.birthYear) : null;
     const _isUnder18 = (_secAge === null || _secAge < CONSENT_AGE_THRESHOLD);
     const _curEmail = profile.parentEmail || profile.parent_email || null;
+    const _syncStatus = (window.MapolisCompliance && typeof window.MapolisCompliance.getCloudSyncStatus === 'function')
+      ? window.MapolisCompliance.getCloudSyncStatus(profile)
+      : 'allowed';
 
-    if (_curEmail) {
+    if (_syncStatus === 'pending_consent') {
+      html += `<div class="profile-security-card" style="margin-top:14px;background:var(--bg-panel);border:1px solid rgba(251,191,36,0.45);border-radius:14px;padding:14px;text-align:left;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="font-size:22px;">⏳</div>
+          <div>
+            <div style="font-size:12.5px;font-weight:800;color:#fbbf24;">Awaiting Parent Approval</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:2px;line-height:1.35;">
+              72-hour approval link sent to ${escHtml(maskEmail(_curEmail || ''))}. Playing locally until approved.
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button id="btn-check-parent-consent" style="flex:1.2;background:rgba(251,191,36,0.16);border:1px solid rgba(251,191,36,0.5);color:#fde68a;font-size:11.5px;font-weight:800;padding:8px 10px;border-radius:var(--pill);cursor:pointer;">
+            🔄 Check Approval
+          </button>
+          <button id="btn-edit-recovery-email" style="flex:1;background:none;border:1px solid var(--border);color:var(--text);font-size:11.5px;font-weight:700;padding:8px 10px;border-radius:var(--pill);cursor:pointer;">
+            Resend / Change
+          </button>
+        </div>
+      </div>`;
+    } else if (_syncStatus === 'local_only') {
+      html += `<div class="profile-security-card" style="margin-top:14px;background:var(--bg-panel);border:1px solid rgba(96,165,250,0.45);border-radius:14px;padding:14px;text-align:left;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <span style="font-size:20px;">📱</span>
+          <div>
+            <div style="font-size:13px;font-weight:800;color:#93c5fd;">Local-Only Play (On This Device)</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:2px;line-height:1.35;">
+              Zero data leaves this device. Ask a parent to verify their email to unlock Cloud Sync, Friends, and Head-to-Head.
+            </div>
+          </div>
+        </div>
+        <button id="btn-add-recovery-email" style="width:100%;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.5);color:#93c5fd;font-weight:800;font-size:12px;padding:9px;border-radius:var(--pill);cursor:pointer;margin-top:6px;display:flex;align-items:center;justify-content:center;gap:6px;">
+          🛡️ Ask Parent to Enable Cloud Sync
+        </button>
+      </div>`;
+    } else if (_curEmail) {
       html += `<div class="profile-security-card" style="margin-top:14px;background:var(--bg-panel);border:1px solid rgba(74,222,128,0.4);border-radius:14px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;">
         <div style="display:flex;align-items:center;gap:10px;">
           <div style="font-size:22px;">🛡️</div>
@@ -11332,15 +11789,17 @@ function renderProfile() {
     <button id="btn-profile-play" style="flex:1;background:var(--yellow);color:#111;font-family:'Fredoka One',sans-serif;font-size:15px;border-radius:var(--pill);padding:12px;">Play</button>
   </div>`;
 
-  // Clean consumer profile (educator panel extracted for post-App Store portal)
-
-
-
-  html += `<div style="margin-top:12px;">
-    <button id="btn-send-note" style="width:100%;padding:12px;background:var(--bg-panel);color:var(--text);font-weight:700;font-size:13px;border:1px solid var(--border);border-radius:var(--pill);">
-      📝 Notes to Dev Team
-    </button>
-  </div>`;
+  // Notes to Dev Team: only shown to logged-in profiles aged 14+ (disabled for profiles under 14)
+  const _allowDevNotes = (window.MapolisCompliance && typeof window.MapolisCompliance.canAccessDevNotes === 'function')
+    ? window.MapolisCompliance.canAccessDevNotes(profile)
+    : false;
+  if (_allowDevNotes) {
+    html += `<div style="margin-top:12px;">
+      <button id="btn-send-note" style="width:100%;padding:12px;background:var(--bg-panel);color:var(--text);font-weight:700;font-size:13px;border:1px solid var(--border);border-radius:var(--pill);">
+        📝 Notes to Dev Team
+      </button>
+    </div>`;
+  }
 
   html += `<button class="title-credits-btn" style="position:relative;bottom:auto;left:auto;display:block;margin:12px 0 0;opacity:.45;" data-go="s-credits">Credits</button>`;
   html += `<div style="height:20px;"></div>`;
@@ -11361,12 +11820,8 @@ function renderProfile() {
   document.getElementById('btn-profile-play')?.addEventListener('click', () => go('s-setup'));
   document.getElementById('btn-view-all-badges')?.addEventListener('click', () => go('s-badges'));
 
-
-
-
-
   const noteBtn = document.getElementById('btn-send-note');
-  if (noteBtn) {
+  if (noteBtn && _allowDevNotes) {
     noteBtn.addEventListener('click', () => {
       if (typeof showNotesModal === 'function') showNotesModal();
     });
@@ -11386,6 +11841,14 @@ function renderProfile() {
   }
 
   // ── Account Security & Recovery Email buttons ──
+  const checkConsentBtn = root.querySelector('#btn-check-parent-consent');
+  if (checkConsentBtn) {
+    checkConsentBtn.addEventListener('click', () => {
+      if (typeof checkParentConsentStatusForProfile === 'function') {
+        checkParentConsentStatusForProfile(profile, true);
+      }
+    });
+  }
   const editRecoveryEmailBtn = root.querySelector('#btn-edit-recovery-email');
   if (editRecoveryEmailBtn) {
     editRecoveryEmailBtn.addEventListener('click', () => {
@@ -11986,6 +12449,9 @@ function _ensureThread(note) {
 function showNotesModal() {
   const profile = window.activeProfile;
   if (!profile) return;
+  if (window.MapolisCompliance && !window.MapolisCompliance.canAccessDevNotes(profile)) {
+    return;
+  }
   const overlay = document.createElement("div");
   overlay.className = "nsg-modal-overlay";
   overlay.innerHTML = `

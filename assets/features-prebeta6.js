@@ -515,6 +515,46 @@
       return;
     }
 
+    if (window.MapolisCompliance && !window.MapolisCompliance.isCloudSyncAllowed(profile)) {
+      var syncStatus = window.MapolisCompliance.getCloudSyncStatus(profile);
+      var meta = window.MapolisCompliance.getConsentBadgeMeta(syncStatus);
+      rootEl.innerHTML =
+        '<div style="max-width:480px;margin:0 auto;padding:18px 16px 36px;color:#eef2ff;text-align:center;">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">' +
+            '<button id="btn-friends-back" style="background:none;border:none;color:var(--dim);font-size:13px;font-weight:700;padding:6px 0;cursor:pointer;">← Back</button>' +
+            '<div style="font-size:11px;color:' + meta.color + ';font-weight:700;">' + meta.icon + ' ' + meta.shortLabel + '</div>' +
+          '</div>' +
+          '<div style="background:rgba(15,23,42,0.85);border:1px solid ' + meta.borderColor + ';border-radius:18px;padding:24px 20px;">' +
+            '<div style="font-size:36px;margin-bottom:10px;">' + meta.icon + '</div>' +
+            '<h2 style="font-family:\'Fredoka One\',sans-serif;font-size:22px;color:#fff;margin:0 0 8px;">Friends Requires Parent Approval</h2>' +
+            '<p style="font-size:13px;color:#cbd5e1;line-height:1.55;margin:0 0 18px;">' +
+              (syncStatus === 'pending_consent'
+                ? 'Your parent approval link has been sent. Once a parent or guardian clicks Approve within 72 hours, Friends and Head-to-Head will unlock automatically.'
+                : 'Your profile is currently in Local-Only Mode so zero data leaves this device. Ask a parent or guardian to link and verify their email to unlock Friends, Cloud Sync, and Head-to-Head play.') +
+            '</p>' +
+            '<div style="display:flex;flex-direction:column;gap:10px;">' +
+              '<button id="btn-friends-parent-consent" style="width:100%;background:var(--yellow,#ffd700);color:#111;font-family:\'Fredoka One\',sans-serif;font-size:14px;border:none;border-radius:999px;padding:11px 16px;cursor:pointer;">' +
+                (syncStatus === 'pending_consent' ? '🔄 Check Approval or Resend Link' : '🛡️ Ask Parent to Enable Cloud Sync') +
+              '</button>' +
+              '<button id="btn-friends-back-solo" style="width:100%;background:var(--bg-panel);color:var(--text);font-weight:700;font-size:13px;border:1px solid var(--border);border-radius:999px;padding:10px 16px;cursor:pointer;">Keep Playing Solo Locally</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      var b1 = rootEl.querySelector('#btn-friends-back');
+      var b2 = rootEl.querySelector('#btn-friends-back-solo');
+      var b3 = rootEl.querySelector('#btn-friends-parent-consent');
+      if (b1) b1.addEventListener('click', function () { if (typeof window.goBack === 'function') window.goBack(); });
+      if (b2) b2.addEventListener('click', function () { if (typeof window.go === 'function') window.go('s-setup'); });
+      if (b3) b3.addEventListener('click', function () {
+        if (syncStatus === 'pending_consent' && typeof window.checkParentConsentStatusForProfile === 'function') {
+          window.checkParentConsentStatusForProfile(profile, true);
+        } else if (typeof window.openRecoveryEmailModal === 'function') {
+          window.openRecoveryEmailModal(profile);
+        }
+      });
+      return;
+    }
+
     if (shouldFetch !== false && window.friendStore) {
       // Paint immediately with cached/initial state, then update once fetched
       paintFriendsDOM(rootEl, profile);

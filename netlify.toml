@@ -7,6 +7,11 @@
   publish = "."
 
 [[redirects]]
+  from = "/api/parent-consent"
+  to = "/.netlify/functions/parent-consent"
+  status = 200
+
+[[redirects]]
   from = "/api/parent-opt-out"
   to = "/.netlify/functions/parent-opt-out"
   status = 200
