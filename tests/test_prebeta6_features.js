@@ -130,6 +130,7 @@ test('Israel Genesis Card covers Zionism, diverse Jewish viewpoints, the Nakba, 
   assert.ok(combined.includes('west bank') && combined.includes('settlement'), 'Israel card must mention West Bank settlements');
   assert.ok(combined.includes('ethnic cleansing'), 'Israel card must mention continued ethnic cleansing');
   assert.ok(combined.includes('genocide'), 'Israel card must include the term genocide');
+  assert.ok(!combined.includes('widely regarded as'), 'Israel card must not include "widely regarded as"');
 });
 
 test('findAtlasCountryAtLonLat prioritizes smaller overlapping polygons, falls back to microstate centroids, and ignores ocean', () => {
@@ -175,6 +176,44 @@ test('flagEmojiToIso2 converts all 200 genesis card emoji flags to lowercase 2-l
   assert.equal(prebeta6.flagEmojiToIso2('🇽🇰'), 'xk');
   assert.equal(prebeta6.flagEmojiToIso2('🇵🇸'), 'ps');
 });
+
+test('genesis cards have clean plain-text formatting and broad numeric casualty/displacement coverage', () => {
+  const genesisData = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'genesis-cards.json'), 'utf8'));
+  let numericImpactCount = 0;
+  for (const c of genesisData.cards) {
+    const combined = `${c.story} ${c.contestedNote || ''}`;
+    assert.ok(!/[*`_]/.test(combined), `Unexpected raw markdown character in ${c.id}`);
+    if (/\b\d{1,3},\d{3}\b|\b\d+\s*(?:to\s*\d+\s*)?(?:million|thousand|%)/i.test(combined)) {
+      numericImpactCount++;
+    }
+  }
+  assert.ok(numericImpactCount >= 160, `Expected at least 160 cards with numeric impact stats, got ${numericImpactCount}`);
+
+  const mustContain = [
+    ['drc', /5 to 10 million/i],
+    ['namibia', /herero and nama.*genocide/i],
+    ['rwanda', /500,000 to 800,000/i],
+    ['armenia', /armenian genocide/i],
+    ['ukraine', /holodomor/i],
+    ['india', /12 to 18 million/i],
+    ['cambodia', /cambodian genocide/i],
+    ['bosnia', /srebrenica genocide/i],
+    ['guatemala', /genocide against the maya/i],
+    ['palestine', /700,000 palestinians/i],
+    ['sudan', /darfur/i],
+    ['usa', /trail of tears/i],
+    ['australia', /frontier wars/i],
+    ['canada', /residential school/i],
+    ['myanmar', /rohingya/i],
+    ['east_timor', /102,800/i]
+  ];
+  for (const [id, regex] of mustContain) {
+    const card = prebeta6.resolveGenesisCard(genesisData, id);
+    assert.ok(card, `Card ${id} must exist`);
+    assert.match(`${card.story} ${card.contestedNote || ''}`, regex, `Card ${id} missing expected historical content ${regex}`);
+  }
+});
+
 
 
 
