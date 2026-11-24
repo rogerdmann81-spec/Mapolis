@@ -214,6 +214,24 @@ test('genesis cards have clean plain-text formatting and broad numeric casualty/
   }
 });
 
+test('all 200 flags are self-hosted locally in assets/flags/*.svg with zero external flagcdn references', () => {
+  const genesisData = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'genesis-cards.json'), 'utf8'));
+  const flagsDir = path.join(__dirname, '..', 'assets', 'flags');
+  for (const c of genesisData.cards) {
+    const iso = prebeta6.flagEmojiToIso2(c.flag);
+    const svgPath = path.join(flagsDir, `${iso}.svg`);
+    assert.ok(fs.existsSync(svgPath), `Missing self-hosted SVG flag for ${c.id}: ${svgPath}`);
+    const content = fs.readFileSync(svgPath, 'utf8');
+    assert.ok(content.includes('<svg'), `Invalid SVG content in ${svgPath}`);
+  }
+
+  for (const rel of ['play/index.html', 'assets/features-prebeta6.js', 'sw.js']) {
+    const src = fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
+    assert.ok(!/flagcdn\.com/i.test(src), `Unexpected external flagcdn.com reference in ${rel}`);
+  }
+});
+
+
 
 
 

@@ -1500,7 +1500,7 @@
         var iso2 = flagEmojiToIso2(card.flag);
         var fitContain = iso2 && NON_RECT_FLAGS[iso2];
         var flagHtml = iso2
-          ? '<img class="atlas-flag-img" src="https://flagcdn.com/w320/' + esc(iso2) + '.png" alt="" loading="lazy" decoding="async" data-fallback="' + esc(card.flag || '🏳️') + '" style="width:100%;height:100%;object-fit:' + (fitContain ? 'contain' : 'cover') + ';' + (fitContain ? 'padding:4px;box-sizing:border-box;' : '') + 'display:block;">'
+          ? '<img class="atlas-flag-img" src="/assets/flags/' + esc(iso2) + '.svg" alt="" loading="lazy" decoding="async" data-fallback="' + esc(card.flag || '🏳️') + '" style="width:100%;height:100%;object-fit:' + (fitContain ? 'contain' : 'cover') + ';' + (fitContain ? 'padding:4px;box-sizing:border-box;' : '') + 'display:block;">'
           : '<span style="font-size:40px;line-height:1;">' + esc(card.flag || '🏳️') + '</span>';
 
         html += '<button class="atlas-card-btn" data-cid="' + esc(card.id) + '" style="width:100%;min-width:0;box-sizing:border-box;text-align:left;background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:0;cursor:pointer;color:#eef2ff;display:flex;align-items:stretch;justify-content:space-between;gap:12px;transition:border-color .15s,transform .12s;overflow:hidden;">' +
@@ -2107,10 +2107,18 @@
     var contName = CONTINENT_LABELS[card.continent] || card.continent;
     var originDisplay = card.originLabel || om.label;
 
+    var modalIso2 = flagEmojiToIso2(card.flag);
+    var modalFitContain = modalIso2 && (modalIso2 === 'np' || modalIso2 === 'ch' || modalIso2 === 'va');
+    var modalFlagHtml = modalIso2
+      ? '<div style="width:50px;height:36px;border-radius:7px;overflow:hidden;border:1px solid rgba(255,255,255,0.16);background:rgba(6,13,46,0.7);display:flex;align-items:center;justify-content:center;flex-shrink:0;">' +
+        '<img class="gc-modal-flag" src="/assets/flags/' + esc(modalIso2) + '.svg" alt="" data-fallback="' + esc(card.flag || '🏳️') + '" style="width:100%;height:100%;object-fit:' + (modalFitContain ? 'contain' : 'cover') + ';' + (modalFitContain ? 'padding:2px;box-sizing:border-box;' : '') + 'display:block;">' +
+        '</div>'
+      : '<span style="font-size:34px;line-height:1;">' + esc(card.flag || '🏳️') + '</span>';
+
     var html = '' +
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px;">' +
       '  <div style="display:flex;align-items:center;gap:10px;">' +
-      '    <span style="font-size:34px;line-height:1;">' + esc(card.flag || '🏳️') + '</span>' +
+      '    ' + modalFlagHtml +
       '    <div>' +
       '      <h3 style="font-family:\'Fredoka One\',sans-serif;font-size:23px;color:#fff;margin:0;line-height:1.15;">' + esc(card.name) + '</h3>' +
       '      <div style="font-size:12px;color:var(--dim);margin-top:3px;">' + esc(contName) + (card.capital ? ' · Capital: ' + esc(card.capital) : '') + ' · Modern Borders: <span style="font-family:\'Space Mono\',monospace;color:#e2e8f0;">' + esc(card.modernYear || '') + '</span></div>' +
@@ -2158,6 +2166,17 @@
 
     var m = createOverlayModal('mapolis-genesis-card-modal', html, { maxWidth: '470px' });
 
+    var modalFlagImg = m.sheet.querySelector('.gc-modal-flag');
+    if (modalFlagImg) {
+      modalFlagImg.addEventListener('error', function () {
+        var fb = modalFlagImg.getAttribute('data-fallback') || '🏳️';
+        var span = document.createElement('span');
+        span.style.cssText = 'font-size:30px;line-height:1;';
+        span.textContent = fb;
+        if (modalFlagImg.parentNode) modalFlagImg.parentNode.replaceChild(span, modalFlagImg);
+      }, { once: true });
+    }
+
     m.sheet.querySelector('#gc-close').addEventListener('click', function () { m.overlay.remove(); });
     m.sheet.querySelector('#gc-done').addEventListener('click', function () { m.overlay.remove(); });
     m.sheet.querySelector('#gc-lines-link').addEventListener('click', function () {
@@ -2191,7 +2210,8 @@
     stopAtlasGlobe: stopAtlasGlobe,
     openGenesisCard: openGenesisCard,
     loadGenesisData: loadGenesisData,
-    findAtlasCountryAtLonLat: findAtlasCountryAtLonLat
+    findAtlasCountryAtLonLat: findAtlasCountryAtLonLat,
+    flagEmojiToIso2: flagEmojiToIso2
   };
 
   window.openH2HModePicker = openH2HModePicker;
