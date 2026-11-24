@@ -211,6 +211,15 @@
     return null;
   }
 
+  function flagEmojiToIso2(flag) {
+    if (!flag) return null;
+    const cps = Array.from(String(flag))
+      .map(ch => ch.codePointAt(0))
+      .filter(cp => cp >= 0x1F1E6 && cp <= 0x1F1FF);
+    if (cps.length !== 2) return null;
+    return String.fromCharCode(cps[0] - 0x1F1E6 + 97, cps[1] - 0x1F1E6 + 97);
+  }
+
   // Export pure helpers immediately for Node unit tests
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -224,7 +233,8 @@
       resolveGenesisCard,
       filterGenesisCards,
       angularDistanceDeg,
-      findAtlasCountryAtLonLat
+      findAtlasCountryAtLonLat,
+      flagEmojiToIso2
     };
   }
 
@@ -1480,19 +1490,28 @@
     } else if (filtered.length === 0) {
       html += '<div style="text-align:center;padding:40px 16px;color:var(--dim);font-size:13px;">No countries match that filter.</div>';
     } else {
-      // Country Grid (single-elevation cards, unboxed metadata — zero horizontal clipping at any width)
-      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(210px,100%),1fr));gap:10px;width:100%;box-sizing:border-box;">';
+      // Country Grid (single-elevation cards with large framed flag panel filling right side)
+      var NON_RECT_FLAGS = { np: true, ch: true, va: true };
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(280px,100%),1fr));gap:10px;width:100%;box-sizing:border-box;">';
       filtered.forEach(function (card) {
         var om = ORIGIN_META[card.originType] || { icon: '🗺️', label: 'Modern Borders' };
         var contName = CONTINENT_LABELS[card.continent] || card.continent;
         var originDisplay = card.originLabel || om.label;
-        html += '<button class="atlas-card-btn" data-cid="' + esc(card.id) + '" style="width:100%;min-width:0;box-sizing:border-box;text-align:left;background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:13px 14px;cursor:pointer;color:#eef2ff;display:flex;flex-direction:column;gap:5px;transition:border-color .15s,transform .12s;overflow:hidden;">' +
-          '<div style="display:flex;align-items:center;gap:8px;min-width:0;">' +
-          '  <span style="font-size:22px;line-height:1;flex-shrink:0;">' + esc(card.flag || '🏳️') + '</span>' +
-          '  <span style="font-weight:800;font-size:14px;color:#fff;line-height:1.25;overflow-wrap:anywhere;">' + esc(card.name) + '</span>' +
+        var iso2 = flagEmojiToIso2(card.flag);
+        var fitContain = iso2 && NON_RECT_FLAGS[iso2];
+        var flagHtml = iso2
+          ? '<img class="atlas-flag-img" src="https://flagcdn.com/w320/' + esc(iso2) + '.png" alt="" loading="lazy" decoding="async" data-fallback="' + esc(card.flag || '🏳️') + '" style="width:100%;height:100%;object-fit:' + (fitContain ? 'contain' : 'cover') + ';' + (fitContain ? 'padding:4px;box-sizing:border-box;' : '') + 'display:block;">'
+          : '<span style="font-size:40px;line-height:1;">' + esc(card.flag || '🏳️') + '</span>';
+
+        html += '<button class="atlas-card-btn" data-cid="' + esc(card.id) + '" style="width:100%;min-width:0;box-sizing:border-box;text-align:left;background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:0;cursor:pointer;color:#eef2ff;display:flex;align-items:stretch;justify-content:space-between;gap:12px;transition:border-color .15s,transform .12s;overflow:hidden;">' +
+          '<div style="flex:1;min-width:0;padding:12px 0 12px 14px;display:flex;flex-direction:column;justify-content:center;gap:4px;">' +
+          '  <div style="font-weight:800;font-size:15px;color:#fff;line-height:1.2;overflow-wrap:anywhere;">' + esc(card.name) + '</div>' +
+          '  <div style="font-size:11px;color:var(--dim);">' + esc(contName) + ' · <span style="font-family:\'Space Mono\',monospace;color:#cbd5e1;">' + esc(card.modernYear || '') + '</span></div>' +
+          '  <div style="font-size:11px;color:#93c5fd;font-weight:700;margin-top:2px;line-height:1.3;">' + om.icon + ' ' + esc(originDisplay) + '</div>' +
           '</div>' +
-          '<div style="font-size:11px;color:var(--dim);">' + esc(contName) + ' · <span style="font-family:\'Space Mono\',monospace;color:#cbd5e1;">' + esc(card.modernYear || '') + '</span></div>' +
-          '<div style="font-size:11px;color:#93c5fd;font-weight:700;margin-top:2px;line-height:1.3;">' + om.icon + ' ' + esc(originDisplay) + '</div>' +
+          '<div style="flex-shrink:0;width:112px;min-height:76px;margin:7px 7px 7px 0;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.14);background:rgba(6,13,46,0.65);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.28);">' +
+          flagHtml +
+          '</div>' +
           '</button>';
       });
       html += '</div>';
@@ -1500,6 +1519,17 @@
 
     html += '</div>';
     rootEl.innerHTML = html;
+
+    // Seamless offline emoji fallback if any flag image cannot load
+    rootEl.querySelectorAll('.atlas-flag-img').forEach(function (img) {
+      img.addEventListener('error', function () {
+        var fb = img.getAttribute('data-fallback') || '🏳️';
+        var span = document.createElement('span');
+        span.style.cssText = 'font-size:40px;line-height:1;';
+        span.textContent = fb;
+        if (img.parentNode) img.parentNode.replaceChild(span, img);
+      }, { once: true });
+    });
 
     var backBtn = rootEl.querySelector('#btn-atlas-back');
     if (backBtn) backBtn.addEventListener('click', function () {

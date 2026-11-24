@@ -165,4 +165,16 @@ test('findAtlasCountryAtLonLat prioritizes smaller overlapping polygons, falls b
   assert.equal(oceanHit, null);
 });
 
+test('flagEmojiToIso2 converts all 200 genesis card emoji flags to lowercase 2-letter ISO codes', () => {
+  const genesisData = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'genesis-cards.json'), 'utf8'));
+  for (const c of genesisData.cards) {
+    const iso = prebeta6.flagEmojiToIso2(c.flag);
+    assert.match(iso || '', /^[a-z]{2}$/, `Expected valid ISO-2 code for ${c.id} (${c.flag}), got ${iso}`);
+  }
+  assert.equal(prebeta6.flagEmojiToIso2('🇳🇵'), 'np');
+  assert.equal(prebeta6.flagEmojiToIso2('🇽🇰'), 'xk');
+  assert.equal(prebeta6.flagEmojiToIso2('🇵🇸'), 'ps');
+});
+
+
 
