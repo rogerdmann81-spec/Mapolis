@@ -487,7 +487,7 @@
     <div class="credits-commit-row"><div class="credits-commit-icon">🔒</div><div><div class="credits-commit-title">Profiles are private &amp; isolated</div><div class="credits-commit-desc">Player accounts cannot see or inspect other players' private data or history. Data minimization and row-level security make this structural.</div></div></div>
     <div class="credits-commit-row"><div class="credits-commit-icon">📝</div><div><div class="credits-commit-title">No open chat or direct messaging</div><div class="credits-commit-desc">Players cannot chat, direct message, or communicate with strangers in Mapolis. No personal information can ever slip through.</div></div></div>
     <div class="credits-commit-row"><div class="credits-commit-icon">🚫</div><div><div class="credits-commit-title">Zero third-party tracking</div><div class="credits-commit-desc">No analytics SDK, no session replay, no advertising identifiers. Nothing you do in Mapolis is observed by any third party.</div></div></div>
-    <div class="credits-commit-row"><div class="credits-commit-icon">🛡️</div><div><div class="credits-commit-title">Moderated namespace</div><div class="credits-commit-desc">Every handle passes a 195-word filter with leetspeak normalization and real-name detection before it's accepted.</div></div></div>
+    <div class="credits-commit-row"><div class="credits-commit-icon">🛡️</div><div><div class="credits-commit-title">Moderated namespace</div><div class="credits-commit-desc">Every handle passes a multi-layer profanity &amp; slur filter with leetspeak normalization and a 500+ real-name detector before it's accepted.</div></div></div>
     <div class="credits-commit-row"><div class="credits-commit-icon">📍</div><div><div class="credits-commit-title">No location data, ever</div><div class="credits-commit-desc">We ask your home country once, for the leaderboard. No GPS, no IP-based location, nothing precise.</div></div></div>
 
     <div class="credits-heading">🇺🇸 US Federal</div>
@@ -513,8 +513,8 @@
     <p class="credits-body">In-force provisions (locked age registration, no geolocation, no targeted ads) met. Feature flags ready if enjoined provisions are reinstated.</p>
     <div class="credits-subheading">TX TDPSA <span class="credits-license" style="background:rgba(255,176,32,.12);color:#ffb020;border-color:rgba(255,176,32,.3);">Monitoring</span></div>
     <p class="credits-body">Texas Data Privacy and Security Act. Small business exemption currently applies. Data minimization applied structurally regardless.</p>
-    <div class="credits-subheading">Utah App Store Act <span class="credits-license" style="background:rgba(255,176,32,.12);color:#ffb020;border-color:rgba(255,176,32,.3);">May 2026</span></div>
-    <p class="credits-body">Compliance responsibility sits with Apple and Google as the app stores. Education classification supports an exemption; legal review in progress.</p>
+    <div class="credits-subheading">Utah App Store Act <span class="credits-license" style="background:rgba(255,176,32,.12);color:#ffb020;border-color:rgba(255,176,32,.3);">May 2027</span></div>
+    <p class="credits-body">Effective date extended to May 2027 under Utah HB 498 (March 2026). Primary age-verification compliance sits with Apple and Google as the app stores; education classification supports an exemption and legal review is ongoing.</p>
 
     <div class="credits-heading">📱 Platform Policies</div>
     <div class="credits-subheading">Apple App Store §1.3, §5.1.4 <span class="credits-license">Met</span></div>
@@ -974,7 +974,7 @@ const VIEW_CONFIGS = {
 
   'south-america': { center:[-60, -15],  scale:350 },
 
-  oceania:         { center:[140, -25],  scale:400 }
+  oceania:         { center:[0, -18],    rotate:[-165, 0], scale:360 }
 
 };
 
@@ -1235,6 +1235,9 @@ async function loadWorldData() {
     }
     if (typeof SA_FRENCH_GUIANA_FEATURE !== 'undefined') {
       ALL_FEATURES.push(SA_FRENCH_GUIANA_FEATURE);
+    }
+    if (typeof OC_TUVALU_FEATURE !== 'undefined') {
+      ALL_FEATURES.push(OC_TUVALU_FEATURE);
     }
 
     WORLD_LOADING = false;
@@ -1943,14 +1946,18 @@ function openRestoreProfileModal() {
     if (!handle) { showToast('Enter your username'); return; }
     if (!pw) { showToast('Enter your password'); return; }
 
-    var hash;
-    try { hash = await hashPassword(pw); }
+    var hash, legacyHash = null;
+    try {
+      hash = await hashPassword(pw);
+      legacyHash = await hashPasswordLegacySha256(pw);
+    }
     catch (e) { showToast('Could not process password — try again'); return; }
 
     var origBtnText = btn ? btn.textContent : 'Sign In';
     if (btn) { btn.disabled = true; btn.textContent = 'Signing in...'; }
 
     var match = null;
+    var usedLegacyHash = false;
     try {
       if (typeof isSupabaseConfigured === 'function' && isSupabaseConfigured()) {
         try {
@@ -1963,13 +1970,30 @@ function openRestoreProfileModal() {
             }
           }
           const baseUrl = (typeof SUPABASE_URL === 'string' ? SUPABASE_URL : '').replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
-          const resp = await fetch(baseUrl + '/rest/v1/rpc/restore_profile', {
+          let resp = await fetch(baseUrl + '/rest/v1/rpc/restore_profile', {
             method: 'POST',
             headers: authedHeaders(),
             body: JSON.stringify({ p_handle: handle, p_password_hash: hash })
           });
+          let errText = '';
           if (!resp.ok) {
-            const errText = await resp.text();
+            errText = await resp.text();
+            // Seamless backward-compatible fallback for pre-PBKDF2 SHA-256 accounts
+            if (legacyHash && legacyHash !== hash && !errText.toLowerCase().includes('frozen') && resp.status < 500) {
+              const legacyResp = await fetch(baseUrl + '/rest/v1/rpc/restore_profile', {
+                method: 'POST',
+                headers: authedHeaders(),
+                body: JSON.stringify({ p_handle: handle, p_password_hash: legacyHash })
+              });
+              if (legacyResp.ok) {
+                resp = legacyResp;
+                usedLegacyHash = true;
+              } else {
+                errText = await legacyResp.text();
+              }
+            }
+          }
+          if (!resp.ok) {
             console.error('[restore_profile] backend error:', errText, resp.status);
             let userMsg = 'Username or password not recognised';
             try {
@@ -2000,6 +2024,11 @@ function openRestoreProfileModal() {
             if (!rowData) { showToast('Profile data missing'); return; }
             var currUid = sess && sess.user ? sess.user.id : rowData.auth_uid;
             match = syncStore._mapRowToProfile(rowData, currUid);
+            if (usedLegacyHash && hash) {
+              // Transparently upgrade legacy SHA-256 hash to PBKDF2-SHA256
+              match.passwordHash = hash;
+              try { syncStore.save('profile_' + match.id, match); } catch (_) {}
+            }
             // Overwrite our local list/cache so we don't have dupes
             const existingIdx = allProfiles.findIndex(p => p.id === match.id);
             if (existingIdx >= 0) allProfiles[existingIdx] = match;
@@ -2015,8 +2044,14 @@ function openRestoreProfileModal() {
         for (var i = 0; i < allProfiles.length; i++) {
           if (allProfiles[i].handle &&
               allProfiles[i].handle.toLowerCase() === handle.toLowerCase() &&
-              allProfiles[i].passwordHash && allProfiles[i].passwordHash === hash) {
-            match = allProfiles[i]; break;
+              allProfiles[i].passwordHash &&
+              (allProfiles[i].passwordHash === hash || (legacyHash && allProfiles[i].passwordHash === legacyHash))) {
+            match = allProfiles[i];
+            if (match.passwordHash !== hash && hash) {
+              match.passwordHash = hash;
+              saveProfiles();
+            }
+            break;
           }
         }
         if (!match) {
@@ -3824,7 +3859,9 @@ const MAP_H = 500;
 
 function createProjection(viewKey) {
   const cfg = VIEW_CONFIGS[viewKey] || VIEW_CONFIGS.globe;
-  return d3.geoMercator()
+  const proj = d3.geoMercator();
+  if (cfg.rotate) proj.rotate(cfg.rotate);
+  return proj
     .center(cfg.center)
     .scale(cfg.scale)
     .translate([MAP_W / 2, MAP_H / 2]);
@@ -4314,6 +4351,65 @@ function extractIslandRing(feature, targetCentroid) {
   return { type:"Feature", geometry:{ type:"Polygon", coordinates:[bestRing] } };
 }
 
+function extractIslandFeatures(isl, geoFeatures) {
+  if (!isl || !geoFeatures || !geoFeatures.length) return [];
+  const ids = Array.isArray(isl.countryIds) && isl.countryIds.length
+    ? isl.countryIds
+    : (isl.countryId ? [isl.countryId] : []);
+  if (!ids.length) return [];
+
+  const bbox = Array.isArray(isl.bbox) && isl.bbox.length === 4 ? isl.bbox : null;
+  const inBBox = function(ring) {
+    if (!bbox) return true;
+    const avgLon = ring.reduce((s,c) => s+c[0], 0) / ring.length;
+    const avgLat = ring.reduce((s,c) => s+c[1], 0) / ring.length;
+    return avgLon >= bbox[0] && avgLon <= bbox[2] && avgLat >= bbox[1] && avgLat <= bbox[3];
+  };
+
+  if (isl.allRings || Array.isArray(isl.countryIds)) {
+    const results = [];
+    for (const cid of ids) {
+      const matching = geoFeatures.filter(f => +f.id === +cid);
+      const cidRings = [];
+      for (const feat of matching) {
+        const geom = feat.geometry;
+        const polys = geom.type === "Polygon" ? [geom.coordinates]
+          : geom.type === "MultiPolygon" ? geom.coordinates : [];
+        for (const poly of polys) {
+          const ring = poly[0];
+          if (ring && ring.length >= 4 && inBBox(ring)) {
+            cidRings.push(ring);
+          }
+        }
+      }
+      if (isl.largestPerCountry && cidRings.length > 1) {
+        cidRings.sort((a, b) => b.length - a.length);
+        results.push({ type:"Feature", geometry:{ type:"Polygon", coordinates:[cidRings[0]] } });
+      } else {
+        for (const ring of cidRings) {
+          results.push({ type:"Feature", geometry:{ type:"Polygon", coordinates:[ring] } });
+        }
+      }
+    }
+    return results;
+  }
+
+  // Single-island mode: gather all features for isl.countryId (handles split polygons like Cyprus)
+  const matching = geoFeatures.filter(f => +f.id === +ids[0]);
+  if (!matching.length) return [];
+  if (matching.length > 1) {
+    // e.g. Cyprus (South + North Cyprus features both share id 196)
+    const results = [];
+    for (const feat of matching) {
+      const r = extractIslandRing(feat, isl.centroid);
+      if (r) results.push(r);
+    }
+    return results;
+  }
+  const single = extractIslandRing(matching[0], isl.centroid);
+  return single ? [single] : [];
+}
+
 function clipRingToHalfPlane(ring, p1, p2) {
   var dx = p2[0]-p1[0], dy = p2[1]-p1[1];
   function isInside(p) { return dx*(p[1]-p1[1]) - dy*(p[0]-p1[0]) >= 0; }
@@ -4492,6 +4588,7 @@ function extractArchipelagoFeatures(archipelagoId, archData, worldFeatures) {
 function findCountryFeature(targetId, geoFeatures, cd) {
   if (targetId === 'kosovo' && typeof EURO_KOSOVO_FEATURE !== 'undefined') return EURO_KOSOVO_FEATURE;
   if (targetId === 'french_guiana' && typeof SA_FRENCH_GUIANA_FEATURE !== 'undefined') return SA_FRENCH_GUIANA_FEATURE;
+  if (targetId === 'tuvalu' && typeof OC_TUVALU_FEATURE !== 'undefined') return OC_TUVALU_FEATURE;
   let numId = null;
   if (cd && cd.countries) {
     const entry = Object.entries(cd.countries).find(([,v]) => v.id === targetId);
@@ -4603,12 +4700,13 @@ function detectByGeo(lon, lat, type, targetId, cd) {
 
   if (type === "island") {
     const isl = (cd.islands || []).find(i => i.id === targetId);
-    if (isl && isl.countryId) {
-      const countryFeat = geoFeatures.find(f => +f.id === +isl.countryId);
-      const ring = extractIslandRing(countryFeat, isl.centroid);
-      if (ring) {
-        try { if (d3.geoContains(ring, [lon,lat])) return true; } catch(e) {}
-        if (nearFeatureEdge(lon, lat, ring, GRACE_DEG * 0.5)) return true;
+    if (isl && (isl.countryId || (isl.countryIds && isl.countryIds.length))) {
+      const rings = extractIslandFeatures(isl, geoFeatures);
+      if (rings.length > 0) {
+        for (const ring of rings) {
+          try { if (d3.geoContains(ring, [lon,lat])) return true; } catch(e) {}
+          if (nearFeatureEdge(lon, lat, ring, GRACE_DEG * 0.5)) return true;
+        }
         return false;
       }
     }
@@ -4859,10 +4957,9 @@ function renderHighlightOnMap(mapG, pathGen, projection, q, cd, style) {
 
   if (type === "island") {
     const isl = (cd.islands || []).find(i => i.id === targetId);
-    if (isl && isl.countryId) {
-      const countryFeat = (ALL_FEATURES || []).find(f => +f.id === +isl.countryId);
-      const ring = extractIslandRing(countryFeat, isl.centroid);
-      if (ring) { addFeaturePath(ring); return; }
+    if (isl && (isl.countryId || (isl.countryIds && isl.countryIds.length))) {
+      const rings = extractIslandFeatures(isl, ALL_FEATURES || []);
+      if (rings.length > 0) { rings.forEach(r => addFeaturePath(r)); return; }
     }
     if (isl) addCircle(isl.centroid, isl.radius);
     return;
@@ -5035,15 +5132,7 @@ function _classifyWater(w) {
     'etang_saumtre','paduskoye_more'];
   if (_lakeOverrides.indexOf(id) !== -1) return 'lakes';
   if (name.indexOf('ocean') !== -1) return 'oceans';
-  if (name.indexOf('gulf') !== -1 || name.indexOf('bay') !== -1 ||
-      name.indexOf('golfo') !== -1 || name.indexOf('golfe') !== -1 ||
-      name.indexOf('bahía') !== -1 || name.indexOf('baia') !== -1 ||
-      name.indexOf('baía') !== -1 || name.indexOf('wan') !== -1 ||
-      name.indexOf('zaliv') !== -1 || name.indexOf('bight') !== -1 ||
-      name.indexOf('inlet') !== -1 || name.indexOf('basin') !== -1 ||
-      name.indexOf('fjord') !== -1 || name.indexOf('seno') !== -1 ||
-      name.indexOf('teluk') !== -1 || name.indexOf('bucht') !== -1 ||
-      name.indexOf('haff') !== -1 || name.indexOf('zalew') !== -1) return 'gulfs';
+  // Test straits/channels/passages BEFORE gulfs/wan so "Taiwan Strait" classifies as straits, not gulfs
   if (name.indexOf('strait') !== -1 || name.indexOf('channel') !== -1 ||
       name.indexOf('passage') !== -1 || name.indexOf('selat') !== -1 ||
       name.indexOf('canal') !== -1 || name.indexOf('sound') !== -1 ||
@@ -5053,6 +5142,15 @@ function _classifyWater(w) {
   if (id === 'bosporus' || id === 'dardanelles' || id === 'skagerrak' ||
       id === 'kattegat' || id === 'bab_el_mandeb' || id === 'oresund' ||
       id === 'boca_grande') return 'straits';
+  if (name.indexOf('gulf') !== -1 || name.indexOf('bay') !== -1 ||
+      name.indexOf('golfo') !== -1 || name.indexOf('golfe') !== -1 ||
+      name.indexOf('bahía') !== -1 || name.indexOf('baia') !== -1 ||
+      name.indexOf('baía') !== -1 || name.indexOf('wan') !== -1 ||
+      name.indexOf('zaliv') !== -1 || name.indexOf('bight') !== -1 ||
+      name.indexOf('inlet') !== -1 || name.indexOf('basin') !== -1 ||
+      name.indexOf('fjord') !== -1 || name.indexOf('seno') !== -1 ||
+      name.indexOf('teluk') !== -1 || name.indexOf('bucht') !== -1 ||
+      name.indexOf('haff') !== -1 || name.indexOf('zalew') !== -1) return 'gulfs';
   if (name.indexOf('reef') !== -1) return 'gulfs';
   if (id === 'l_de_maracaibo') return 'gulfs';
   var lkPfx = ['lake ','lago ','lac ','lac-','loch ','lough ','ozero ',
@@ -5116,7 +5214,7 @@ function buildPool(config, cd) {
     if (categories.countries) {
       countryList.forEach(c => pool.push({
         id:`country_${c.id}`, type:"country", label:c.name,
-        hint:"Find this country on the map", targetId:c.id,
+        hint:c.isTerritory ? "Find this territory on the map" : "Find this country on the map", targetId:c.id,
         cat:"countries", subcat:"countries", continent:_cc(c), tier:c.tier
       }));
     }
@@ -5126,7 +5224,7 @@ function buildPool(config, cd) {
         if (et > tierCeiling) return;
         pool.push({
           id:`capital_${c.id}`, type:"country", label:c.capital,
-          hint:"Find the country whose capital this is", targetId:c.id,
+          hint:c.isTerritory ? "Find the territory whose capital this is" : "Find the country whose capital this is", targetId:c.id,
           cat:"capitals", subcat:"capitals", continent:_cc(c), tier:et
         });
       });
@@ -5137,7 +5235,7 @@ function buildPool(config, cd) {
         if (et > tierCeiling) return;
         pool.push({
           id:`flag_${c.id}`, type:"country", label:c.flag,
-          hint:"Find this country on the map", targetId:c.id,
+          hint:c.isTerritory ? "Find this territory on the map" : "Find this country on the map", targetId:c.id,
           cat:"flags", subcat:"flags", flagName:c.name, continent:_cc(c), tier:et
         });
       });
@@ -5170,7 +5268,7 @@ function buildPool(config, cd) {
         if (i.tier && i.tier > tierCeiling) return;
         pool.push({
           id:`land_${i.id}`, type:"island", label:i.name,
-          hint:"Click on this island", targetId:i.id,
+          hint:i.allRings ? "Click on this island group" : "Click on this island", targetId:i.id,
           cat:"landforms", subcat:"landforms", continent:cd.id, tier:i.tier
         });
       });
@@ -5242,6 +5340,8 @@ function buildPool(config, cd) {
         pool.push({
         id:q.id, type:"country", label:q.label,
         hint:"Click on the country", targetId:q.targetId,
+        altTargetId:q.altTargetId || null,
+        altTargetIds:Array.isArray(q.altTargetIds) ? q.altTargetIds.slice() : null,
         cat:"culture", subcat:"languages", continent:cd.id, tier:q.tier
         });
       });
@@ -5252,6 +5352,8 @@ function buildPool(config, cd) {
         pool.push({
         id:q.id, type:"country", label:q.label,
         hint:"Click on the correct country", targetId:q.targetId,
+        altTargetId:q.altTargetId || null,
+        altTargetIds:Array.isArray(q.altTargetIds) ? q.altTargetIds.slice() : null,
         cat:"culture", subcat:"trivia", continent:cd.id, tier:q.tier
       });
       });
@@ -5912,12 +6014,14 @@ function logSecurityEvent(kind, detail) {
 }
 
 // ── Password hashing ────────────────────────────────────────────────────
-// SHA-256 via Web Crypto. Stored hash is hex string.
-// NOTE: Unsalted pre-backend — the hash lives in localStorage on the
-// user's own device (not a leak target). When Supabase lands
-// (TODO phase-b-9), move to a salted hash (bcrypt/argon2 server-side
-// or a per-profile salt stored separately in the DB).
-async function hashPassword(password) {
+// PBKDF2-SHA256 (100,000 iterations, domain-separated salt) via Web Crypto.
+// Stored hash format: "pbkdf2$100000$<64-char hex>".
+// Legacy single-round SHA-256 helper retained solely for seamless login
+// fallback and automatic upgrade of pre-beta6 accounts.
+const PBKDF2_ITERATIONS = 100000;
+const PBKDF2_DOMAIN_SALT = 'mapolis-pbkdf2-v1-kdf-salt';
+
+async function hashPasswordLegacySha256(password) {
   if (!password) return null;
   if (typeof crypto === 'undefined' || !crypto.subtle) {
     throw new Error('Web Crypto not available — password cannot be hashed');
@@ -5933,6 +6037,39 @@ async function hashPassword(password) {
     hex += h;
   }
   return hex;
+}
+
+async function hashPassword(password) {
+  if (!password) return null;
+  if (typeof crypto === 'undefined' || !crypto.subtle) {
+    throw new Error('Web Crypto not available — password cannot be hashed');
+  }
+  var enc = new TextEncoder();
+  var keyMat = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(password),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveBits']
+  );
+  var bits = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: enc.encode(PBKDF2_DOMAIN_SALT),
+      iterations: PBKDF2_ITERATIONS,
+      hash: 'SHA-256'
+    },
+    keyMat,
+    256
+  );
+  var bytes = new Uint8Array(bits);
+  var hex = '';
+  for (var i = 0; i < bytes.length; i++) {
+    var h = bytes[i].toString(16);
+    if (h.length === 1) h = '0' + h;
+    hex += h;
+  }
+  return 'pbkdf2$' + PBKDF2_ITERATIONS + '$' + hex;
 }
 
 function normalizeEmail(email) {
@@ -5985,9 +6122,8 @@ function isHandleTaken(handle, exceptProfileId) {
   return false;
 }
 
-// NOTE: No handle-rename flow exists in renderProfile today (only two
-// `.handle =` assignments in the file, both in the create step). If a
-// rename flow is added later, call validateHandle() there too.
+// Handle renames are served via openRenameHandleModal(), which enforces
+// validateHandle() (2–20 chars, profanity & real-name checks) before saving.
 
 // ════════════════════════════════════════════════════════════════════
 // H2H STATE + STUB DATA LAYER
@@ -9149,7 +9285,18 @@ function handleGameClick(lon, lat, event) {
     if (specific) detectCd = specific;
   }
 
-  const isCorrect = detectByGeo(lon, lat, q.type, q.targetId, detectCd);
+  let isCorrect = detectByGeo(lon, lat, q.type, q.targetId, detectCd);
+  if (!isCorrect && q.altTargetId) {
+    isCorrect = detectByGeo(lon, lat, q.type, q.altTargetId, detectCd);
+  }
+  if (!isCorrect && Array.isArray(q.altTargetIds) && q.altTargetIds.length) {
+    for (let ai = 0; ai < q.altTargetIds.length; ai++) {
+      if (detectByGeo(lon, lat, q.type, q.altTargetIds[ai], detectCd)) {
+        isCorrect = true;
+        break;
+      }
+    }
+  }
   const geo = getCorrectGeo(q, detectCd);
 
   const answerMs = Date.now() - (_game._qStart || Date.now());
@@ -10865,7 +11012,7 @@ const ANIMAL_PRESERVE = [
   { id:'a_turtle', name:'Sea Turtle', cp:'a_turtle', cost:250, continent:'north-america', link:'Mexico', linkType:'country', desc:'Ancient ocean voyager' },
   { id:'a_raccoon', name:'Raccoon', cp:'1f99d', cost:150, continent:'north-america', link:'United States', linkType:'country', desc:'Masked night explorer' },
   { id:'a_beaver', name:'Beaver', cp:'1f9ab', cost:300, continent:'north-america', link:'Canada', linkType:'country', desc:'Nature\'s engineer' },
-  { id:'a_turkey', name:'Wild Turkey', cp:'1f983', cost:200, continent:'north-america', link:'United States', linkType:'country', desc:'Ben Franklin\'s choice' },
+  { id:'a_turkey', name:'Wild Turkey', cp:'1f983', cost:200, continent:'north-america', link:'United States', linkType:'country', desc:'Native North American bird admired by Ben Franklin' },
   { id:'a_polarbear', name:'Polar Bear', cp:'1f43b-200d-2744-fe0f', cost:500, continent:'north-america', link:'Canada', linkType:'country', desc:'Arctic sea-ice king' },
   { id:'a_otter', name:'Sea Otter', cp:'1f9a6', cost:300, continent:'north-america', link:'United States', linkType:'country', desc:'Kelp forest floater' },
   { id:'a_axolotl', name:'Axolotl', cp:'a_axolotl', cost:450, continent:'north-america', link:'Mexico', linkType:'country', desc:'Smiling lake salamander' },

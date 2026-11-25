@@ -43,7 +43,7 @@ const COUNTRY_DATA = {
 705: {id:"slovenia",      name:"Slovenia",               capital:"Ljubljana",        capitalCoords:[14.51,46.06],  continent:"europe", tier:9,  flag:"🇸🇮", centroid:[14.82,46.15]},
 724: {id:"spain",         name:"Spain",                  capital:"Madrid",           capitalCoords:[-3.70,40.42],  continent:"europe", tier:3,  flag:"🇪🇸", centroid:[-3.70,40.40]},
 752: {id:"sweden",        name:"Sweden",                 capital:"Stockholm",        capitalCoords:[18.07,59.33],  continent:"europe", tier:6,  flag:"🇸🇪", centroid:[16.00,62.00]},
-756: {id:"switzerland",   name:"Switzerland",            capital:"Bern",             capitalCoords:[7.45,46.95],   continent:"europe", tier:8,  flag:"🇨🇭", centroid:[8.23,46.82]},
+756: {id:"switzerland",   name:"Switzerland",            capital:"Bern (de facto)",  capitalCoords:[7.45,46.95],   continent:"europe", tier:8,  flag:"🇨🇭", centroid:[8.23,46.82]},
 804: {id:"ukraine",       name:"Ukraine",                capital:"Kyiv",             capitalCoords:[30.52,50.45],  continent:"europe", tier:6,  flag:"🇺🇦", centroid:[31.50,49.00]},
 826: {id:"uk",            name:"United Kingdom",         capital:"London",           capitalCoords:[-0.12,51.51],  continent:"europe", tier:2,  flag:"🇬🇧", centroid:[-2.00,54.00]},
 336: {id:"vatican",       name:"Vatican City",           capital:"Vatican City",     capitalCoords:[12.45,41.90],  continent:"europe", tier:13, flag:"🇻🇦", centroid:[12.45,41.90]},
@@ -58,9 +58,9 @@ const COUNTRY_DATA = {
 178: {id:"congo",         name:"Republic of the Congo",  capital:"Brazzaville",      capitalCoords:[15.28,-4.27],  continent:"africa", tier:10, flag:"🇨🇬", centroid:[15.83,-0.23]},
 384: {id:"ivory_coast",   name:"Côte d'Ivoire",         capital:"Yamoussoukro",     capitalCoords:[-5.28,6.83],   continent:"africa", tier:8,  flag:"🇨🇮", centroid:[-5.55,7.54]},
 818: {id:"egypt",         name:"Egypt",                  capital:"Cairo",            capitalCoords:[31.24,30.04],  continent:"africa", tier:2,  flag:"🇪🇬", centroid:[29.87,26.82]},
-226: {id:"eq_guinea",     name:"Equatorial Guinea",      capital:"Malabo",           capitalCoords:[8.78,3.75],    continent:"africa", tier:10, flag:"🇬🇶", centroid:[10.34,1.65]},
+226: {id:"eq_guinea",     name:"Equatorial Guinea",      capital:"Ciudad de la Paz", capitalCoords:[10.82,1.59],   continent:"africa", tier:10, flag:"🇬🇶", centroid:[10.34,1.65]},
 232: {id:"eritrea",       name:"Eritrea",                capital:"Asmara",           capitalCoords:[38.93,15.34],  continent:"africa", tier:10, flag:"🇪🇷", centroid:[39.78,15.18]},
-748: {id:"eswatini",      name:"Eswatini",               capital:"Mbabane",          capitalCoords:[31.13,-26.32], continent:"africa", tier:10, flag:"🇸🇿", centroid:[31.50,-26.56]},
+748: {id:"eswatini",      name:"Eswatini",               capital:"Mbabane / Lobamba",capitalCoords:[31.13,-26.32], continent:"africa", tier:10, flag:"🇸🇿", centroid:[31.50,-26.56]},
 231: {id:"ethiopia",      name:"Ethiopia",               capital:"Addis Ababa",      capitalCoords:[38.75,9.02],   continent:"africa", tier:7,  flag:"🇪🇹", centroid:[39.62,8.63]},
 266: {id:"gabon",         name:"Gabon",                  capital:"Libreville",       capitalCoords:[9.45,0.39],    continent:"africa", tier:10, flag:"🇬🇦", centroid:[11.80,-0.80]},
 270: {id:"gambia",        name:"Gambia",                 capital:"Banjul",           capitalCoords:[-16.58,13.45], continent:"africa", tier:10, flag:"🇬🇲", centroid:[-15.39,13.44]},
@@ -84,8 +84,8 @@ const COUNTRY_DATA = {
 686: {id:"senegal",       name:"Senegal",                capital:"Dakar",            capitalCoords:[-17.47,14.72], continent:"africa", tier:8,  flag:"🇸🇳", centroid:[-14.45,14.50]},
 694: {id:"sierra_leone",  name:"Sierra Leone",           capital:"Freetown",         capitalCoords:[-13.23,8.48],  continent:"africa", tier:10, flag:"🇸🇱", centroid:[-11.79,8.56]},
 706: {id:"somalia",       name:"Somalia",                capital:"Mogadishu",        capitalCoords:[45.34,2.05],   continent:"africa", tier:10, flag:"🇸🇴", centroid:[45.71,5.15]},
-732: {id:"w_sahara",      name:"Western Sahara",         capital:"El Aaiún",         capitalCoords:[-13.20,27.15], continent:"africa", tier:12, flag:"🇪🇭", centroid:[-12.22,24.22]},
-710: {id:"south_africa",  name:"South Africa",           capital:"Pretoria",         capitalCoords:[28.19,-25.75], continent:"africa", tier:3,  flag:"🇿🇦", centroid:[25.08,-29.00]},
+732: {id:"w_sahara",      name:"Western Sahara",         capital:"El Aaiún (claimed)",capitalCoords:[-13.20,27.15], continent:"africa", tier:12, flag:"🇪🇭", centroid:[-12.22,24.22], isTerritory:true},
+710: {id:"south_africa",  name:"South Africa",           capital:"Pretoria (Exec.) / Cape Town / Bloemfontein", capitalCoords:[28.19,-25.75], continent:"africa", tier:3,  flag:"🇿🇦", centroid:[25.08,-29.00]},
 728: {id:"south_sudan",   name:"South Sudan",            capital:"Juba",             capitalCoords:[31.60,4.85],   continent:"africa", tier:10, flag:"🇸🇸", centroid:[30.25,7.00]},
 729: {id:"sudan",         name:"Sudan",                  capital:"Khartoum",         capitalCoords:[32.53,15.59],  continent:"africa", tier:8,  flag:"🇸🇩", centroid:[30.00,15.00]},
 834: {id:"tanzania",      name:"Tanzania",               capital:"Dodoma",           capitalCoords:[35.74,-6.16],  continent:"africa", tier:7,  flag:"🇹🇿", centroid:[34.82,-6.27]},
@@ -113,7 +113,7 @@ const COUNTRY_DATA = {
 116: {id:"cambodia",      name:"Cambodia",               capital:"Phnom Penh",       capitalCoords:[104.92,11.56], continent:"asia", tier:8,  flag:"🇰🇭", centroid:[104.99,12.57]},
 156: {id:"china",         name:"China",                  capital:"Beijing",          capitalCoords:[116.41,39.90], continent:"asia", tier:2,  flag:"🇨🇳", centroid:[104.20,35.86]},
 268: {id:"georgia",       name:"Georgia",                capital:"Tbilisi",          capitalCoords:[44.83,41.72],  continent:"asia", tier:10, flag:"🇬🇪", centroid:[43.36,42.32]},
-275: {id:"palestine",     name:"Palestine",              capital:"Ramallah",         capitalCoords:[35.21,31.90],  continent:"asia", tier:8,  flag:"🇵🇸", centroid:[35.00,31.50]},
+275: {id:"palestine",     name:"Palestine",              capital:"East Jerusalem (proclaimed) / Ramallah", capitalCoords:[35.21,31.90],  continent:"asia", tier:8,  flag:"🇵🇸", centroid:[35.00,31.50]},
 356: {id:"india",         name:"India",                  capital:"New Delhi",        capitalCoords:[77.21,28.61],  continent:"asia", tier:2,  flag:"🇮🇳", centroid:[78.96,20.59]},
 360: {id:"indonesia",     name:"Indonesia",              capital:"Jakarta",          capitalCoords:[106.85,-6.21], continent:"asia", tier:3,  flag:"🇮🇩", centroid:[113.92,-0.79]},
 364: {id:"iran",          name:"Iran",                   capital:"Tehran",           capitalCoords:[51.39,35.69],  continent:"asia", tier:7,  flag:"🇮🇷", centroid:[53.69,32.43]},
@@ -168,12 +168,12 @@ const COUNTRY_DATA = {
 840: {id:"usa",           name:"United States",          capital:"Washington, D.C.", capitalCoords:[-77.04,38.90], continent:"north-america", tier:2,  flag:"🇺🇸", centroid:[-95.71,37.09]},
 
 32:  {id:"argentina",     name:"Argentina",              capital:"Buenos Aires",     capitalCoords:[-58.38,-34.60],continent:"south-america", tier:3,  flag:"🇦🇷", centroid:[-63.62,-38.42]},
-68:  {id:"bolivia",       name:"Bolivia",                capital:"Sucre",            capitalCoords:[-65.26,-19.04],continent:"south-america", tier:8,  flag:"🇧🇴", centroid:[-63.59,-16.29]},
+68:  {id:"bolivia",       name:"Bolivia",                capital:"Sucre / La Paz",   capitalCoords:[-65.26,-19.04],continent:"south-america", tier:8,  flag:"🇧🇴", centroid:[-63.59,-16.29]},
 76:  {id:"brazil",        name:"Brazil",                 capital:"Brasília",        capitalCoords:[-47.88,-15.79],continent:"south-america", tier:2,  flag:"🇧🇷", centroid:[-51.93,-14.24]},
 152: {id:"chile",         name:"Chile",                  capital:"Santiago",         capitalCoords:[-70.65,-33.45],continent:"south-america", tier:6,  flag:"🇨🇱", centroid:[-71.36,-35.68]},
 170: {id:"colombia",      name:"Colombia",               capital:"Bogotá",          capitalCoords:[-74.07,4.71],  continent:"south-america", tier:6,  flag:"🇨🇴", centroid:[-74.30,4.57]},
 218: {id:"ecuador",       name:"Ecuador",                capital:"Quito",            capitalCoords:[-78.50,-0.18], continent:"south-america", tier:8,  flag:"🇪🇨", centroid:[-78.18,-1.83]},
-254: {id:"french_guiana", name:"French Guiana",           capital:"Cayenne",          capitalCoords:[-52.33,4.94],  continent:"south-america", tier:11, flag:"🇬🇫", centroid:[-53.13,3.92]},
+254: {id:"french_guiana", name:"French Guiana",           capital:"Cayenne",          capitalCoords:[-52.33,4.94],  continent:"south-america", tier:11, flag:"🇬🇫", centroid:[-53.13,3.92], isTerritory:true},
 328: {id:"guyana",        name:"Guyana",                 capital:"Georgetown",       capitalCoords:[-58.16,6.80],  continent:"south-america", tier:10, flag:"🇬🇾", centroid:[-58.93,4.86]},
 600: {id:"paraguay",      name:"Paraguay",               capital:"Asunción",        capitalCoords:[-57.58,-25.26],continent:"south-america", tier:9,  flag:"🇵🇾", centroid:[-58.44,-23.44]},
 604: {id:"peru",          name:"Peru",                   capital:"Lima",             capitalCoords:[-77.04,-12.05],continent:"south-america", tier:6,  flag:"🇵🇪", centroid:[-75.02,-9.19]},
@@ -186,7 +186,26 @@ const COUNTRY_DATA = {
 554: {id:"new_zealand",   name:"New Zealand",            capital:"Wellington",       capitalCoords:[174.78,-41.29],continent:"oceania", tier:8,  flag:"🇳🇿", centroid:[174.89,-40.90]},
 598: {id:"png",           name:"Papua New Guinea",       capital:"Port Moresby",     capitalCoords:[147.15,-9.44], continent:"oceania", tier:8,  flag:"🇵🇬", centroid:[143.96,-6.31]},
 90:  {id:"solomons",      name:"Solomon Islands",        capital:"Honiara",          capitalCoords:[159.95,-9.43], continent:"oceania", tier:10, flag:"🇸🇧", centroid:[160.16,-9.62]},
-548: {id:"vanuatu",       name:"Vanuatu",                capital:"Port Vila",        capitalCoords:[168.32,-17.73],continent:"oceania", tier:10, flag:"🇻🇺", centroid:[166.96,-15.38]}
+548: {id:"vanuatu",       name:"Vanuatu",                capital:"Port Vila",        capitalCoords:[168.32,-17.73],continent:"oceania", tier:10, flag:"🇻🇺", centroid:[166.96,-15.38]},
+678: {id:"sao_tome",      name:"São Tomé & Príncipe",    capital:"São Tomé",         capitalCoords:[6.73,0.34],    continent:"africa",  tier:11, flag:"🇸🇹", centroid:[6.61,0.24]},
+690: {id:"seychelles",    name:"Seychelles",             capital:"Victoria",         capitalCoords:[55.45,-4.62],  continent:"africa",  tier:11, flag:"🇸🇨", centroid:[55.49,-4.68]},
+158: {id:"taiwan",        name:"Taiwan",                 capital:"Taipei",           capitalCoords:[121.56,25.03], continent:"asia",    tier:11, flag:"🇹🇼", centroid:[120.96,23.75]},
+462: {id:"maldives",      name:"Maldives",               capital:"Malé",             capitalCoords:[73.51,4.17],   continent:"asia",    tier:11, flag:"🇲🇻", centroid:[73.22,3.20]},
+52:  {id:"barbados",      name:"Barbados",               capital:"Bridgetown",       capitalCoords:[-59.62,13.10], continent:"north-america", tier:11, flag:"🇧🇧", centroid:[-59.54,13.19]},
+212: {id:"dominica",      name:"Dominica",               capital:"Roseau",           capitalCoords:[-61.39,15.30], continent:"north-america", tier:11, flag:"🇩🇲", centroid:[-61.37,15.41]},
+308: {id:"grenada",       name:"Grenada",                capital:"St. George's",     capitalCoords:[-61.75,12.05], continent:"north-america", tier:11, flag:"🇬🇩", centroid:[-61.68,12.12]},
+659: {id:"st_kitts",      name:"St. Kitts & Nevis",      capital:"Basseterre",       capitalCoords:[-62.72,17.30], continent:"north-america", tier:11, flag:"🇰🇳", centroid:[-62.68,17.34]},
+662: {id:"st_lucia",      name:"St. Lucia",              capital:"Castries",         capitalCoords:[-61.00,14.01], continent:"north-america", tier:11, flag:"🇱🇨", centroid:[-60.97,13.91]},
+670: {id:"st_vincent",    name:"St. Vincent & the Grenadines", capital:"Kingstown",  capitalCoords:[-61.23,13.16], continent:"north-america", tier:11, flag:"🇻🇨", centroid:[-61.20,13.25]},
+296: {id:"kiribati",      name:"Kiribati",               capital:"Tarawa",           capitalCoords:[172.98,1.45],  continent:"oceania", tier:11, flag:"🇰🇮", centroid:[173.02,1.42]},
+520: {id:"nauru",         name:"Nauru",                  capital:"Yaren (de facto)", capitalCoords:[166.92,-0.55], continent:"oceania", tier:11, flag:"🇳🇷", centroid:[166.93,-0.53]},
+540: {id:"new_caledonia", name:"New Caledonia",          capital:"Nouméa",           capitalCoords:[166.46,-22.28],continent:"oceania", tier:11, flag:"🇳🇨", centroid:[165.62,-21.50], isTerritory:true},
+583: {id:"micronesia",    name:"Micronesia",             capital:"Palikir",          capitalCoords:[158.15,6.92],  continent:"oceania", tier:11, flag:"🇫🇲", centroid:[158.23,6.89]},
+584: {id:"marshall",      name:"Marshall Islands",       capital:"Majuro",           capitalCoords:[171.38,7.09],  continent:"oceania", tier:11, flag:"🇲🇭", centroid:[171.18,7.13]},
+585: {id:"palau",         name:"Palau",                  capital:"Ngerulmud",        capitalCoords:[134.62,7.50],  continent:"oceania", tier:11, flag:"🇵🇼", centroid:[134.58,7.51]},
+776: {id:"tonga",         name:"Tonga",                  capital:"Nukuʻalofa",       capitalCoords:[-175.20,-21.21],continent:"oceania",tier:11, flag:"🇹🇴", centroid:[-175.20,-21.21]},
+798: {id:"tuvalu",        name:"Tuvalu",                 capital:"Funafuti",         capitalCoords:[179.19,-8.52], continent:"oceania", tier:11, flag:"🇹🇻", centroid:[179.21,-8.52]},
+882: {id:"samoa",         name:"Samoa",                  capital:"Apia",             capitalCoords:[-171.77,-13.83],continent:"oceania",tier:11, flag:"🇼🇸", centroid:[-172.10,-13.76]}
 };
 
 const MICRO_ZONES = {
@@ -197,11 +216,11 @@ const MICRO_ZONES = {
 
 const CONTINENT_COUNTRIES = {
   europe: [8,20,40,112,56,70,100,191,196,203,208,233,246,250,276,300,348,352,372,380,383,428,438,440,442,470,498,492,499,528,807,578,616,620,642,643,674,688,703,705,724,752,756,804,826,336,792],
-  africa: [12,24,72,108,120,132,140,148,174,178,180,204,226,232,231,262,266,270,288,324,384,404,426,430,434,450,454,466,478,480,504,508,516,562,566,624,646,686,694,706,710,728,729,732,748,768,788,800,818,834,854,894,716],
-  asia: [4,31,48,50,51,64,96,104,116,144,156,158,268,275,356,360,364,368,376,392,398,400,408,410,414,417,418,422,458,496,524,512,586,608,634,682,702,760,762,764,626,784,792,795,860,704,887,643],
-  'north-america': [28,44,84,124,188,192,214,222,304,320,332,340,388,484,558,591,780,840],
+  africa: [12,24,72,108,120,132,140,148,174,178,180,204,226,232,231,262,266,270,288,324,384,404,426,430,434,450,454,466,478,480,504,508,516,562,566,624,646,678,686,690,694,706,710,728,729,732,748,768,788,800,818,834,854,894,716],
+  asia: [4,31,48,50,51,64,96,104,116,144,156,158,268,275,356,360,364,368,376,392,398,400,408,410,414,417,418,422,458,462,496,524,512,586,608,634,682,702,760,762,764,626,784,792,795,860,704,887,643],
+  'north-america': [28,44,52,84,124,188,192,212,214,222,304,308,320,332,340,388,484,558,591,659,662,670,780,840],
   'south-america': [32,68,76,152,170,218,254,328,600,604,740,858,862],
-  oceania: [36,90,242,554,548,598]
+  oceania: [36,90,242,296,520,540,548,554,583,584,585,598,776,798,882]
 };
 
 
@@ -247,7 +266,7 @@ var EURO_COUNTRIES = {
 705:{id:"slovenia",tier:11,name:"Slovenia",capital:"Ljubljana"},
 724:{id:"spain",tier:11,name:"Spain",capital:"Madrid"},
 752:{id:"sweden",tier:11,name:"Sweden",capital:"Stockholm"},
-756:{id:"switzerland",tier:11,name:"Switzerland",capital:"Bern"},
+756:{id:"switzerland",tier:11,name:"Switzerland",capital:"Bern (de facto)"},
 804:{id:"ukraine",tier:11,name:"Ukraine",capital:"Kyiv"},
 826:{id:"uk",tier:11,name:"United Kingdom",capital:"London"},
 336:{id:"vatican",tier:11,name:"Vatican City",capital:"Vatican City"},
@@ -1306,10 +1325,10 @@ var EURO_ISLANDS = [
 {id:"sardinia",tier:8,  name:"Sardinia",    centroid:[9.0,  40.1], radius:0.9, countryId:"380"},
 {id:"corsica",tier:8,   name:"Corsica",     centroid:[9.0,  42.2], radius:0.7, countryId:"250"},
 {id:"crete",tier:6,     name:"Crete",       centroid:[24.8, 35.2], radius:1.3, countryId:"300"},
-{id:"svalbard",tier:10,  name:"Svalbard",    centroid:[17.5, 78.0], radius:3.5, countryId:"578"},
+{id:"svalbard",tier:10,  name:"Svalbard",    centroid:[17.5, 78.0], radius:3.5, countryId:"578", allRings:true, bbox:[9.0,74.0,34.0,81.5]},
 {id:"jan_mayen",tier:11, name:"Jan Mayen",   centroid:[-8.5, 71.0], radius:1.2, countryId:"578"},
 {id:"iceland",tier:3,    name:"Iceland",     centroid:[-19.0,64.9], radius:3.0, countryId:"352"},
-{id:"cyprus",tier:8,     name:"Cyprus",      centroid:[33.4, 35.1], radius:1.0, countryId:"196"},
+{id:"cyprus",tier:8,     name:"Cyprus",      centroid:[33.4, 35.1], radius:1.0, countryId:"196", allRings:true},
 ];
 
 var EURO_ARCHIPELAGOS = [
@@ -1431,7 +1450,7 @@ var EURO_WATER_BODIES = [
 {id:"siljan",tier:13,name:"Siljan",centroid:[14.8,60.9]},
 {id:"lauwerszee",tier:13,name:"Lauwerszee",centroid:[6.2,53.4]},
 {id:"tyrifjorden",tier:13,name:"Tyrifjorden",centroid:[10.2,60.0]},
-{id:"paduskoye_more",tier:13,name:"Paduskoye More",centroid:[31.0,68.5]},
+{id:"paduskoye_more",tier:13,name:"Padunskoye More",centroid:[31.0,68.5]},
 {id:"mjosa",tier:13,name:"Mjøsa",centroid:[11.0,60.7]},
 {id:"kaliningradskiy_zaliv",tier:13,name:"Kaliningradskiy Zaliv",centroid:[20.0,54.6]},
 {id:"zalew_wislany",tier:13,name:"Zalew Wislany",centroid:[19.5,54.4]}
@@ -1560,13 +1579,11 @@ var EURO_HERITAGE_SITES = [
 {id:"venice_her",tier:9,name:"Venice and its Lagoon",coords:[12.338,45.438],radius:0.9},
 {id:"budapest_her",tier:9,name:"Budapest — Banks of the Danube",coords:[19.047,47.492],radius:0.8},
 {id:"auschwitz",tier:9,name:"Auschwitz-Birkenau Memorial",coords:[19.202,50.027],radius:0.7},
-{id:"gaudi",tier:9,name:"Works of Antoni Gaudí",coords:[2.174,41.404],radius:0.8},
 {id:"tower_london",tier:9,name:"Tower of London",coords:[-0.076,51.508],radius:0.7},
 {id:"cologne_cath",tier:9,name:"Cologne Cathedral",coords:[6.958,50.941],radius:0.7},
 {id:"mont_saint",tier:9,name:"Mont-Saint-Michel",coords:[-1.511,48.636],radius:0.8},
 {id:"sistine",tier:9,name:"Sistine Chapel",coords:[12.454,41.903],radius:0.6},
 {id:"sagrada",tier:9,name:"Sagrada Família",coords:[2.174,41.403],radius:0.7},
-{id:"parthenon",tier:9,name:"Parthenon",coords:[23.726,37.971],radius:0.7},
 
 {id:"charles_bridge",tier:11,name:"Historic Centre of Prague",coords:[14.41,50.09],radius:0.8},
 {id:"plitvice",tier:11,name:"Plitvice Lakes National Park",coords:[15.62,44.88],radius:0.9},
@@ -1588,8 +1605,8 @@ var EURO_LANGUAGE_QUESTIONS = [
 {id:"lang_hungarian",tier:11,label:"Where is Hungarian (Magyar) spoken?",targetId:"hungary"},
 {id:"lang_finnish",tier:11,label:"Find the country where Finnish is the official language",targetId:"finland"},
 {id:"lang_catalan",tier:11,label:"In which country is Catalan widely spoken?",targetId:"spain",altTargetId:"andorra"},
-{id:"lang_basque",tier:11,label:"Basque (Euskara) is spoken in which country?",targetId:"spain"},
-{id:"lang_romanian",tier:11,label:"Romanian is the official language of which country?",targetId:"romania"},
+{id:"lang_basque",tier:11,label:"Basque (Euskara) is spoken in which country?",targetId:"spain",altTargetId:"france"},
+{id:"lang_romanian",tier:11,label:"Romanian is the official language of which country?",targetId:"romania",altTargetId:"moldova"},
 {id:"lang_greek",tier:11,label:"Where is Greek the official language of the mainland state?",targetId:"greece"},
 {id:"lang_swiss",tier:11,label:"Which country has four official languages: German, French, Italian, and Romansh?",targetId:"switzerland"},
 {id:"lang_faroese",tier:11,label:"Where is Faroese spoken as an official language?",targetId:"denmark"},
@@ -1615,7 +1632,7 @@ var EURO_TRIVIA_QUESTIONS = [
 {id:"tri_windmills",tier:10,label:"Which country has the most windmills historically?",targetId:"netherlands"},
 {id:"tri_abba",tier:9,label:"In which country did ABBA form?",targetId:"sweden"},
 
-{id:"tri_aurora",tier:11,label:"The Northern Lights (Aurora Borealis) are best seen in which Scandinavian country?",targetId:"norway"},
+{id:"tri_aurora",tier:11,label:"The Northern Lights (Aurora Borealis) are best seen in which Nordic country?",targetId:"norway",altTargetIds:["sweden","finland","iceland"]},
 {id:"tri_euro_tunnel",tier:11,label:"The Channel Tunnel connects the UK with which country?",targetId:"france"},
 {id:"tri_gdansk",tier:12,label:"The Solidarity movement that helped end communism began in which country?",targetId:"poland"},
 {id:"tri_chernobyl",tier:12,label:"The Chernobyl nuclear disaster occurred in which country?",targetId:"ukraine"},
@@ -1683,9 +1700,9 @@ var AFRICA_COUNTRIES = {
 384:{id:"ivory_coast",tier:11,name:"Côte d'Ivoire",capital:"Yamoussoukro",capitalCoords:[-5.28,6.82]},
 262:{id:"djibouti",tier:11,name:"Djibouti",capital:"Djibouti City",capitalCoords:[43.15,11.59]},
 818:{id:"egypt",tier:11,name:"Egypt",capital:"Cairo",capitalCoords:[31.24,30.04]},
-226:{id:"eq_guinea",tier:11,name:"Equatorial Guinea",capital:"Malabo",capitalCoords:[8.78,3.75]},
+226:{id:"eq_guinea",tier:11,name:"Equatorial Guinea",capital:"Ciudad de la Paz",capitalCoords:[10.82,1.59]},
 232:{id:"eritrea",tier:11,name:"Eritrea",capital:"Asmara",capitalCoords:[38.93,15.34]},
-748:{id:"eswatini",tier:11,name:"Eswatini",capital:"Mbabane",capitalCoords:[31.13,-26.32]},
+748:{id:"eswatini",tier:11,name:"Eswatini",capital:"Mbabane / Lobamba",capitalCoords:[31.13,-26.32]},
 231:{id:"ethiopia",tier:11,name:"Ethiopia",capital:"Addis Ababa",capitalCoords:[38.75,9.02]},
 266:{id:"gabon",tier:11,name:"Gabon",capital:"Libreville",capitalCoords:[9.45,0.39]},
 270:{id:"gambia",tier:11,name:"Gambia",capital:"Banjul",capitalCoords:[-16.58,13.45]},
@@ -1712,14 +1729,14 @@ var AFRICA_COUNTRIES = {
 690:{id:"seychelles",tier:11,name:"Seychelles",capital:"Victoria",capitalCoords:[55.45,-4.62]},
 694:{id:"sierra_leone",tier:11,name:"Sierra Leone",capital:"Freetown",capitalCoords:[-13.23,8.48]},
 706:{id:"somalia",tier:11,name:"Somalia",capital:"Mogadishu",capitalCoords:[45.34,2.05]},
-710:{id:"south_africa",tier:11,name:"South Africa",capital:"Pretoria",capitalCoords:[28.19,-25.75]},
+710:{id:"south_africa",tier:11,name:"South Africa",capital:"Pretoria (Exec.) / Cape Town / Bloemfontein",capitalCoords:[28.19,-25.75]},
 728:{id:"south_sudan",tier:11,name:"South Sudan",capital:"Juba",capitalCoords:[31.60,4.85]},
 729:{id:"sudan",tier:11,name:"Sudan",capital:"Khartoum",capitalCoords:[32.53,15.59]},
 834:{id:"tanzania",tier:11,name:"Tanzania",capital:"Dodoma",capitalCoords:[35.74,-6.17]},
 768:{id:"togo",tier:11,name:"Togo",capital:"Lomé",capitalCoords:[1.22,6.14]},
 788:{id:"tunisia",tier:11,name:"Tunisia",capital:"Tunis",capitalCoords:[10.17,36.81]},
 800:{id:"uganda",tier:11,name:"Uganda",capital:"Kampala",capitalCoords:[32.58,0.35]},
-732:{id:"w_sahara",tier:11,name:"Western Sahara",capital:"El Aaiún",capitalCoords:[-13.20,27.15]},
+732:{id:"w_sahara",tier:11,name:"Western Sahara",capital:"El Aaiún (claimed)",capitalCoords:[-13.20,27.15],isTerritory:true},
 894:{id:"zambia",tier:11,name:"Zambia",capital:"Lusaka",capitalCoords:[28.28,-15.39]},
 716:{id:"zimbabwe",tier:11,name:"Zimbabwe",capital:"Harare",capitalCoords:[31.05,-17.83]}
 };
@@ -2365,8 +2382,8 @@ cape_peninsula:[[17.8,-33.0],[18.2,-33.2],[18.6,-33.7],[18.8,-34.0],[18.9,-34.4]
 var AFRICA_ISLANDS = [
 {id:"madagascar",tier:2,   name:"Madagascar",   centroid:[46.9,-19.4], radius:3.0, countryId:"450"},
 {id:"zanzibar",tier:9,     name:"Zanzibar",     centroid:[39.2,-6.2],  radius:0.8, countryId:"834"},
-{id:"cape_verde_is",tier:10,name:"Cape Verde Islands",centroid:[-23.6,15.1],radius:2.5,countryId:"132"},
-{id:"comoros_is",tier:11,   name:"Comoros Islands",centroid:[43.3,-12.2],radius:1.5, countryId:"174"},
+{id:"cape_verde_is",tier:10,name:"Cape Verde Islands",centroid:[-23.6,15.1],radius:2.5,countryId:"132",allRings:true},
+{id:"comoros_is",tier:11,   name:"Comoros Islands",centroid:[43.3,-12.2],radius:1.5, countryId:"174",allRings:true},
 {id:"mauritius_is",tier:11, name:"Mauritius",     centroid:[57.5,-20.2], radius:2.0, countryId:"480"},
 {id:"socotra",tier:11,      name:"Socotra",       centroid:[54.0,12.5],  radius:1.2, countryId:"887"},
 {id:"reunion",tier:11,      name:"Réunion",       centroid:[55.5,-21.1], radius:1.0, countryId:"250"},
@@ -2447,12 +2464,10 @@ var AFRICA_CITIES = [
 {id:"nairobi_city",tier:8,name:"Nairobi",country:"Kenya",coords:[36.82,-1.29],radius:0.8},
 {id:"addis_ababa_city",tier:9,name:"Addis Ababa",country:"Ethiopia",coords:[38.75,9.02],radius:0.8},
 {id:"accra_city",tier:9,name:"Accra",country:"Ghana",coords:[-0.19,5.56],radius:0.8},
-{id:"luanda_city",tier:10,name:"Luanda",country:"Angola",coords:[13.23,-8.84],radius:0.8},
 {id:"dakar_city",tier:9,name:"Dakar",country:"Senegal",coords:[-17.47,14.69],radius:0.8},
 {id:"cape_town",tier:8,name:"Cape Town",country:"South Africa",coords:[18.42,-33.93],radius:0.9},
 {id:"durban",tier:10,name:"Durban",country:"South Africa",coords:[31.02,-29.86],radius:0.8},
 {id:"abidjan",tier:10,name:"Abidjan",country:"Côte d'Ivoire",coords:[-4.03,5.32],radius:0.8},
-{id:"khartoum_city",tier:10,name:"Khartoum",country:"Sudan",coords:[32.53,15.59],radius:0.8},
 {id:"mombasa",tier:10,name:"Mombasa",country:"Kenya",coords:[39.66,-4.05],radius:0.8},
 {id:"marrakech",tier:10,name:"Marrakech",country:"Morocco",coords:[-8.01,31.63],radius:0.8},
 
@@ -2484,7 +2499,6 @@ var AFRICA_HERITAGE_SITES = [
 {id:"leptis_magna",tier:11,name:"Leptis Magna",coords:[14.29,32.64],radius:0.7},
 {id:"great_zimbabwe",tier:11,name:"Great Zimbabwe",coords:[30.93,-20.27],radius:0.8},
 
-{id:"okavango_delta",tier:12,name:"Okavango Delta",coords:[22.67,-19.47],radius:1.0},
 ];
 
 var AFRICA_TRIVIA_QUESTIONS = [
@@ -2492,7 +2506,7 @@ var AFRICA_TRIVIA_QUESTIONS = [
 {id:"tri_safari",tier:8,label:"The Maasai Mara safari reserve is in which country?",targetId:"kenya"},
 {id:"tri_apartheid",tier:8,label:"Which country ended apartheid in 1994?",targetId:"south_africa"},
 {id:"tri_nile_source",tier:9,label:"The Nile's primary source, Lake Victoria, borders which country to the north?",targetId:"uganda"},
-{id:"tri_gorillas",tier:9,label:"Mountain gorillas are found in which small Central African country?",targetId:"rwanda"},
+{id:"tri_gorillas",tier:9,label:"Endangered mountain gorillas live in volcanic forests of which Central/East African country?",targetId:"rwanda",altTargetIds:["uganda","drc"]},
 {id:"tri_timbuktu",tier:9,label:"The legendary city of Timbuktu is in which country?",targetId:"mali"},
 {id:"tri_victoria_falls",tier:9,label:"Victoria Falls lies on the border of Zambia and which other country?",targetId:"zimbabwe"},
 {id:"tri_sahara",tier:9,label:"Which is the largest country in Africa by area?",targetId:"algeria"},
@@ -2510,7 +2524,6 @@ var AFRICA_TRIVIA_QUESTIONS = [
 
 {id:"tri_kilimanjaro",tier:11,label:"Mount Kilimanjaro, Africa's highest peak, is in which country?",targetId:"tanzania"},
 {id:"tri_sahara_largest",tier:11,label:"The Sahara Desert covers much of which large North African country?",targetId:"algeria"},
-{id:"tri_coffee_origin",tier:12,label:"Coffee originated in which African country?",targetId:"ethiopia"},
 {id:"tri_swahili",tier:12,label:"Swahili is a major language in which East African country?",targetId:"tanzania"},
 {id:"tri_lemurs",tier:13,label:"Lemurs are found in the wild only on which island country?",targetId:"madagascar"},
 {id:"tri_rwandagorillas",tier:13,label:"Volcanoes National Park, famous for mountain gorilla trekking, is in which country?",targetId:"rwanda"},
@@ -2553,7 +2566,7 @@ var ASIA_COUNTRIES = {
 156:{id:"china",tier:11,name:"China",capital:"Beijing",capitalCoords:[116.40,39.90]},
 626:{id:"east_timor",tier:11,name:"East Timor",capital:"Dili",capitalCoords:[125.57,-8.56]},
 268:{id:"georgia",tier:11,name:"Georgia",capital:"Tbilisi",capitalCoords:[44.83,41.72]},
-275:{id:"palestine",tier:8,name:"Palestine",capital:"Ramallah",capitalCoords:[35.21,31.90]},
+275:{id:"palestine",tier:8,name:"Palestine",capital:"East Jerusalem (proclaimed) / Ramallah",capitalCoords:[35.21,31.90]},
 356:{id:"india",tier:11,name:"India",capital:"New Delhi",capitalCoords:[77.21,28.61]},
 360:{id:"indonesia",tier:11,name:"Indonesia",capital:"Jakarta",capitalCoords:[106.85,-6.21]},
 364:{id:"iran",tier:11,name:"Iran",capital:"Tehran",capitalCoords:[51.39,35.69]},
@@ -3876,7 +3889,7 @@ anatolia: [[26.0,41.5],[28.0,41.0],[30.0,41.5],[32.0,42.0],[34.0,42.0],[36.0,42.
 var ASIA_ISLANDS = [
 {id:"sri_lanka",tier:6,  name:"Sri Lanka",   centroid:[80.8,7.9],    radius:2.0, countryId:"144"},
 {id:"taiwan",tier:8,     name:"Taiwan",      centroid:[121.0,23.7],  radius:1.5, countryId:"158"},
-{id:"borneo",tier:7,     name:"Borneo",      centroid:[114.5,1.0],   radius:3.5, countryId:"458"},
+{id:"borneo",tier:7,     name:"Borneo",      centroid:[114.5,1.0],   radius:3.5, countryIds:["458","360","96"], bbox:[108.5,-4.5,119.5,7.6]},
 {id:"sumatra",tier:7,    name:"Sumatra",     centroid:[102.0,0.0],   radius:3.5, countryId:"360"},
 {id:"java",tier:7,       name:"Java",        centroid:[110.0,-7.5],  radius:2.5, countryId:"360"},
 {id:"hainan",tier:9,     name:"Hainan",      centroid:[109.7,19.2],  radius:1.5, countryId:"156"},
@@ -3886,8 +3899,8 @@ var ASIA_ISLANDS = [
 {id:"hokkaido",tier:8,   name:"Hokkaido",    centroid:[143.2,43.0],  radius:2.0, countryId:"392"},
 {id:"honshu",tier:8,     name:"Honshu",      centroid:[137.0,36.5],  radius:2.5, countryId:"392"},
 {id:"kyushu",tier:8,     name:"Kyushu",      centroid:[131.0,33.0],  radius:1.5, countryId:"392"},
-{id:"maldives_is",tier:11,name:"Maldives",    centroid:[73.2,3.2],    radius:3.0, countryId:"462"},
-{id:"timor",tier:11,     name:"Timor",       centroid:[125.7,-8.8],  radius:1.5, countryId:"626"},
+{id:"maldives_is",tier:11,name:"Maldives",    centroid:[73.2,3.2],    radius:3.0, countryId:"462", allRings:true},
+{id:"timor",tier:11,     name:"Timor",       centroid:[125.7,-8.8],  radius:1.5, countryIds:["626","360"], bbox:[123.3,-10.5,127.6,-8.0], largestPerCountry:true},
 ];
 
 var ASIA_ARCHIPELAGOS = [
@@ -3934,7 +3947,7 @@ var ASIA_WATER_BODIES = [
 {id:"liaodong_wan",tier:13,name:"Liaodong Wan",centroid:[121.4,40.3]},
 {id:"g_kutch",tier:13,name:"Gulf of Kutch",centroid:[69.6,22.7]},
 {id:"vilkitskogo_strait",tier:13,name:"Vil'kitskogo Strait",centroid:[102.8,77.8]},
-{id:"g_khambhat",tier:13,name:"Gulf of Khambhät",centroid:[72.2,20.9]},
+{id:"g_khambhat",tier:13,name:"Gulf of Khambhat",centroid:[72.2,20.9]},
 {id:"palk_strait",tier:13,name:"Palk Strait",centroid:[79.6,9.7]},
 {id:"kronotskiy_gulf",tier:13,name:"Kronotskiy Gulf",centroid:[160.5,54.0]},
 {id:"uchiura_bay",tier:13,name:"Uchiura Bay",centroid:[141.8,41.8]},
@@ -3943,7 +3956,7 @@ var ASIA_WATER_BODIES = [
 {id:"g_yana",tier:13,name:"Gulf of Yana",centroid:[137.2,72.9]},
 {id:"dmitriy_laptev_strait",tier:13,name:"Dmitriy Laptev Strait",centroid:[141.9,73.1]},
 {id:"east_korea_bay",tier:13,name:"East Korea Bay",centroid:[128.0,39.4]},
-{id:"g_olenk",tier:13,name:"Gulf of Olen‘k",centroid:[121.2,73.3]},
+{id:"g_olenk",tier:13,name:"Olenyok Gulf",centroid:[121.2,73.3]},
 {id:"hangzhou_bay",tier:13,name:"Hangzhou Bay",centroid:[121.4,30.4]},
 {id:"karaginskiy_gulf",tier:13,name:"Karaginskiy Gulf",centroid:[164.1,59.1]},
 {id:"g_kamchatka",tier:13,name:"Gulf of Kamchatka",centroid:[162.3,55.7]},
@@ -4090,11 +4103,9 @@ var ASIA_CITIES = [
 {id:"kuala_lumpur",tier:9,name:"Kuala Lumpur",country:"Malaysia",coords:[101.69,3.14],radius:0.8},
 {id:"dubai",tier:8,name:"Dubai",country:"UAE",coords:[55.27,25.20],radius:0.8},
 {id:"riyadh_city",tier:9,name:"Riyadh",country:"Saudi Arabia",coords:[46.72,24.71],radius:0.8},
-{id:"tehran_city",tier:9,name:"Tehran",country:"Iran",coords:[51.39,35.69],radius:0.8},
 {id:"karachi",tier:9,name:"Karachi",country:"Pakistan",coords:[67.01,24.86],radius:0.9},
 {id:"kolkata",tier:9,name:"Kolkata",country:"India",coords:[88.36,22.57],radius:0.8},
 {id:"bangalore",tier:9,name:"Bangalore",country:"India",coords:[77.59,12.97],radius:0.8},
-{id:"hanoi_city",tier:9,name:"Hanoi",country:"Vietnam",coords:[105.83,21.03],radius:0.8},
 {id:"taipei_city",tier:9,name:"Taipei",country:"Taiwan",coords:[121.56,25.03],radius:0.8},
 {id:"manila_city",tier:9,name:"Manila",country:"Philippines",coords:[120.98,14.60],radius:0.8},
 {id:"yangon",tier:10,name:"Yangon",country:"Myanmar",coords:[96.17,16.87],radius:0.8},
@@ -4126,11 +4137,10 @@ var ASIA_HERITAGE_SITES = [
 {id:"cappadocia",tier:10,name:"Cappadocia",coords:[34.83,38.64],radius:0.8},
 {id:"bagan",tier:10,name:"Temples of Bagan",coords:[94.87,21.17],radius:0.8},
 {id:"ha_long",tier:10,name:"Hạ Long Bay",coords:[107.08,20.91],radius:0.7},
-{id:"meiji_shrine",tier:10,name:"Meiji Shrine",coords:[139.70,35.68],radius:0.6},
-{id:"fushimi_inari",tier:10,name:"Fushimi Inari",coords:[135.77,34.97],radius:0.6},
+{id:"nikko_shrines",tier:10,name:"Shrines and Temples of Nikkō",coords:[139.60,36.76],radius:0.7},
+{id:"itsukushima_shrine",tier:10,name:"Itsukushima Shinto Shrine",coords:[132.32,34.30],radius:0.7},
 {id:"jerusalem_old",tier:10,name:"Old City of Jerusalem",coords:[35.23,31.78],radius:0.6},
 
-{id:"halong_bay",tier:11,name:"Ha Long Bay",coords:[107.18,20.91],radius:0.9},
 {id:"samarkand",tier:13,name:"Samarkand — Crossroads of Cultures",coords:[66.96,39.65],radius:0.8},
 ];
 
@@ -4145,7 +4155,7 @@ var ASIA_LANGUAGE_QUESTIONS = [
 {id:"lang_farsi",tier:11,label:"Farsi (Persian) is the official language of which country?",targetId:"iran"},
 {id:"lang_urdu",tier:11,label:"In which South Asian country is Urdu the national language?",targetId:"pakistan"},
 {id:"lang_tagalog",tier:11,label:"Where is Tagalog (Filipino) spoken?",targetId:"philippines"},
-{id:"lang_bahasa",tier:11,label:"Which Southeast Asian archipelago nation speaks Bahasa?",targetId:"indonesia"},
+{id:"lang_bahasa",tier:11,label:"Which Southeast Asian archipelago nation speaks Bahasa Indonesia?",targetId:"indonesia"},
 {id:"lang_hebrew",tier:11,label:"Where is Hebrew an official language?",targetId:"israel"},
 ];
 
@@ -4162,23 +4172,22 @@ var ASIA_TRIVIA_QUESTIONS = [
 {id:"tri_tea",tier:9,label:"Which country is the world's largest tea producer?",targetId:"china"},
 {id:"tri_tsunami",tier:10,label:"The 2004 Indian Ocean tsunami devastated coastlines — which SE Asian country was hit hardest?",targetId:"indonesia"},
 {id:"tri_kpop",tier:9,label:"K-pop music originates from which country?",targetId:"south_korea"},
-{id:"tri_dead_sea",tier:9,label:"The Dead Sea borders Israel and which other country?",targetId:"jordan"},
+{id:"tri_dead_sea",tier:9,label:"Which country borders the Dead Sea, Earth's lowest point on land?",targetId:"jordan",altTargetIds:["israel","palestine"]},
 {id:"tri_chopsticks",tier:10,label:"Which country invented chopsticks?",targetId:"china"},
 {id:"tri_sushi",tier:8,label:"Sushi is a traditional dish from which country?",targetId:"japan"},
 {id:"tri_yoga",tier:9,label:"Yoga originated in which country?",targetId:"india"},
-{id:"tri_oil",tier:10,label:"Which Middle Eastern country has the world's largest proven oil reserves?",targetId:"saudi_arabia"},
+{id:"tri_oil",tier:10,label:"Which Middle Eastern country has the region's largest proven oil reserves?",targetId:"saudi_arabia"},
 {id:"tri_everest",tier:10,label:"Mount Everest sits on the border of China and which country?",targetId:"nepal"},
 {id:"tri_buddha",tier:10,label:"Siddhartha Gautama (the Buddha) was born in which country?",targetId:"nepal"},
 {id:"tri_samurai",tier:11,label:"The samurai warrior class originated in which country?",targetId:"japan"},
-{id:"tri_monsoon",tier:11,label:"Which South Asian country experiences the world's heaviest monsoon rains?",targetId:"bangladesh"},
+{id:"tri_monsoon",tier:11,label:"Which South Asian country experiences the world's heaviest monsoon rains?",targetId:"india"},
 {id:"tri_opec",tier:11,label:"OPEC was co-founded by Iran, Iraq, Kuwait, Venezuela, and which other country?",targetId:"saudi_arabia"},
 {id:"tri_baht",tier:11,label:"The Baht is the currency of which country?",targetId:"thailand"},
 {id:"tri_halong",tier:11,label:"Hạ Long Bay, famous for its limestone karsts, is in which country?",targetId:"vietnam"},
 {id:"tri_genghis",tier:11,label:"Genghis Khan founded an empire based in which country?",targetId:"mongolia"},
 
-{id:"tri_silk_road_china",tier:11,label:"The ancient Silk Road's eastern terminus was in which country?",targetId:"china"},
 {id:"tri_everest_border",tier:12,label:"Mount Everest sits on the border of Nepal and which other country?",targetId:"china"},
-{id:"tri_dmz",tier:12,label:"The Demilitarized Zone (DMZ) separates which two countries?",targetId:"south_korea"},
+{id:"tri_dmz",tier:12,label:"The Demilitarized Zone (DMZ) separates which two countries? (Click either)",targetId:"south_korea",altTargetId:"north_korea"},
 {id:"tri_sri_lanka_tea",tier:13,label:"Which island country south of India is one of the world's largest tea exporters?",targetId:"sri_lanka"},
 {id:"tri_gobi",tier:13,label:"The Gobi Desert spans southern Mongolia and which other country?",targetId:"china"},
 {id:"tri_bhutan_gnh",tier:13,label:"Which Himalayan kingdom measures Gross National Happiness instead of GDP?",targetId:"bhutan"},
@@ -5165,10 +5174,10 @@ nova_scotia: [[[-63.9,46.0],[-62.5,45.6],[-62.0,45.9],[-61.8,45.7],[-61.5,45.7],
 
 var NA_ISLANDS = [
 {id:"cuba_is",tier:6,      name:"Cuba",           centroid:[-79.5,22.0],  radius:2.5, countryId:"192"},
-{id:"hispaniola",tier:7,   name:"Hispaniola",     centroid:[-71.5,19.0],  radius:2.0, countryId:"214"},
+{id:"hispaniola",tier:7,   name:"Hispaniola",     centroid:[-71.5,19.0],  radius:2.0, countryIds:["214","332"], bbox:[-75.0,17.4,-68.0,20.3]},
 {id:"jamaica_is",tier:7,   name:"Jamaica",        centroid:[-77.3,18.1],  radius:1.5, countryId:"388"},
-{id:"puerto_rico",tier:8,  name:"Puerto Rico",    centroid:[-66.5,18.2],  radius:1.5, countryId:"840"},
-{id:"hawaii",tier:2,       name:"Hawaiian Islands",centroid:[-155.5,19.9], radius:3.0, countryId:"840"},
+{id:"puerto_rico",tier:8,  name:"Puerto Rico",    centroid:[-66.5,18.2],  radius:1.5, countryId:"630", allRings:true},
+{id:"hawaii",tier:2,       name:"Hawaiian Islands",centroid:[-155.5,19.9], radius:3.0, countryId:"840", allRings:true, bbox:[-161.0,18.5,-154.0,22.8]},
 {id:"greenland",tier:1,    name:"Greenland",      centroid:[-42.0,72.0],  radius:5.0, countryId:"304"},
 {id:"vancouver_is",tier:9, name:"Vancouver Island",centroid:[-125.5,49.3], radius:2.0, countryId:"124"},
 {id:"baffin",tier:9,       name:"Baffin Island",  centroid:[-68.0,68.0],  radius:4.0, countryId:"124"},
@@ -5198,7 +5207,6 @@ var NA_WATER_BODIES = [
 {id:"lake_ontario",tier:2,   name:"Lake Ontario",        centroid:[-77.8,43.7]},
 {id:"gulf_california",tier:9,name:"Gulf of California",  centroid:[-110.0,27.0]},
 {id:"bering_sea",tier:7,name:"Bering Sea",centroid:[-178.0,58.0]},
-{id:"golfo_de_california",tier:9,name:"Golfo de California",centroid:[-111.0,26.9]},
 {id:"g_alaska",tier:10,name:"Gulf of Alaska",centroid:[-149.3,57.6]},
 {id:"g_saint_lawrence",tier:10,name:"Gulf of Saint Lawrence",centroid:[-61.5,48.5]},
 {id:"great_bear_lake",tier:6,name:"Great Bear Lake",centroid:[-120.9,66.0]},
@@ -5253,7 +5261,7 @@ var NA_WATER_BODIES = [
 {id:"darnley_bay",tier:13,name:"Darnley Bay",centroid:[-123.8,69.5]},
 {id:"prince_of_wales_strait",tier:13,name:"Prince of Wales Strait",centroid:[-118.4,72.5]},
 {id:"minto_inlet",tier:13,name:"Minto Inlet",centroid:[-117.2,71.3]},
-{id:"prince_albert_sound",tier:13,name:"Prince ALbert Sound",centroid:[-114.9,70.4]},
+{id:"prince_albert_sound",tier:13,name:"Prince Albert Sound",centroid:[-114.9,70.4]},
 {id:"liddon_gulf",tier:13,name:"Liddon Gulf",centroid:[-113.4,75.0]},
 {id:"wynniatt_bay",tier:13,name:"Wynniatt Bay",centroid:[-110.9,72.6]},
 {id:"hadley_bay",tier:13,name:"Hadley Bay",centroid:[-108.1,72.3]},
@@ -5280,11 +5288,11 @@ var NA_WATER_BODIES = [
 {id:"frobisher_bay",tier:13,name:"Frobisher Bay",centroid:[-66.9,63.0]},
 {id:"foxe_basin",tier:13,name:"Foxe Basin",centroid:[-78.9,67.0]},
 {id:"wager_bay",tier:13,name:"Wager Bay",centroid:[-89.0,65.6]},
-{id:"the_north_western_passages",tier:13,name:"The North Western Passages",centroid:[-98.9,74.6]},
+{id:"the_north_western_passages",tier:13,name:"Northwest Passage",centroid:[-98.9,74.6]},
 {id:"yucatan_channel",tier:13,name:"Yucatan Channel",centroid:[-85.9,21.6]},
 {id:"l_tahoe",tier:13,name:"Lake Tahoe",centroid:[-120.0,39.1]},
 {id:"l_champlain",tier:13,name:"Lake Champlain",centroid:[-73.3,44.6]},
-{id:"etang_saumtre",tier:13,name:"Etang Saumâtre",centroid:[-72.0,18.6]},
+{id:"etang_saumtre",tier:13,name:"Étang Saumâtre",centroid:[-72.0,18.6]},
 {id:"chukchi_sea",tier:10,name:"Chukchi Sea",centroid:[-164.0,69.0]},
 {id:"salton_sea",tier:11,name:"Salton Sea",centroid:[-115.8,33.3]}
 ];
@@ -5430,19 +5438,18 @@ var NA_HERITAGE_SITES = [
 {id:"chichen_itza",tier:8,name:"Chichén Itzá",coords:[-88.57,20.68],radius:0.7},
 {id:"yellowstone",tier:8,name:"Yellowstone National Park",coords:[-110.59,44.60],radius:1.2},
 {id:"teotihuacan",tier:9,name:"Teotihuacan",coords:[-98.84,19.69],radius:0.7},
-{id:"niagara",tier:9,name:"Niagara Falls",coords:[-79.07,43.08],radius:0.8},
+{id:"rideau_canal",tier:9,name:"Rideau Canal",coords:[-75.70,45.42],radius:0.8},
 {id:"banff",tier:10,name:"Banff National Park",coords:[-115.57,51.18],radius:1.0},
 {id:"old_havana",tier:10,name:"Old Havana",coords:[-82.35,23.14],radius:0.7},
 {id:"tikal",tier:10,name:"Tikal",coords:[-89.62,17.22],radius:0.7},
 {id:"mesa_verde",tier:11,name:"Mesa Verde",coords:[-108.49,37.18],radius:0.8},
 {id:"cahokia",tier:11,name:"Cahokia Mounds",coords:[-90.06,38.65],radius:0.7},
-{id:"panama_canal",tier:11,name:"Panama Canal",coords:[-79.92,9.08],radius:0.8},
+{id:"panama_viejo",tier:11,name:"Archaeological Site of Panamá Viejo",coords:[-79.48,9.01],radius:0.8},
 
 {id:"old_quebec",tier:11,name:"Historic District of Old Québec",coords:[-71.20,46.81],radius:0.7},
 {id:"papahana",tier:12,name:"Papahānaumokuākea Marine National Monument",coords:[-166.10,23.78],radius:1.2},
 {id:"monte_alban",tier:12,name:"Monte Albán",coords:[-96.77,17.04],radius:0.7},
 {id:"san_juan_her",tier:13,name:"La Fortaleza and San Juan Historic Site",coords:[-66.12,18.47],radius:0.7},
-{id:"cahokia_mounds",tier:13,name:"Cahokia Mounds State Historic Site",coords:[-90.06,38.66],radius:0.8},
 ];
 
 var NA_TRIVIA_QUESTIONS = [
@@ -5467,11 +5474,11 @@ var NA_TRIVIA_QUESTIONS = [
 {id:"tri_salsa",tier:11,label:"Salsa dancing originated in the Caribbean — in which country specifically?",targetId:"cuba"},
 {id:"tri_nasa",tier:11,label:"NASA's Kennedy Space Center is in which country?",targetId:"usa"},
 
-{id:"tri_caribbean_cruise",tier:12,label:"Which country is home to the busiest cruise port in the world, Cozumel?",targetId:"mexico"},
+{id:"tri_caribbean_cruise",tier:12,label:"Which country is home to Cozumel, the busiest cruise port of call in the Caribbean?",targetId:"mexico"},
 {id:"tri_rocky_mtn",tier:12,label:"The Rocky Mountains stretch from New Mexico to which country?",targetId:"canada"},
 {id:"tri_cdn_arctic",tier:13,label:"Which country has the longest coastline in the world?",targetId:"canada"},
 {id:"tri_great_lakes",tier:13,label:"The Great Lakes form part of the border between the USA and which country?",targetId:"canada"},
-{id:"tri_inuit",tier:13,label:"The Inuit people traditionally inhabit the Arctic regions of which country?",targetId:"canada"},
+{id:"tri_inuit",tier:13,label:"The Inuit people traditionally inhabit the Arctic regions of which country?",targetId:"canada",altTargetIds:["usa","denmark"]},
 ];
 
 var NA_DATA = {
@@ -5500,12 +5507,12 @@ var NA_DATA = {
 
 var SA_COUNTRIES = {
 32:{id:"argentina",tier:11,name:"Argentina",capital:"Buenos Aires",capitalCoords:[-58.38,-34.60]},
-68:{id:"bolivia",tier:11,name:"Bolivia",capital:"Sucre",capitalCoords:[-65.26,-19.04]},
+68:{id:"bolivia",tier:11,name:"Bolivia",capital:"Sucre / La Paz",capitalCoords:[-65.26,-19.04]},
 76:{id:"brazil",tier:11,name:"Brazil",capital:"Brasília",capitalCoords:[-47.88,-15.79]},
 152:{id:"chile",tier:11,name:"Chile",capital:"Santiago",capitalCoords:[-70.65,-33.45]},
 170:{id:"colombia",tier:11,name:"Colombia",capital:"Bogotá",capitalCoords:[-74.07,4.71]},
 218:{id:"ecuador",tier:11,name:"Ecuador",capital:"Quito",capitalCoords:[-78.50,-0.18]},
-254:{id:"french_guiana",tier:11,name:"French Guiana",capital:"Cayenne",capitalCoords:[-52.33,4.94]},
+254:{id:"french_guiana",tier:11,name:"French Guiana",capital:"Cayenne",capitalCoords:[-52.33,4.94],isTerritory:true},
 328:{id:"guyana",tier:11,name:"Guyana",capital:"Georgetown",capitalCoords:[-58.15,6.80]},
 600:{id:"paraguay",tier:11,name:"Paraguay",capital:"Asunción",capitalCoords:[-57.64,-25.26]},
 604:{id:"peru",tier:11,name:"Peru",capital:"Lima",capitalCoords:[-77.04,-12.05]},
@@ -5524,6 +5531,22 @@ uruguay:[-55.77,-32.52],venezuela:[-66.59,6.42]
 };
 
 var SA_MICRO_ZONES = {
+};
+
+// Synthetic atoll silhouette for Tuvalu (ISO 798), omitted from Natural Earth 50m TopoJSON
+var OC_TUVALU_FEATURE = {
+  type: "Feature",
+  id: "798",
+  properties: { name: "Tuvalu" },
+  geometry: {
+    type: "MultiPolygon",
+    coordinates: [
+      [[[179.05,-8.40],[179.33,-8.40],[179.35,-8.56],[179.20,-8.68],[179.04,-8.58],[179.05,-8.40]]],
+      [[[178.26,-7.90],[178.50,-7.90],[178.50,-8.12],[178.26,-8.12],[178.26,-7.90]]],
+      [[[178.56,-7.38],[178.80,-7.38],[178.80,-7.60],[178.56,-7.60],[178.56,-7.38]]],
+      [[[176.00,-5.56],[176.26,-5.56],[176.26,-5.80],[176.00,-5.80],[176.00,-5.56]]]
+    ]
+  }
 };
 
 var SA_FRENCH_GUIANA_FEATURE = {
@@ -6049,9 +6072,9 @@ valdes:[[-65.0,-42.0],[-64.5,-42.0],[-63.5,-42.0],[-63.0,-42.3],[-62.5,-42.5],[-
 };
 
 var SA_ISLANDS = [
-{id:"galapagos",tier:9,      name:"Galápagos Islands",  centroid:[-90.5,-0.7],   radius:2.0, countryId:"218"},
-{id:"tierra_del_fuego",tier:9,name:"Tierra del Fuego",  centroid:[-69.0,-54.3],  radius:2.5, countryId:"32"},
-{id:"falklands",tier:10,      name:"Falkland Islands",   centroid:[-59.0,-51.8],  radius:2.0, countryId:"238"},
+{id:"galapagos",tier:9,      name:"Galápagos Islands",  centroid:[-90.5,-0.7],   radius:2.0, countryId:"218", allRings:true, bbox:[-92.5,-2.0,-88.5,2.0]},
+{id:"tierra_del_fuego",tier:9,name:"Tierra del Fuego",  centroid:[-69.0,-54.3],  radius:2.5, countryIds:["32","152"], bbox:[-72.0,-56.2,-63.5,-52.4]},
+{id:"falklands",tier:10,      name:"Falkland Islands",   centroid:[-59.0,-51.8],  radius:2.0, countryId:"238", allRings:true},
 {id:"chiloe",tier:10,         name:"Chiloé Island",      centroid:[-73.8,-42.6],  radius:1.2, countryId:"152"},
 {id:"marajo",tier:10,         name:"Marajó Island",      centroid:[-49.5,-1.0],   radius:1.5, countryId:"76"},
 {id:"easter_island",tier:4,   name:"Easter Island",      centroid:[-109.4,-27.1], radius:1.5, countryId:"152"},
@@ -6070,7 +6093,7 @@ var SA_WATER_BODIES = [
 {id:"drake_passage",tier:9,    name:"Drake Passage",        centroid:[-67.0,-58.0]},
 {id:"weddell_sea",tier:11,name:"Weddell Sea",centroid:[-43.4,-71.5]},
 {id:"l_titicaca",tier:4,name:"Lago Titicaca",centroid:[-69.4,-15.9]},
-{id:"estrecho_de_magellanes",tier:9,name:"Estrecho de Magellanes",centroid:[-71.4,-53.1]},
+{id:"estrecho_de_magellanes",tier:9,name:"Strait of Magellan",centroid:[-71.4,-53.1]},
 {id:"l_de_maracaibo",tier:5,name:"Lago de Maracaibo",centroid:[-71.5,9.8]},
 {id:"golfo_san_jorge",tier:13,name:"Golfo San Jorge",centroid:[-66.5,-46.1]},
 {id:"baia_de_marajo",tier:13,name:"Baía de Marajó",centroid:[-48.9,-1.4]},
@@ -6085,7 +6108,7 @@ var SA_WATER_BODIES = [
 {id:"bahia_grande",tier:13,name:"Bahía Grande",centroid:[-68.6,-51.0]},
 {id:"seno_de_skyring",tier:13,name:"Seno de Skyring",centroid:[-72.4,-52.7]},
 {id:"seno_otway",tier:13,name:"Seno Otway",centroid:[-71.8,-53.1]},
-{id:"bay_inutil",tier:13,name:"Bay Inútil",centroid:[-70.0,-53.9]},
+{id:"bay_inutil",tier:13,name:"Bahía Inútil",centroid:[-70.0,-53.9]},
 {id:"canal_perigoso",tier:13,name:"Canal Perigoso",centroid:[-49.7,0.1]},
 {id:"canal_do_sul",tier:13,name:"Canal do Sul",centroid:[-50.3,-0.1]},
 {id:"canal_do_norte",tier:13,name:"Canal do Norte",centroid:[-50.7,0.2]},
@@ -6155,25 +6178,23 @@ var SA_HERITAGE_SITES = [
 {id:"iguazu_falls",tier:8,    name:"Iguazú Falls",            coords:[-54.44,-25.69], radius:0.8},
 {id:"easter_island",tier:9,   name:"Easter Island (Rapa Nui)",coords:[-109.37,-27.12],radius:1.5},
 {id:"nazca_lines",tier:9,     name:"Nazca Lines",             coords:[-75.13,-14.74], radius:1.0},
-{id:"torres_del_paine",tier:10,name:"Torres del Paine",        coords:[-72.97,-51.00], radius:1.2},
+{id:"valparaiso_historic",tier:10,name:"Historic Quarter of Valparaíso", coords:[-71.63,-33.04], radius:0.9},
 {id:"colonia_sacramento",tier:11,name:"Colonia del Sacramento", coords:[-57.84,-34.47], radius:0.7},
 {id:"cartagena_old",tier:11,   name:"Walled City of Cartagena",coords:[-75.55,10.42],  radius:0.7},
 {id:"tiwanaku",tier:11,        name:"Tiwanaku",                coords:[-68.67,-16.55], radius:0.8},
 {id:"angel_falls",tier:10,     name:"Angel Falls",             coords:[-62.54,5.97],   radius:1.0},
 {id:"perito_moreno",tier:11,   name:"Perito Moreno Glacier",   coords:[-73.05,-50.50], radius:1.0},
-{id:"salt_flats",tier:11,      name:"Salar de Uyuni",          coords:[-67.59,-20.13], radius:1.5},
-{id:"amazon_rainforest",tier:11,name:"Amazon Rainforest",      coords:[-60.00,-3.00],  radius:3.0},
+{id:"potosi_bolivia",tier:11,  name:"City of Potosí",          coords:[-65.75,-19.59], radius:1.0},
+{id:"central_amazon",tier:11,  name:"Central Amazon Conservation Complex", coords:[-62.00,-2.33], radius:2.5},
 
-{id:"cartagena",tier:11,name:"Port, Fortresses and Group of Monuments, Cartagena",coords:[-75.51,10.42],radius:0.7},
 {id:"cuzco",tier:12,name:"City of Cuzco",coords:[-71.97,-13.52],radius:0.7},
-{id:"tierra_del_fuego",tier:13,name:"Los Glaciares National Park",coords:[-73.05,-50.33],radius:1.0},
-{id:"ciudad_perdida",tier:13,name:"Ciudad Perdida (Lost City)",coords:[-73.93,11.04],radius:0.7},
+{id:"san_agustin_park",tier:13,name:"San Agustín Archaeological Park",coords:[-76.29,1.89],radius:0.8},
 ];
 
 var SA_TRIVIA_QUESTIONS = [
 {id:"tri_machu",tier:7,    label:"In which country is the ancient Inca citadel of Machu Picchu?",targetId:"peru"},
 {id:"tri_carnival",tier:7, label:"Which country hosts the world's largest Carnival celebration?",targetId:"brazil"},
-{id:"tri_tango",tier:8,    label:"The tango originated in which country?",targetId:"argentina"},
+{id:"tri_tango",tier:8,    label:"The tango originated in which Río de la Plata country?",targetId:"argentina",altTargetId:"uruguay"},
 {id:"tri_amazon",tier:8,   label:"The Amazon River flows into the Atlantic through which country?",targetId:"brazil"},
 {id:"tri_galapagos",tier:8,label:"The Galápagos Islands belong to which country?",targetId:"ecuador"},
 {id:"tri_angel",tier:9,    label:"Angel Falls, the world's highest uninterrupted waterfall, is in which country?",targetId:"venezuela"},
@@ -6186,9 +6207,7 @@ var SA_TRIVIA_QUESTIONS = [
 {id:"tri_guinea",tier:11,   label:"Which is the smallest country on the South American mainland?",targetId:"suriname"},
 {id:"tri_atacama",tier:11,  label:"The Atacama Desert, one of the driest places on Earth, is in which country?",targetId:"chile"},
 
-{id:"tri_salar",tier:11,label:"Salar de Uyuni, the world's largest salt flat, is in which country?",targetId:"bolivia"},
 {id:"tri_patagonia",tier:12,label:"Patagonia spans the southern regions of Chile and which other country?",targetId:"argentina"},
-{id:"tri_angel_falls",tier:12,label:"Angel Falls, the world's highest waterfall, is in which country?",targetId:"venezuela"},
 {id:"tri_darwin_galapagos",tier:12,label:"Charles Darwin studied finches on the Galápagos Islands, which belong to which country?",targetId:"ecuador"},
 {id:"tri_llama",tier:13,label:"Llamas and alpacas were first domesticated in which country?",targetId:"peru"},
 {id:"tri_wine_sa",tier:13,label:"Mendoza, one of the world's great wine regions, is in which country?",targetId:"argentina"},
@@ -6232,8 +6251,8 @@ var OC_COUNTRIES = {
 584:{id:"marshall",tier:11,name:"Marshall Islands",capital:"Majuro",capitalCoords:[171.38,7.09]},
 585:{id:"palau",tier:11,name:"Palau",capital:"Ngerulmud",capitalCoords:[134.62,7.50]},
 798:{id:"tuvalu",tier:11,name:"Tuvalu",capital:"Funafuti",capitalCoords:[179.19,-8.52]},
-520:{id:"nauru",tier:11,name:"Nauru",capital:"Yaren",capitalCoords:[166.92,-0.55]},
-540:{id:"new_caledonia",tier:11,name:"New Caledonia",capital:"Nouméa",capitalCoords:[166.46,-22.28]}
+520:{id:"nauru",tier:11,name:"Nauru",capital:"Yaren (de facto)",capitalCoords:[166.92,-0.55]},
+540:{id:"new_caledonia",tier:11,name:"New Caledonia",capital:"Nouméa",capitalCoords:[166.46,-22.28],isTerritory:true}
 };
 
 var OC_CENTROIDS = {
@@ -6322,7 +6341,7 @@ darling: [
 };
 
 var OC_RIVERS = [
-{id:"murray_darling",name:"Murray-Darling River",tier:8,centroid:[142.0,-35.0],coords:OC_RIVER_COORDS.murray_darling},
+{id:"murray_darling",name:"Murray River",tier:8,centroid:[142.0,-35.0],coords:OC_RIVER_COORDS.murray_darling},
 {id:"darling",name:"Darling River",tier:9,centroid:[146.0,-31.0],coords:OC_RIVER_COORDS.darling},
 ];
 
@@ -6477,13 +6496,13 @@ var OC_ISLANDS = [
 {id:"tasmania",tier:8,       name:"Tasmania",             centroid:[146.8,-42.0],  radius:2.0, countryId:"36"},
 {id:"nz_north",tier:8,      name:"New Zealand North Island",centroid:[175.5,-38.0],radius:3.0, countryId:"554"},
 {id:"nz_south",tier:8,      name:"New Zealand South Island",centroid:[170.5,-44.0],radius:3.0, countryId:"554"},
-{id:"png_island",tier:9,    name:"Papua New Guinea",      centroid:[143.96,-6.31], radius:4.0, countryId:"598"},
-{id:"fiji_islands",tier:10,  name:"Fiji Islands",           centroid:[178.0,-17.8],  radius:3.0, countryId:"242"},
+{id:"png_island",tier:9,    name:"New Guinea",            centroid:[141.0,-5.5],   radius:4.0, countryIds:["598","360"], bbox:[130.5,-10.8,151.0,-0.5], largestPerCountry:true},
+{id:"fiji_islands",tier:10,  name:"Fiji Islands",           centroid:[178.0,-17.8],  radius:3.0, countryId:"242", allRings:true},
 {id:"new_caledonia_is",tier:10,name:"New Caledonia",        centroid:[165.6,-21.5],  radius:2.5, countryId:"540"},
-{id:"solomons_is",tier:10,   name:"Solomon Islands",        centroid:[160.0,-9.1],   radius:3.0, countryId:"90"},
-{id:"vanuatu_is",tier:10,    name:"Vanuatu Islands",        centroid:[167.0,-15.4],  radius:2.5, countryId:"548"},
+{id:"solomons_is",tier:10,   name:"Solomon Islands",        centroid:[160.0,-9.1],   radius:3.0, countryId:"90", allRings:true},
+{id:"vanuatu_is",tier:10,    name:"Vanuatu Islands",        centroid:[167.0,-15.4],  radius:2.5, countryId:"548", allRings:true},
 {id:"guam",tier:11,          name:"Guam",                   centroid:[144.8,13.4],   radius:1.5, countryId:"316"},
-{id:"samoa",tier:11,         name:"Samoa",                  centroid:[-172.1,-13.8], radius:2.0, countryId:"882"},
+{id:"samoa",tier:11,         name:"Samoa",                  centroid:[-172.1,-13.8], radius:2.0, countryId:"882", allRings:true},
 ];
 
 var OC_ARCHIPELAGOS = [
@@ -6503,7 +6522,6 @@ var OC_WATER_BODIES = [
 {id:"tasman_sea",tier:7,  name:"Tasman Sea",   centroid:[163.0,-35.0]},
 {id:"arafura_sea",tier:10, name:"Arafura Sea",  centroid:[136.6,-10.4]},
 {id:"timor_sea",tier:10,   name:"Timor Sea",    centroid:[128.0,-11.0]},
-{id:"great_barrier",tier:8,name:"Great Barrier Reef",centroid:[149.0,-18.0]},
 {id:"great_australian_bight",tier:11,name:"Great Australian Bight",centroid:[128.4,-33.7]},
 {id:"bass_strait",tier:11,name:"Bass Strait",centroid:[146.4,-39.5]},
 {id:"g_carpentaria",tier:12,name:"Gulf of Carpentaria",centroid:[139.0,-14.5]},
@@ -6571,7 +6589,6 @@ var OC_CITIES = [
 {id:"auckland",tier:8,     name:"Auckland",     country:"New Zealand",     coords:[174.76,-36.85], radius:0.8},
 {id:"wellington_city",tier:9,name:"Wellington", country:"New Zealand",     coords:[174.78,-41.29], radius:0.8},
 {id:"port_moresby",tier:10, name:"Port Moresby", country:"Papua New Guinea",coords:[147.15,-9.44],  radius:0.8},
-{id:"suva_city",tier:10,    name:"Suva",         country:"Fiji",            coords:[178.44,-18.14], radius:0.8},
 {id:"adelaide",tier:10,     name:"Adelaide",     country:"Australia",       coords:[138.60,-34.93], radius:0.8},
 {id:"christchurch",tier:10, name:"Christchurch", country:"New Zealand",     coords:[172.64,-43.53], radius:0.8},
 
@@ -6585,13 +6602,11 @@ var OC_HERITAGE_SITES = [
 {id:"uluru",tier:8,          name:"Uluru (Ayers Rock)",       coords:[131.04,-25.35], radius:1.5},
 {id:"sydney_opera",tier:8,   name:"Sydney Opera House",       coords:[151.21,-33.86], radius:0.7},
 {id:"great_barrier_site",tier:8,name:"Great Barrier Reef",    coords:[149.00,-18.29], radius:2.5},
-{id:"milford_sound",tier:9,  name:"Milford Sound",            coords:[167.93,-44.67], radius:1.0},
 {id:"kakadu",tier:10,         name:"Kakadu National Park",     coords:[132.39,-12.84], radius:1.5},
 {id:"tongariro",tier:10,      name:"Tongariro National Park",  coords:[175.56,-39.20], radius:1.0},
 {id:"blue_mountains",tier:11, name:"Blue Mountains",           coords:[150.31,-33.72], radius:1.0},
-{id:"fiordland",tier:11,      name:"Fiordland National Park",  coords:[167.50,-45.50], radius:1.5},
 {id:"daintree",tier:11,       name:"Daintree Rainforest",      coords:[145.42,-16.25], radius:1.2},
-{id:"twelve_apostles",tier:11, name:"Twelve Apostles",         coords:[143.10,-38.66], radius:0.8},
+{id:"tasmanian_wilderness",tier:11,name:"Tasmanian Wilderness",  coords:[146.00,-42.50], radius:1.5},
 
 {id:"te_wahipounamu",tier:11,name:"Te Wahipounamu — South West New Zealand",coords:[167.72,-44.67],radius:1.2},
 {id:"lord_howe",tier:12,name:"Lord Howe Island Group",coords:[159.08,-31.56],radius:0.9},
@@ -6609,9 +6624,7 @@ var OC_TRIVIA_QUESTIONS = [
 {id:"tri_outback",tier:9,   label:"The vast, arid interior known as the Outback is in which country?",targetId:"australia"},
 {id:"tri_bula",tier:10,      label:"'Bula!' is the traditional greeting in which island nation?",targetId:"fiji"},
 {id:"tri_opera",tier:8,     label:"The Sydney Opera House is in which country?",targetId:"australia"},
-{id:"tri_coral_sea",tier:10,  label:"The Great Barrier Reef lies in the Coral Sea off the coast of which country?",targetId:"australia"},
 
-{id:"tri_rugby_nz",tier:12,label:"The All Blacks, one of rugby's most dominant teams, represent which country?",targetId:"new_zealand"},
 {id:"tri_fiji_islands",tier:13,label:"Which Pacific island nation of over 300 islands is known for its coral reefs and rugby culture?",targetId:"fiji"},
 {id:"tri_boomerang",tier:13,label:"The boomerang was originally used as a hunting tool by indigenous people of which country?",targetId:"australia"},
 ];
@@ -8105,8 +8118,7 @@ var MOUNTAIN_PEAKS = {
     [-75.399,4.896,18438],
     [-75.345,4.897,17126],
     [-75.32,5.32,17060],
-    [-78.436,-0.677,22834],
-    [-78.438,0.677,19347],
+    [-78.436,-0.677,19347],
     [-78.137,0,15623],
     [-78.03,-0.1,16407],
     [-78.717,-1.476,20564],

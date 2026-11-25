@@ -190,7 +190,7 @@ test('genesis cards have clean plain-text formatting and broad numeric casualty/
   assert.ok(numericImpactCount >= 160, `Expected at least 160 cards with numeric impact stats, got ${numericImpactCount}`);
 
   const mustContain = [
-    ['drc', /5 to 10 million/i],
+    ['drc', /1\.5 to 10 million/i],
     ['namibia', /herero and nama.*genocide/i],
     ['rwanda', /500,000 to 800,000/i],
     ['armenia', /armenian genocide/i],
@@ -356,6 +356,316 @@ test('s-compliance, RETENTION_POLICY, and parent email notices include explicit 
   assert.ok(!/<a\s+href="https:\/\/www\.culturalsurvival\.org\/"/i.test(playHtml), 's-solidarity Cultural Survival card must not hardcode static href');
   assert.ok(!/<a\s+href="https:\/\/linktr\.ee\/moco_irc"/i.test(playHtml), 's-solidarity MoCo IRC card must not hardcode static href');
 });
+
+function loadFullMapData() {
+  const code = fs.readFileSync(path.join(__dirname, '..', 'map-data.js'), 'utf8');
+  const ctx = {};
+  vm.createContext(ctx);
+  vm.runInContext(
+    code +
+      `\nthis.__all = {
+        COUNTRY_DATA, CONTINENT_COUNTRIES, OC_TUVALU_FEATURE,
+        EURO_COUNTRIES, AFRICA_COUNTRIES, ASIA_COUNTRIES, NA_COUNTRIES, SA_COUNTRIES, OC_COUNTRIES,
+        EURO_ISLANDS, AFRICA_ISLANDS, ASIA_ISLANDS, NA_ISLANDS, SA_ISLANDS, OC_ISLANDS,
+        EURO_WATER_BODIES, AFRICA_WATER_BODIES, ASIA_WATER_BODIES, NA_WATER_BODIES, SA_WATER_BODIES, OC_WATER_BODIES,
+        EURO_RIVERS, AFRICA_RIVERS, ASIA_RIVERS, NA_RIVERS, SA_RIVERS, OC_RIVERS,
+        EURO_CITIES, AFRICA_CITIES, ASIA_CITIES, NA_CITIES, SA_CITIES, OC_CITIES,
+        EURO_HERITAGE_SITES, AFRICA_HERITAGE_SITES, ASIA_HERITAGE_SITES, NA_HERITAGE_SITES, SA_HERITAGE_SITES, OC_HERITAGE_SITES,
+        EURO_LANGUAGE_QUESTIONS, ASIA_LANGUAGE_QUESTIONS,
+        EURO_TRIVIA_QUESTIONS, AFRICA_TRIVIA_QUESTIONS, ASIA_TRIVIA_QUESTIONS, NA_TRIVIA_QUESTIONS, SA_TRIVIA_QUESTIONS, OC_TRIVIA_QUESTIONS,
+        MOUNTAIN_PEAKS
+      };`,
+    ctx
+  );
+  return ctx.__all;
+}
+
+test('Section 1: security, compliance text, PBKDF2 password hashing, recovery doc, and sw.js precaching', async () => {
+  const playHtml = fs.readFileSync(path.join(__dirname, '..', 'play', 'index.html'), 'utf8');
+  const swSrc = fs.readFileSync(path.join(__dirname, '..', 'sw.js'), 'utf8');
+  const recoveryDoc = fs.readFileSync(path.join(__dirname, '..', 'docs', 'SUPABASE_RECOVERY_REPORT.md'), 'utf8');
+
+  // s-compliance text accuracy
+  assert.ok(!/195-word filter/i.test(playHtml), 's-compliance must not have stale 195-word filter text');
+  assert.match(playHtml, /500\+ real-name detector/i, 's-compliance must describe updated real-name detector');
+  assert.match(playHtml, /Utah App Store Act[\s\S]{0,250}May 2027/i, 's-compliance must reflect Utah HB 498 May 2027 effective date');
+  assert.ok(!/Utah App Store Act[\s\S]{0,250}May 2026/i.test(playHtml), 's-compliance must not show outdated Utah May 2026 date');
+  assert.ok(!/no handle-rename flow exists/i.test(playHtml), 'stale handle-rename comment must be removed');
+
+  // Extract & execute hashPassword and hashPasswordLegacySha256 via Web Crypto
+  const hashBlockMatch = playHtml.match(/const PBKDF2_ITERATIONS =[\s\S]*?async function hashPassword\(password\) \{[\s\S]*?return 'pbkdf2\$' \+ PBKDF2_ITERATIONS \+ '\$' \+ hex;\n\}/);
+  assert.ok(hashBlockMatch, 'PBKDF2 hashPassword and hashPasswordLegacySha256 block must exist in play/index.html');
+  const hashCtx = { crypto: globalThis.crypto, TextEncoder, Uint8Array };
+  vm.createContext(hashCtx);
+  vm.runInContext(hashBlockMatch[0] + '\nthis.__fns = { hashPassword, hashPasswordLegacySha256 };', hashCtx);
+  const pbkdf2Hash = await hashCtx.__fns.hashPassword('TestPass!2026');
+  const legacyHash = await hashCtx.__fns.hashPasswordLegacySha256('TestPass!2026');
+  assert.match(pbkdf2Hash, /^pbkdf2\$100000\$[0-9a-f]{64}$/, 'hashPassword must produce pbkdf2$100000$<64hex>');
+  assert.match(legacyHash, /^[0-9a-f]{64}$/, 'hashPasswordLegacySha256 must produce 64-char SHA-256 hex');
+  assert.equal(await hashCtx.__fns.hashPassword('TestPass!2026'), pbkdf2Hash, 'PBKDF2 hash must be deterministic');
+  assert.notEqual(pbkdf2Hash, legacyHash);
+  assert.match(playHtml, /hashPasswordLegacySha256\(pw\)/, 'login/restore flow must keep legacy SHA-256 fallback');
+
+  // Recovery doc accuracy
+  assert.match(recoveryDoc, /restore_profile_by_email.*dropped/is, 'SUPABASE_RECOVERY_REPORT.md must document dropped restore_profile_by_email');
+  assert.match(recoveryDoc, /\/api\/request-recovery/, 'SUPABASE_RECOVERY_REPORT.md must document tokenized recovery endpoint');
+
+  // sw.js version & asset lists
+  assert.match(swSrc, /CACHE_NAME\s*=\s*'mapolis-cache-v13'/, 'sw.js must be bumped to mapolis-cache-v13');
+  assert.doesNotThrow(() => new Function(swSrc), 'sw.js must parse with valid JS syntax');
+  const badgeFiles = fs.readdirSync(path.join(__dirname, '..', 'assets', 'badges')).filter(f => f.endsWith('.webp'));
+  const flagFiles = fs.readdirSync(path.join(__dirname, '..', 'assets', 'flags')).filter(f => f.endsWith('.svg'));
+  assert.equal(badgeFiles.length, 121, 'Expected 121 badge webp assets');
+  assert.equal(flagFiles.length, 200, 'Expected 200 flag svg assets');
+  for (const b of badgeFiles) {
+    assert.ok(swSrc.includes(`'/assets/badges/${b}'`), `sw.js missing badge precache entry: ${b}`);
+  }
+  for (const f of flagFiles) {
+    assert.ok(swSrc.includes(`'/assets/flags/${f}'`), `sw.js missing flag warm-cache entry: ${f}`);
+  }
+});
+
+test('Section 2: Oceania antimeridian projection, Puerto Rico ID, divided/multi-island extraction, Taiwan Strait, Cotopaxi, altTargetIds, Tuvalu', () => {
+  const md = loadFullMapData();
+  const playHtml = fs.readFileSync(path.join(__dirname, '..', 'play', 'index.html'), 'utf8');
+  const featSrc = fs.readFileSync(path.join(__dirname, '..', 'assets', 'features-prebeta6.js'), 'utf8');
+
+  const allIslands = Object.fromEntries(
+    [...md.EURO_ISLANDS, ...md.AFRICA_ISLANDS, ...md.ASIA_ISLANDS, ...md.NA_ISLANDS, ...md.SA_ISLANDS, ...md.OC_ISLANDS].map(i => [i.id, i])
+  );
+
+  // Puerto Rico ISO 630
+  assert.equal(allIslands.puerto_rico.countryId, '630');
+  assert.equal(allIslands.puerto_rico.allRings, true);
+
+  // Oceania antimeridian projection math (rotate [-165, 0], center [0, -18], scale 360 on 800x500)
+  assert.match(playHtml, /oceania:\s*\{[^}]*rotate:\s*\[-165,\s*0\][^}]*scale:\s*360/, 'VIEW_CONFIGS.oceania must rotate across antimeridian');
+  assert.match(playHtml, /if\s*\(cfg\.rotate\)\s*proj\.rotate\(cfg\.rotate\)/, 'createProjection must apply cfg.rotate');
+
+  // Verify exact Mercator math for Oceania points on 800x500 viewport
+  const deg2rad = d => (d * Math.PI) / 180;
+  const mercY = latDeg => Math.log(Math.tan(Math.PI / 4 + deg2rad(latDeg) / 2));
+  const projectOceania = ([lon, lat]) => {
+    let dLon = lon - 165;
+    if (dLon > 180) dLon -= 360;
+    if (dLon < -180) dLon += 360;
+    const x = 400 + 360 * deg2rad(dLon);
+    const y = 250 - 360 * (mercY(lat) - mercY(-18));
+    return [x, y];
+  };
+  const oceaniaChecks = {
+    perth: [115.86, -31.95],
+    palau: [134.58, 7.51],
+    tuvalu: [179.19, -8.52],
+    fiji: [178.06, -17.71],
+    tonga: [-175.20, -21.14],
+    samoa: [-171.76, -13.83],
+    french_polynesia: [-149.41, -17.68],
+    nz_south: [168.35, -46.41]
+  };
+  for (const [name, coord] of Object.entries(oceaniaChecks)) {
+    const [x, y] = projectOceania(coord);
+    assert.ok(x >= 20 && x <= 780 && y >= 20 && y <= 480, `Oceania target ${name} projected off-screen at [${x.toFixed(1)}, ${y.toFixed(1)}]`);
+  }
+
+  // Extract and execute extractIslandFeatures on real countries-50m.json
+  const extractFnMatch = playHtml.match(/function extractIslandRing\([\s\S]*?\nfunction extractIslandFeatures\(isl, geoFeatures\) \{[\s\S]*?\n\}/);
+  assert.ok(extractFnMatch, 'extractIslandFeatures must exist in play/index.html');
+  const topojson = require('../lib/topojson.min.js');
+  const worldTopo = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'countries-50m.json'), 'utf8'));
+  const worldFeats = topojson.feature(worldTopo, worldTopo.objects.countries).features;
+  // Mirror runtime _idFixups from play/index.html (Northern Cyprus → 196)
+  for (const f of worldFeats) {
+    if (f.id === undefined && f.properties && f.properties.name === 'N. Cyprus') f.id = '196';
+  }
+  worldFeats.push(md.OC_TUVALU_FEATURE);
+
+  const ringArea = ring => {
+    let a = 0;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      a += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+    }
+    return Math.abs(a) / 2;
+  };
+  const islCtx = {
+    d3: {
+      geoArea: f => {
+        const ring = f.geometry.coordinates[0];
+        return ringArea(ring);
+      }
+    }
+  };
+  vm.createContext(islCtx);
+  vm.runInContext(extractFnMatch[0] + '\nthis.__extract = extractIslandFeatures;', islCtx);
+
+  // Divided islands must yield >= 2 polygons (covering all sovereign halves)
+  for (const id of ['borneo', 'hispaniola', 'tierra_del_fuego', 'timor', 'png_island', 'cyprus']) {
+    const res = islCtx.__extract(allIslands[id], worldFeats);
+    assert.ok(res.length >= 2, `Divided island ${id} expected >= 2 polygons, got ${res.length}`);
+  }
+  assert.equal(allIslands.png_island.name, 'New Guinea', 'png_island must be named New Guinea');
+  // Multi-island archipelagos must yield >= 2 polygons
+  for (const id of ['hawaii', 'galapagos', 'svalbard', 'falklands', 'fiji_islands', 'solomons_is', 'vanuatu_is', 'cape_verde_is', 'comoros_is', 'maldives_is', 'samoa', 'puerto_rico']) {
+    const res = islCtx.__extract(allIslands[id], worldFeats);
+    assert.ok(res.length >= 2, `Island group ${id} expected >= 2 polygons, got ${res.length}`);
+  }
+
+  // _classifyWater classifies Taiwan Strait as straits (not gulfs)
+  const cwMatch = playHtml.match(/function _classifyWater\(w\) \{[\s\S]*?\n\}/);
+  assert.ok(cwMatch, '_classifyWater must exist in play/index.html');
+  const cwCtx = {};
+  vm.createContext(cwCtx);
+  vm.runInContext(cwMatch[0] + '\nthis.__cw = _classifyWater;', cwCtx);
+  assert.equal(cwCtx.__cw({ name: 'Taiwan Strait', id: 'taiwan_strait' }), 'straits');
+  assert.equal(cwCtx.__cw({ name: 'Persian Gulf', id: 'persian_gulf' }), 'gulfs');
+  assert.equal(cwCtx.__cw({ name: 'Bay of Bengal', id: 'bay_of_bengal' }), 'gulfs');
+  assert.equal(cwCtx.__cw({ name: 'Strait of Magellan', id: 'magellan_strait' }), 'straits');
+  const validWaterCats = new Set(['oceans', 'seas', 'gulfs', 'straits', 'lakes']);
+  for (const w of [
+    ...md.EURO_WATER_BODIES, ...md.AFRICA_WATER_BODIES, ...md.ASIA_WATER_BODIES,
+    ...md.NA_WATER_BODIES, ...md.SA_WATER_BODIES, ...md.OC_WATER_BODIES
+  ]) {
+    assert.ok(validWaterCats.has(cwCtx.__cw(w)), `Unexpected water category for ${w.id} (${w.name}): ${cwCtx.__cw(w)}`);
+  }
+
+  // Cotopaxi coordinates & elevation fixed (array format [lon, lat, elevFt])
+  const cotopaxis = md.MOUNTAIN_PEAKS.andes_north.filter(p => Array.isArray(p) ? (Math.abs(p[0] - (-78.436)) < 0.01) : p.name === 'Cotopaxi');
+  assert.equal(cotopaxis.length, 1, 'Expected exactly 1 Cotopaxi peak');
+  assert.equal(cotopaxis[0][1], -0.677);
+  assert.equal(cotopaxis[0][2], 19347);
+  assert.ok(!md.MOUNTAIN_PEAKS.andes_north.some(p => p[2] === 22834 && Math.abs(p[0] - (-78.436)) < 0.1), 'Corrupted Cotopaxi 22834 entry must be removed');
+
+  // altTargetId / altTargetIds wired into buildPool and handleGameClick
+  assert.match(playHtml, /altTargetId:\s*q\.altTargetId \|\| null/);
+  assert.match(playHtml, /altTargetIds:\s*Array\.isArray\(q\.altTargetIds\) \? q\.altTargetIds\.slice\(\) : null/);
+  assert.match(playHtml, /detectByGeo\(lon, lat, q\.type, q\.altTargetIds\[ai\], detectCd\)/);
+
+  // Tuvalu synthetic feature + globe label
+  assert.equal(md.OC_TUVALU_FEATURE.id, '798');
+  assert.equal(md.OC_TUVALU_FEATURE.geometry.type, 'MultiPolygon');
+  assert.ok(md.OC_TUVALU_FEATURE.geometry.coordinates.length >= 3);
+  assert.match(playHtml, /ALL_FEATURES\.push\(OC_TUVALU_FEATURE\)/);
+  assert.match(featSrc, /allCards\.length \+ ' countries &amp; territories'/);
+});
+
+test('Section 3: COUNTRY_DATA sync (200), Equatorial Guinea capital, UNESCO replacements, deduplication, water typos, trivia fixes', () => {
+  const md = loadFullMapData();
+  const playHtml = fs.readFileSync(path.join(__dirname, '..', 'play', 'index.html'), 'utf8');
+
+  // COUNTRY_DATA has all 200 unique entries
+  assert.equal(Object.keys(md.COUNTRY_DATA).length, 200, 'COUNTRY_DATA must contain all 200 countries/territories');
+  assert.equal(md.COUNTRY_DATA[226].capital, 'Ciudad de la Paz');
+  assert.equal(md.AFRICA_COUNTRIES[226].capital, 'Ciudad de la Paz');
+  assert.equal(md.SA_COUNTRIES[254].isTerritory, true);
+  assert.equal(md.OC_COUNTRIES[540].isTerritory, true);
+  assert.equal(md.AFRICA_COUNTRIES[732].isTerritory, true);
+
+  // Non-UNESCO sites removed, Neuschwanstein kept
+  const allHeritage = Object.fromEntries(
+    [...md.EURO_HERITAGE_SITES, ...md.AFRICA_HERITAGE_SITES, ...md.ASIA_HERITAGE_SITES, ...md.NA_HERITAGE_SITES, ...md.SA_HERITAGE_SITES, ...md.OC_HERITAGE_SITES].map(h => [h.id, h])
+  );
+  for (const removed of ['meiji_shrine', 'fushimi_inari', 'niagara', 'panama_canal', 'torres_del_paine', 'salt_flats', 'amazon_rainforest', 'ciudad_perdida', 'twelve_apostles']) {
+    assert.equal(allHeritage[removed], undefined, `Non-UNESCO site ${removed} should have been replaced`);
+  }
+  for (const added of ['nikko_shrines', 'itsukushima_shrine', 'rideau_canal', 'panama_viejo', 'valparaiso_historic', 'potosi_bolivia', 'central_amazon', 'san_agustin_park', 'tasmanian_wilderness', 'neuschwanstein']) {
+    assert.ok(allHeritage[added], `Expected UNESCO site ${added} to exist`);
+  }
+
+  // Deduplicated heritage sites
+  for (const dup of ['parthenon', 'gaudi', 'okavango_delta', 'halong_bay', 'cahokia_mounds', 'cartagena', 'tierra_del_fuego', 'milford_sound', 'fiordland']) {
+    assert.equal(allHeritage[dup], undefined, `Duplicate/misnamed heritage site ${dup} should be removed`);
+  }
+
+  // Deduplicated cities
+  const allCities = Object.fromEntries(
+    [...md.EURO_CITIES, ...md.AFRICA_CITIES, ...md.ASIA_CITIES, ...md.NA_CITIES, ...md.SA_CITIES, ...md.OC_CITIES].map(c => [c.id, c])
+  );
+  for (const dupCity of ['luanda_city', 'khartoum_city', 'tehran_city', 'hanoi_city', 'suva_city']) {
+    assert.equal(allCities[dupCity], undefined, `Duplicate city ${dupCity} should be removed`);
+  }
+
+  // Water typos & removals & Murray/Darling split
+  const allWaterArr = [
+    ...md.EURO_WATER_BODIES, ...md.AFRICA_WATER_BODIES, ...md.ASIA_WATER_BODIES,
+    ...md.NA_WATER_BODIES, ...md.SA_WATER_BODIES, ...md.OC_WATER_BODIES
+  ];
+  const allWater = Object.fromEntries(allWaterArr.map(w => [w.id, w]));
+  assert.equal(allWater.golfo_de_california, undefined, 'Duplicate golfo_de_california should be removed');
+  assert.equal(allWater.great_barrier, undefined, 'Non-water great_barrier should be removed from OC_WATER_BODIES');
+  const waterNames = new Set(allWaterArr.map(w => w.name));
+  for (const fixedName of ['Padunskoye More', 'Gulf of Khambhat', 'Olenyok Gulf', 'Prince Albert Sound', 'Northwest Passage', 'Étang Saumâtre', 'Strait of Magellan', 'Bahía Inútil']) {
+    assert.ok(waterNames.has(fixedName), `Expected corrected water body name: ${fixedName}`);
+  }
+  const ocRivers = Object.fromEntries(md.OC_RIVERS.map(r => [r.id, r]));
+  assert.equal(ocRivers.murray_darling.name, 'Murray River');
+  assert.equal(ocRivers.darling.name, 'Darling River');
+
+  // Trivia & Language fixes & deduplications
+  const allTrivia = [
+    ...md.EURO_LANGUAGE_QUESTIONS, ...md.ASIA_LANGUAGE_QUESTIONS,
+    ...md.EURO_TRIVIA_QUESTIONS, ...md.AFRICA_TRIVIA_QUESTIONS, ...md.ASIA_TRIVIA_QUESTIONS,
+    ...md.NA_TRIVIA_QUESTIONS, ...md.SA_TRIVIA_QUESTIONS, ...md.OC_TRIVIA_QUESTIONS
+  ];
+  const triviaById = Object.fromEntries(allTrivia.map(t => [t.id, t]));
+  assert.equal(triviaById.tri_monsoon.targetId, 'india');
+  assert.match(triviaById.lang_bahasa.label, /Bahasa Indonesia/);
+  assert.ok(!/largest.*oil.*exporter|most oil/i.test(triviaById.tri_oil.clue || ''), 'tri_oil should not make false superlative claim');
+  assert.ok(!/busiest cruise/i.test(triviaById.tri_caribbean_cruise.clue || ''), 'tri_caribbean_cruise should not make false superlative claim');
+  for (const id of ['lang_basque', 'lang_romanian', 'tri_aurora', 'tri_gorillas', 'tri_dead_sea', 'tri_dmz', 'tri_inuit', 'tri_tango']) {
+    assert.ok(triviaById[id].altTargetId || (Array.isArray(triviaById[id].altTargetIds) && triviaById[id].altTargetIds.length > 0), `Expected alternate target(s) on ${id}`);
+  }
+  for (const removedTrivia of ['tri_coffee_origin', 'tri_silk_road_china', 'tri_salar', 'tri_angel_falls', 'tri_coral_sea', 'tri_rugby_nz']) {
+    assert.equal(triviaById[removedTrivia], undefined, `Duplicate trivia ${removedTrivia} should be removed`);
+  }
+
+  // Turkey myth fixed
+  assert.ok(!/Ben Franklin\\'s choice/.test(playHtml), 'Turkey animal description must not state Franklin national bird myth');
+  assert.match(playHtml, /Native North American bird admired by Ben Franklin/);
+});
+
+test('Section 4: Genesis Card 2024-2026 updates, 10 historical precision fixes, and multi-capital headers', () => {
+  const dataset = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'genesis-cards.json'), 'utf8'));
+  const byId = Object.fromEntries(dataset.cards.map(c => [c.id, c]));
+
+  // 2024-2026 geopolitical updates
+  assert.equal(byId.eq_guinea.capital, 'Ciudad de la Paz');
+  assert.match(byId.eq_guinea.story, /Ciudad de la Paz/i);
+  assert.match(byId.syria.story, /December 8, 2024/i);
+  assert.match(byId.syria.story, /1920/);
+  assert.match(byId.syria.story, /1939/);
+  const mauritiusText = `${byId.mauritius.story} ${byId.mauritius.contestedNote || ''}`;
+  assert.match(mauritiusText, /May 2025/i);
+  assert.match(mauritiusText, /unratified|stalled/i);
+
+  // 10 historical precision fixes
+  assert.match(byId.bahamas.story, /1648/);
+  assert.match(byId.bahamas.story, /1718/);
+  assert.match(byId.canada.story, /1883/);
+  assert.match(byId.belarus.story, /9,200/);
+  assert.match(byId.belarus.story, /628/);
+  assert.match(byId.spain.story, /1713/);
+  assert.match(byId.spain.story, /1801/);
+  assert.match(byId.france.story, /1947/);
+  assert.match(byId.iran.story, /1932/);
+  assert.match(byId.iran.story, /1975/);
+  assert.match(byId.ghana.story, /Sudan/i);
+  assert.match(byId.dominica.story, /1903/);
+  assert.match(byId.colombia.story, /1830/);
+  assert.match(byId.drc.story, /1\.5 to 10 million/i);
+  assert.match(byId.belgium.story, /1\.5 to 10 million/i);
+
+  // Multi-capital & de facto headers
+  assert.match(byId.nauru.capital, /Yaren.*de facto/i);
+  assert.match(byId.south_africa.capital, /Pretoria.*Cape Town.*Bloemfontein/i);
+  assert.match(byId.switzerland.capital, /Bern.*de facto/i);
+  assert.match(byId.bolivia.capital, /Sucre.*La Paz/i);
+  assert.match(byId.eswatini.capital, /Mbabane.*Lobamba/i);
+  assert.match(byId.w_sahara.capital, /El Aaiún|Laayoune/i);
+  assert.match(byId.palestine.capital, /Jerusalem|Ramallah/i);
+  assert.match(byId.palestine.story, /1988/);
+  assert.match(byId.palestine.story, /2012/);
+});
+
 
 
 

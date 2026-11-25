@@ -9,7 +9,7 @@ Since we were blocked from using a standard Postgres connection (due to the lack
 Here are the changes applied to your database:
 1. **Schema Modifications:** Added missing columns to the `profiles` table to support COPPA-compliant account recovery (`password_hash`, `parent_email`, `frozen`, `recovery_created_at`, `avatar_selections`, `avatar_svg`, `stats`, `link_code`).
 2. **RLS Policy Fix:** Replaced the "Admins can read all profiles" RLS policy with a safer `auth_is_admin()` function to prevent an infinite recursion error.
-3. **RPC Functions:** Created and deployed the `restore_profile` and `restore_profile_by_email` Remote Procedure Calls in your database. These allow users to securely claim a profile using their password or parent email without violating RLS.
+3. **RPC Functions:** Created and deployed the `restore_profile` Remote Procedure Call for password-based sign-in, and subsequently replaced the earlier `restore_profile_by_email` RPC (dropped in `docs/database_migration.sql`) with the server-side tokenized `/api/request-recovery` + `verify_recovery_token` + `complete_recovery` email recovery flow so users can securely recover accounts without violating RLS.
 4. **Data Cleansing:** Purged 2 unrecoverable profile records from the database that lacked both a password hash and a parent email, keeping the database clean and COPPA/FERPA compliant.
 
 ## 🚀 How to Deploy This Update

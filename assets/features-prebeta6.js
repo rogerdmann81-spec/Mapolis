@@ -1406,6 +1406,7 @@
     var n = Number(numId);
     if (n === 383 && window.EURO_KOSOVO_FEATURE) return window.EURO_KOSOVO_FEATURE;
     if (n === 254 && window.SA_FRENCH_GUIANA_FEATURE) return window.SA_FRENCH_GUIANA_FEATURE;
+    if (n === 798 && window.OC_TUVALU_FEATURE) return window.OC_TUVALU_FEATURE;
     if (!Array.isArray(features)) return null;
     for (var i = 0; i < features.length; i++) {
       if (Number(features[i].id) === n) return features[i];
@@ -1475,7 +1476,7 @@
     // Top row
     html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;width:100%;">' +
       '<button id="btn-atlas-back" style="background:none;border:none;color:var(--dim);font-size:13px;font-weight:700;padding:6px 0;cursor:pointer;flex-shrink:0;">← Back</button>' +
-      '<div style="font-family:\'Space Mono\',monospace;font-size:11px;color:var(--dim);white-space:nowrap;">' + (isGlobe ? allCards.length + ' countries on globe' : (filtered.length + ' / ' + allCards.length + ' entries')) + '</div>' +
+      '<div style="font-family:\'Space Mono\',monospace;font-size:11px;color:var(--dim);white-space:nowrap;">' + (isGlobe ? allCards.length + ' countries &amp; territories' : (filtered.length + ' / ' + allCards.length + ' entries')) + '</div>' +
       '</div>';
 
     // Header
@@ -1675,6 +1676,9 @@
     }
     if (window.SA_FRENCH_GUIANA_FEATURE && !features.some(function (f) { return Number(f.id) === 254; })) {
       features.push(window.SA_FRENCH_GUIANA_FEATURE);
+    }
+    if (window.OC_TUVALU_FEATURE && !features.some(function (f) { return Number(f.id) === 798; })) {
+      features.push(window.OC_TUVALU_FEATURE);
     }
 
     var ctx = canvas.getContext('2d');
