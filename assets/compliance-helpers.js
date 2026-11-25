@@ -105,6 +105,19 @@
     return getCloudSyncStatus(profile, currentYear) === 'allowed';
   }
 
+  // Live friend-request & direct H2H challenge popups are strictly limited to
+  // age-appropriate, cloud-eligible profiles (13+, or under-13 ONLY with verified
+  // Email Plus parental consent) that have not paused incoming requests.
+  // Guests and local-only / pending-consent under-13 profiles never receive popups.
+  function canReceiveSocialPopups(profile, currentYear) {
+    if (!profile || !profile.id) return false;
+    if (!isCloudSyncAllowed(profile, currentYear)) return false;
+    if (profile.allowFriendRequests === false || profile.allow_friend_requests === false) {
+      return false;
+    }
+    return true;
+  }
+
   function getConsentBadgeMeta(status) {
     if (status === 'pending_consent') {
       return {
@@ -147,6 +160,7 @@
     canAccessDevNotes,
     getCloudSyncStatus,
     isCloudSyncAllowed,
+    canReceiveSocialPopups,
     getConsentBadgeMeta
   };
 });

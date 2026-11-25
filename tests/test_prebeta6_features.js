@@ -411,7 +411,7 @@ test('Section 1: security, compliance text, PBKDF2 password hashing, recovery do
   assert.match(recoveryDoc, /\/api\/request-recovery/, 'SUPABASE_RECOVERY_REPORT.md must document tokenized recovery endpoint');
 
   // sw.js version & asset lists
-  assert.match(swSrc, /CACHE_NAME\s*=\s*'mapolis-cache-v15'/, 'sw.js must be bumped to mapolis-cache-v15');
+  assert.match(swSrc, /CACHE_NAME\s*=\s*'mapolis-cache-v16'/, 'sw.js must be bumped to mapolis-cache-v16');
   assert.doesNotThrow(() => new Function(swSrc), 'sw.js must parse with valid JS syntax');
   const badgeFiles = fs.readdirSync(path.join(__dirname, '..', 'assets', 'badges')).filter(f => f.endsWith('.webp'));
   const flagFiles = fs.readdirSync(path.join(__dirname, '..', 'assets', 'flags')).filter(f => f.endsWith('.svg'));
@@ -844,6 +844,70 @@ test('Section 5: World Atlas 3-section Country Dossier two-way cross-check parit
   assert.ok(prebeta6.filterGenesisCards(dataset.cards, { search: 'Alps' }, assetIndex).some(c => c.id === 'switzerland'));
   assert.ok(prebeta6.filterGenesisCards(dataset.cards, { search: 'Angkor' }, assetIndex).some(c => c.id === 'cambodia'));
   assert.ok(prebeta6.filterGenesisCards(dataset.cards, { search: 'Romansh' }, assetIndex).some(c => c.id === 'switzerland'));
+});
+
+test('Section 6: Age-gated social popups, single-use tokenized buttons, and removal of clunky room/friend codes from UI', () => {
+  const compliance = require('../assets/compliance-helpers.js');
+  const yr = 2026;
+
+  // 1. canReceiveSocialPopups age & COPPA gating
+  assert.equal(compliance.canReceiveSocialPopups(null, yr), false, 'Guest must never receive social popups');
+  assert.equal(compliance.canReceiveSocialPopups({ handle: 'NoId', birthYear: 2000 }, yr), false, 'Profile without id must not receive social popups');
+  assert.equal(
+    compliance.canReceiveSocialPopups({ id: 'u-kid-local', birthYear: 2016, localOnly: true, parentConsentStatus: 'local_only' }, yr),
+    false,
+    'Under-13 local-only profile must never receive social popups'
+  );
+  assert.equal(
+    compliance.canReceiveSocialPopups({ id: 'u-kid-pending', birthYear: 2016, parentEmail: 'p@example.com', localOnly: true, parentConsentStatus: 'pending' }, yr),
+    false,
+    'Under-13 pending parent consent must never receive social popups'
+  );
+  assert.equal(
+    compliance.canReceiveSocialPopups({ id: 'u-kid-verified', birthYear: 2016, parentEmail: 'p@example.com', localOnly: false, parentConsentStatus: 'verified' }, yr),
+    true,
+    'Under-13 with verified Email Plus parental consent may receive social popups'
+  );
+  assert.equal(
+    compliance.canReceiveSocialPopups({ id: 'u-teen', birthYear: 2013, localOnly: false }, yr),
+    true,
+    '13+ active profile may receive social popups'
+  );
+  assert.equal(
+    compliance.canReceiveSocialPopups({ id: 'u-teen-paused', birthYear: 2013, localOnly: false, allowFriendRequests: false }, yr),
+    false,
+    'Profile with paused friend requests must not receive social popups'
+  );
+
+  // 2. Single-use action token registry (profile-bound, sender-bound, expiry, replay rejection)
+  const reg = prebeta6.createActionTokenRegistry(60_000);
+  const t0 = 1_700_000_000_000;
+  const tok = reg.issue('profile-A', 'sender-X', 'friend_request', t0);
+  assert.match(tok, /^act_/);
+
+  // Mismatched profile / sender / kind rejected without consuming
+  assert.deepEqual(reg.consume(tok, 'profile-B', 'sender-X', 'friend_request', t0 + 1000), { ok: false, reason: 'mismatch' });
+  assert.deepEqual(reg.consume(tok, 'profile-A', 'sender-Y', 'friend_request', t0 + 1000), { ok: false, reason: 'mismatch' });
+  assert.deepEqual(reg.consume(tok, 'profile-A', 'sender-X', 'challenge', t0 + 1000), { ok: false, reason: 'mismatch' });
+
+  // Valid consume succeeds once, replay immediately fails
+  assert.deepEqual(reg.consume(tok, 'profile-A', 'sender-X', 'friend_request', t0 + 5000), { ok: true });
+  assert.deepEqual(reg.consume(tok, 'profile-A', 'sender-X', 'friend_request', t0 + 5001), { ok: false, reason: 'invalid_token' });
+
+  // Expired token fails
+  const tokExp = reg.issue('profile-A', 'sender-Z', 'friend_request', t0);
+  assert.deepEqual(reg.consume(tokExp, 'profile-A', 'sender-Z', 'friend_request', t0 + 60_001), { ok: false, reason: 'expired' });
+
+  // 3. UI regression guard: clunky Room Code & Friend Code controls removed from Friends & Challenge UI
+  const featSrc = fs.readFileSync(path.join(__dirname, '..', 'assets', 'features-prebeta6.js'), 'utf8');
+  assert.ok(!featSrc.includes('Create Private Room'), 'UI must not include Create Private Room button');
+  assert.ok(!featSrc.includes('Instant Private Room'), 'UI must not include Instant Private Room card');
+  assert.ok(!featSrc.includes('Backup Room Code'), 'Challenge wait modal must not display Backup Room Code');
+  assert.ok(!featSrc.includes('Your Friend Code'), 'Friends UI must not display Your Friend Code card');
+  assert.ok(!featSrc.includes('fr-join-input'), 'Friends UI must not include Room Code join input');
+  assert.ok(!featSrc.includes('fr-create-room'), 'Friends UI must not include Create Private Room button ID');
+  assert.ok(featSrc.includes('showIncomingFriendRequestBanner'), 'Live incoming friend request popup must be implemented');
+  assert.ok(featSrc.includes('data-action-token'), 'Popup action buttons must carry single-use action tokens');
 });
 
 

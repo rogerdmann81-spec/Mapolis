@@ -10716,10 +10716,21 @@ function updateTopBarRankBadge() {
   var _p8go = go;
   go = function(id) {
     _p8go(id);
+    window.currentScreen = id;
     if (id === 's-leaderboard') refreshLeaderboard();
     if (id === 's-friends' && typeof renderFriendsScreen === 'function') renderFriendsScreen(true);
     if (id === 's-atlas' && typeof renderAtlasScreen === 'function') renderAtlasScreen();
     if (id === 's-setup') updateTopBarRankBadge();
+    if (window.MapolisPreBeta6) {
+      if (id === 's-setup' || id === 's-profile') {
+        if (typeof window.MapolisPreBeta6.pollIncomingSocialActivity === 'function') {
+          window.MapolisPreBeta6.pollIncomingSocialActivity(true);
+        }
+      } else if (id === 's-game' || id === 's-h2h' || id === 's-title' || id === 's-profiles') {
+        if (typeof window.MapolisPreBeta6.dismissChallengeBanner === 'function') window.MapolisPreBeta6.dismissChallengeBanner();
+        if (typeof window.MapolisPreBeta6.dismissFriendRequestBanner === 'function') window.MapolisPreBeta6.dismissFriendRequestBanner();
+      }
+    }
   };
 })();
 

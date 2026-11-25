@@ -71,6 +71,78 @@
     return clean;
   }
 
+  // Single-use per-session action token registry for one-tap popup response buttons.
+  // Binds each Accept / Decline button to (activeProfileId, senderId, kind, expiry)
+  // so duplicate clicks, stale-profile clicks, or cross-request replays are rejected.
+  function createActionTokenRegistry(defaultTtlMs) {
+    const ttl = (typeof defaultTtlMs === 'number' && defaultTtlMs > 0) ? defaultTtlMs : 5 * 60 * 1000;
+    const store = new Map();
+    let seq = 0;
+
+    function randomToken() {
+      seq += 1;
+      if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+        const bytes = new Uint8Array(12);
+        crypto.getRandomValues(bytes);
+        let hex = '';
+        for (let i = 0; i < bytes.length; i++) {
+          hex += bytes[i].toString(16).padStart(2, '0');
+        }
+        return 'act_' + hex;
+      }
+      return 'act_' + Date.now().toString(36) + '_' + seq.toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+    }
+
+    function prune(nowMs) {
+      const now = typeof nowMs === 'number' ? nowMs : Date.now();
+      for (const [k, v] of store.entries()) {
+        if (v.used || now > v.expiresAt) store.delete(k);
+      }
+    }
+
+    function issue(profileId, senderId, kind, nowMs) {
+      const now = typeof nowMs === 'number' ? nowMs : Date.now();
+      prune(now);
+      const token = randomToken();
+      store.set(token, {
+        profileId: String(profileId || ''),
+        senderId: String(senderId || ''),
+        kind: String(kind || ''),
+        expiresAt: now + ttl,
+        used: false
+      });
+      return token;
+    }
+
+    function consume(token, expectedProfileId, expectedSenderId, expectedKind, nowMs) {
+      if (!token || typeof token !== 'string') return { ok: false, reason: 'missing_token' };
+      const entry = store.get(token);
+      if (!entry) return { ok: false, reason: 'invalid_token' };
+      if (entry.used) return { ok: false, reason: 'already_used' };
+      const now = typeof nowMs === 'number' ? nowMs : Date.now();
+      if (now > entry.expiresAt) {
+        store.delete(token);
+        return { ok: false, reason: 'expired' };
+      }
+      if (
+        entry.profileId !== String(expectedProfileId || '') ||
+        entry.senderId !== String(expectedSenderId || '') ||
+        entry.kind !== String(expectedKind || '')
+      ) {
+        return { ok: false, reason: 'mismatch' };
+      }
+      entry.used = true;
+      store.delete(token);
+      return { ok: true };
+    }
+
+    function clear() {
+      store.clear();
+    }
+
+    return { issue, consume, clear, size: () => store.size };
+  }
+
   function _getCardsArray(dataset) {
     if (!dataset || !dataset.cards) return [];
     return Array.isArray(dataset.cards) ? dataset.cards : Object.values(dataset.cards);
@@ -477,6 +549,7 @@
       normalizeFriendQuery,
       normalizeRoomCodeInput,
       formatRoomCodeDisplay,
+      createActionTokenRegistry,
       buildGameAssetIndex,
       resolveCardAssets,
       resolveGenesisCard,
@@ -545,6 +618,15 @@
     return window.activeProfile || null;
   }
 
+  function getCurrentScreenId() {
+    if (window.currentScreen) return window.currentScreen;
+    if (typeof document !== 'undefined') {
+      var activeEl = document.querySelector('.screen.active');
+      if (activeEl && activeEl.id) return activeEl.id;
+    }
+    return null;
+  }
+
   function getPlayerTier(profile) {
     try {
       var grade = (profile && typeof window.estimateGrade === 'function') ? window.estimateGrade(profile) : 6;
@@ -573,6 +655,7 @@
     closeOverlayModal('mapolis-player-card-modal');
     closeOverlayModal('mapolis-h2h-picker-modal');
     dismissChallengeBanner();
+    dismissFriendRequestBanner();
 
     if (typeof window.launchFriendH2HMatch === 'function') {
       window.launchFriendH2HMatch(matchData);
@@ -650,7 +733,7 @@
       '    <div style="font-size:26px;line-height:1;">🤝</div>' +
       '    <div style="flex:1;">' +
       '      <div style="font-weight:800;font-size:15px;color:#fff;">Play a Friend</div>' +
-      '      <div style="font-size:12px;color:#bbf7d0;margin-top:2px;line-height:1.35;">6-character Room Code, Friend List, or exact handle · Friendly or Ranked.</div>' +
+      '      <div style="font-size:12px;color:#bbf7d0;margin-top:2px;line-height:1.35;">Search by exact username or challenge someone on your Friend List · Friendly or Ranked.</div>' +
       '    </div>' +
       '    <div style="color:#86efac;font-weight:800;">→</div>' +
       '  </button>' +
@@ -668,26 +751,25 @@
     });
   }
 
-  // ── 2. Friends & Private Rooms Screen (#s-friends) ───────────────────────
+  // ── 2. Friends & Direct Challenges Screen (#s-friends) ───────────────────
 
   var _friendState = {
     loading: false,
-    friendCode: null,
     allowRequests: true,
     friends: [],
     incoming: [],
     outgoing: [],
     blocked: [],
     roomRanked: false,
-    activeRoom: null, // { room_id, room_code, is_ranked, expires_at, targetHandle }
+    activeRoom: null, // { room_id, is_ranked, expires_at, targetHandle }
     lookupResult: null,
     lookupMsg: '',
-    joinMsg: '',
     showBlocked: false
   };
 
   var _roomPollTimer = null;
   var _roomTickTimer = null;
+  var _popupTokens = createActionTokenRegistry(5 * 60 * 1000);
 
   function stopRoomPoll() {
     if (_roomPollTimer) { clearInterval(_roomPollTimer); _roomPollTimer = null; }
@@ -715,13 +797,13 @@
         stopRoomPoll();
         if (typeof onStatusChange === 'function') onStatusChange(res.status);
         if (res.status === 'declined') toast('Challenge was declined', 2400);
-        else if (res.status === 'expired') toast('Room code expired', 2400);
-        if (window.currentScreen === 's-friends') renderFriendsScreen(false);
+        else if (res.status === 'expired') toast('Challenge expired', 2400);
+        if (getCurrentScreenId() === 's-friends') renderFriendsScreen(false);
       }
     }, 2000);
 
     _roomTickTimer = setInterval(function () {
-      var cdEl = document.getElementById('fr-room-countdown') || document.getElementById('chal-wait-countdown');
+      var cdEl = document.getElementById('chal-wait-countdown');
       if (!cdEl || !_friendState.activeRoom || !_friendState.activeRoom.expires_at) return;
       var rem = Math.max(0, Math.floor((new Date(_friendState.activeRoom.expires_at).getTime() - Date.now()) / 1000));
       var m = Math.floor(rem / 60);
@@ -731,7 +813,7 @@
         _friendState.activeRoom = null;
         stopRoomPoll();
         closeOverlayModal('mapolis-challenge-wait-modal');
-        if (window.currentScreen === 's-friends') renderFriendsScreen(false);
+        if (getCurrentScreenId() === 's-friends') renderFriendsScreen(false);
       }
     }, 1000);
   }
@@ -743,15 +825,13 @@
     var res = await window.friendStore.listFriends(profile.id);
     _friendState.loading = false;
     if (res && !res.offline && !res.error) {
-      _friendState.friendCode = res.friend_code || _friendState.friendCode || profile.friend_code || '';
-      if (res.friend_code && profile) profile.friend_code = res.friend_code;
       _friendState.allowRequests = (typeof res.allow_friend_requests === 'boolean') ? res.allow_friend_requests : true;
+      profile.allowFriendRequests = _friendState.allowRequests;
       _friendState.friends = Array.isArray(res.friends) ? res.friends : [];
       _friendState.incoming = Array.isArray(res.incoming) ? res.incoming : [];
       _friendState.outgoing = Array.isArray(res.outgoing) ? res.outgoing : [];
       _friendState.blocked = Array.isArray(res.blocked) ? res.blocked : [];
-    } else if (!_friendState.friendCode && profile && profile.friend_code) {
-      _friendState.friendCode = profile.friend_code;
+      updateFriendsNavBadge(_friendState.incoming.length);
     }
   }
 
@@ -804,11 +884,13 @@
       return;
     }
 
+    // Inline incoming requests are visible on #s-friends, so avoid overlapping with top popup
+    dismissFriendRequestBanner();
+
     if (shouldFetch !== false && window.friendStore) {
-      // Paint immediately with cached/initial state, then update once fetched
       paintFriendsDOM(rootEl, profile);
       await refreshFriendsData();
-      if (window.currentScreen === 's-friends') {
+      if (getCurrentScreenId() === 's-friends') {
         paintFriendsDOM(rootEl, profile);
       }
       return;
@@ -831,75 +913,32 @@
 
     html += '<div style="text-align:center;margin-bottom:16px;">' +
       '<h2 style="font-family:\'Fredoka One\',sans-serif;font-size:24px;color:#fff;margin:0;">Play with Friends</h2>' +
-      '<div style="font-size:12px;color:var(--dim);margin-top:3px;">Private Room Codes, Friend Codes, or exact handle lookup</div>' +
+      '<div style="font-size:12px;color:var(--dim);margin-top:3px;">Search by exact username to add friends or send a live Head-to-Head challenge</div>' +
       '</div>';
 
     if (offline) {
       html += '<div style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);border-radius:12px;padding:12px 14px;font-size:12px;color:#fde68a;margin-bottom:14px;">' +
-        '📡 Connect to the internet to create Private Rooms or link Friends. Solo play and World Atlas work offline.' +
+        '📡 Connect to the internet to find friends or send live challenges. Solo play and World Atlas work offline.' +
         '</div>';
     }
 
-    // Card 1: Instant Private H2H Room
+    // Card 1: Find a Player by Exact Username + Challenge Mode
     html += '<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px;">';
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">' +
-      '<div style="font-weight:800;font-size:14px;color:#fff;">Instant Private Room</div>' +
-      '<div style="font-size:11px;color:var(--dim);">5-min code</div>' +
-      '</div>';
+    html += '<div style="font-weight:800;font-size:14px;color:#fff;margin-bottom:3px;">Find a Player</div>' +
+      '<div style="font-size:11px;color:var(--dim);margin-bottom:10px;">Search by exact profile username (no public browsing)</div>';
 
-    // Ranked / Friendly segmented toggle
-    html += '<div style="display:flex;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:3px;gap:4px;margin-bottom:10px;">' +
-      '<button id="fr-mode-friendly" style="flex:1;padding:7px 8px;border-radius:8px;border:none;font-size:12px;font-weight:700;cursor:pointer;background:' + (!st.roomRanked ? '#22c55e' : 'transparent') + ';color:' + (!st.roomRanked ? '#04120a' : 'var(--dim)') + ';">🤝 Friendly (Unranked)</button>' +
-      '<button id="fr-mode-ranked" style="flex:1;padding:7px 8px;border-radius:8px;border:none;font-size:12px;font-weight:700;cursor:pointer;background:' + (st.roomRanked ? 'var(--blue)' : 'transparent') + ';color:' + (st.roomRanked ? '#fff' : 'var(--dim)') + ';">⚔️ Ranked (ELO)</button>' +
-      '</div>';
-
-    if (st.roomRanked) {
-      html += '<div style="font-size:11px;color:#93c5fd;margin-bottom:10px;line-height:1.35;">ELO updates apply for up to 3 ranked matches per day between the same two players.</div>';
-    }
-
-    if (st.activeRoom && !st.activeRoom.targetHandle) {
-      var remSec = Math.max(0, Math.floor((new Date(st.activeRoom.expires_at).getTime() - Date.now()) / 1000));
-      var remText = Math.floor(remSec / 60) + ':' + (remSec % 60 < 10 ? '0' : '') + (remSec % 60);
-      html += '<div style="background:rgba(59,110,248,.14);border:1px solid rgba(91,143,255,.4);border-radius:12px;padding:14px;text-align:center;margin-bottom:10px;">' +
-        '<div style="font-size:11px;color:#a5b4fc;text-transform:uppercase;letter-spacing:.1em;">Share this Room Code · ' + (st.activeRoom.is_ranked ? 'Ranked' : 'Friendly') + '</div>' +
-        '<div style="font-family:\'Space Mono\',monospace;font-size:28px;font-weight:700;letter-spacing:.14em;color:#fff;margin:6px 0;font-variant-numeric:tabular-nums;">' + esc(formatRoomCodeDisplay(st.activeRoom.room_code)) + '</div>' +
-        '<div style="font-size:11px;color:var(--dim);margin-bottom:10px;">Waiting for opponent… expires in <span id="fr-room-countdown" style="font-family:\'Space Mono\',monospace;color:#fff;">' + remText + '</span></div>' +
-        '<div style="display:flex;gap:8px;justify-content:center;">' +
-        '  <button id="fr-copy-room" style="padding:8px 14px;border-radius:10px;border:1px solid rgba(91,143,255,.5);background:rgba(59,110,248,.22);color:#fff;font-size:12px;font-weight:700;cursor:pointer;">Copy Code</button>' +
-        '  <button id="fr-cancel-room" style="padding:8px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:transparent;color:var(--dim);font-size:12px;font-weight:700;cursor:pointer;">Cancel</button>' +
-        '</div>' +
-        '</div>';
-    } else {
-      html += '<button id="fr-create-room" ' + (offline ? 'disabled' : '') + ' style="width:100%;padding:11px;border-radius:12px;border:none;background:var(--yellow);color:#111;font-family:\'Fredoka One\',sans-serif;font-size:15px;cursor:pointer;margin-bottom:12px;' + (offline ? 'opacity:.5;cursor:not-allowed;' : '') + '">Create Private Room</button>';
-    }
-
-    // Join room input
-    html += '<div style="display:flex;gap:8px;">' +
-      '<input id="fr-join-input" type="text" maxlength="7" autocomplete="off" spellcheck="false" placeholder="Room code (e.g. K7M-2P9)" style="flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg-deep);color:#fff;font-family:\'Space Mono\',monospace;font-size:13px;text-transform:uppercase;letter-spacing:.06em;">' +
-      '<button id="fr-join-btn" ' + (offline ? 'disabled' : '') + ' style="padding:10px 16px;border-radius:10px;border:1px solid rgba(91,143,255,.5);background:rgba(59,110,248,.22);color:#fff;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0;">Join</button>' +
-      '</div>';
-    if (st.joinMsg) {
-      html += '<div style="font-size:11px;color:#fca5a5;margin-top:6px;">' + esc(st.joinMsg) + '</div>';
-    }
-    html += '</div>';
-
-    // Card 2: Exact Handle or Friend Code Lookup
-    html += '<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px;">';
-    html += '<div style="font-weight:800;font-size:14px;color:#fff;margin-bottom:3px;">Find a Friend</div>' +
-      '<div style="font-size:11px;color:var(--dim);margin-bottom:10px;">Exact username or Friend Code only (no public browsing)</div>';
-
-    html += '<div style="display:flex;gap:8px;">' +
-      '<input id="fr-lookup-input" type="text" maxlength="32" autocomplete="off" spellcheck="false" placeholder="Exact handle or MAP-XXXX" style="flex:1;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg-deep);color:#fff;font-size:13px;">' +
-      '<button id="fr-lookup-btn" ' + (offline ? 'disabled' : '') + ' style="padding:10px 16px;border-radius:10px;border:1px solid rgba(91,143,255,.5);background:rgba(59,110,248,.22);color:#fff;font-size:13px;font-weight:800;cursor:pointer;">Search</button>' +
+    html += '<div style="display:flex;gap:8px;margin-bottom:12px;">' +
+      '<input id="fr-lookup-input" type="text" maxlength="32" autocomplete="off" spellcheck="false" aria-label="Exact profile username" placeholder="Enter exact username…" style="flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg-deep);color:#fff;font-size:13px;">' +
+      '<button id="fr-lookup-btn" ' + (offline ? 'disabled' : '') + ' style="padding:10px 16px;border-radius:10px;border:none;background:var(--yellow);color:#111;font-family:\'Fredoka One\',sans-serif;font-size:14px;cursor:pointer;flex-shrink:0;' + (offline ? 'opacity:.5;cursor:not-allowed;' : '') + '">Search</button>' +
       '</div>';
 
     if (st.lookupMsg) {
-      html += '<div style="font-size:12px;color:#fde68a;margin-top:8px;">' + esc(st.lookupMsg) + '</div>';
+      html += '<div style="font-size:12px;color:#fde68a;margin-bottom:10px;">' + esc(st.lookupMsg) + '</div>';
     }
     if (st.lookupResult && st.lookupResult.player) {
       var lp = st.lookupResult.player;
       var lrel = st.lookupResult.relation_status || 'none';
-      html += '<div style="margin-top:10px;padding:12px;background:var(--bg-deep);border:1px solid rgba(91,143,255,.32);border-radius:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
+      html += '<div style="margin-bottom:12px;padding:12px;background:var(--bg-deep);border:1px solid rgba(91,143,255,.32);border-radius:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
         avatarMarkup(lp.avatar_svg, lp.avatar_face, 40) +
         '<div style="flex:1;min-width:130px;">' +
         '  <div style="font-weight:800;font-size:14px;color:#fff;">' + esc(lp.handle) + (lp.country ? ' <span style="font-size:11px;color:var(--dim);font-weight:600;">' + esc(lp.country) + '</span>' : '') + '</div>' +
@@ -919,53 +958,41 @@
         '</div>' +
         '</div>';
     }
+
+    // Challenge match mode selector (applies to all Challenge buttons below)
+    html += '<div style="padding-top:10px;border-top:1px solid rgba(255,255,255,.07);">' +
+      '<div style="font-size:11px;color:var(--dim);font-weight:700;margin-bottom:6px;">Challenge Mode</div>' +
+      '<div style="display:flex;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:3px;gap:4px;">' +
+      '  <button id="fr-mode-friendly" style="flex:1;padding:7px 8px;border-radius:8px;border:none;font-size:12px;font-weight:700;cursor:pointer;background:' + (!st.roomRanked ? '#22c55e' : 'transparent') + ';color:' + (!st.roomRanked ? '#04120a' : 'var(--dim)') + ';">🤝 Friendly (Unranked)</button>' +
+      '  <button id="fr-mode-ranked" style="flex:1;padding:7px 8px;border-radius:8px;border:none;font-size:12px;font-weight:700;cursor:pointer;background:' + (st.roomRanked ? 'var(--blue)' : 'transparent') + ';color:' + (st.roomRanked ? '#fff' : 'var(--dim)') + ';">⚔️ Ranked (ELO)</button>' +
+      '</div>';
+    if (st.roomRanked) {
+      html += '<div style="font-size:11px;color:#93c5fd;margin-top:8px;line-height:1.35;">ELO updates apply for up to 3 ranked matches per day between the same two players.</div>';
+    }
+    html += '</div>';
     html += '</div>';
 
-    // Card 3: My Friend Code & Privacy
-    var displayCode = st.friendCode || (profile && profile.friend_code) || '';
-    html += '<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px;">';
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">' +
-      '<div>' +
-      '  <div style="font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;">Your Friend Code</div>' +
-      '  <div style="font-family:\'Space Mono\',monospace;font-size:20px;font-weight:700;color:#fff;letter-spacing:.08em;margin-top:2px;">' + esc(displayCode || 'MAP-····') + '</div>' +
-      (!displayCode ? '  <div style="font-size:11px;color:var(--dim);margin-top:2px;">Play or sync online to activate your personal Friend Code.</div>' : '') +
-      '</div>' +
-      '<div style="display:flex;gap:6px;">' +
-      '  <button id="fr-copy-code" ' + (!displayCode ? 'disabled' : '') + ' style="padding:7px 12px;border-radius:9px;border:1px solid rgba(91,143,255,.45);background:rgba(59,110,248,.18);color:#fff;font-size:12px;font-weight:700;cursor:pointer;' + (!displayCode ? 'opacity:.45;cursor:not-allowed;' : '') + '">Copy</button>' +
-      '  <button id="fr-rotate-code" ' + (offline ? 'disabled' : '') + ' style="padding:7px 10px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--dim);font-size:12px;font-weight:700;cursor:pointer;" title="Generate a fresh code">Reset</button>' +
-      '</div>' +
-      '</div>';
-
-    html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-between;gap:12px;">' +
-      '<div>' +
-      '  <div style="font-size:12px;font-weight:700;color:#fff;">Allow Friend Requests &amp; Challenges</div>' +
-      '  <div style="font-size:11px;color:var(--dim);margin-top:2px;">When off, hides you from handle search &amp; leaderboard challenges. Room Codes still work.</div>' +
-      '</div>' +
-      '<button id="fr-toggle-privacy" role="switch" aria-checked="' + (st.allowRequests ? 'true' : 'false') + '" style="flex-shrink:0;width:44px;height:24px;border-radius:999px;border:1px solid ' + (st.allowRequests ? '#22c55e' : 'var(--border)') + ';background:' + (st.allowRequests ? '#22c55e' : 'rgba(255,255,255,.1)') + ';position:relative;cursor:pointer;transition:background .15s;">' +
-      '  <span style="position:absolute;top:2px;left:' + (st.allowRequests ? '22px' : '2px') + ';width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s;"></span>' +
-      '</button>' +
-      '</div>';
-    html += '</div>';
-
-    // Card 4: Pending Incoming Friend Requests
+    // Card 2: Pending Incoming Friend Requests (with single-use tokenized buttons)
     if (st.incoming.length > 0) {
-      html += '<div style="background:var(--bg-panel);border:1px solid rgba(250,204,21,.35);border-radius:16px;padding:14px 16px;margin-bottom:12px;">' +
-        '<div style="font-weight:800;font-size:13px;color:#fde047;margin-bottom:8px;">Incoming Friend Requests (' + st.incoming.length + ')</div>';
+      html += '<div style="background:var(--bg-panel);border:1px solid rgba(74,222,128,.4);border-radius:16px;padding:14px 16px;margin-bottom:12px;">' +
+        '<div style="font-weight:800;font-size:13px;color:#86efac;margin-bottom:8px;">Incoming Friend Requests (' + st.incoming.length + ')</div>';
       st.incoming.forEach(function (req) {
+        var acceptTok = _popupTokens.issue(profile.id, req.player_id, 'friend_request');
+        var declineTok = _popupTokens.issue(profile.id, req.player_id, 'friend_request');
         html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid rgba(255,255,255,.06);">' +
           avatarMarkup(req.avatar_svg, req.avatar_face, 36) +
           '<div style="flex:1;min-width:0;">' +
           '  <div style="font-weight:700;font-size:13px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(req.handle) + '</div>' +
           '  <div style="font-size:11px;color:var(--dim);">ELO ' + (req.rating || 1200) + '</div>' +
           '</div>' +
-          '<button class="fr-req-accept" data-pid="' + esc(req.player_id) + '" style="padding:6px 10px;border-radius:8px;border:none;background:#22c55e;color:#04120a;font-size:11px;font-weight:800;cursor:pointer;">Accept</button>' +
-          '<button class="fr-req-decline" data-pid="' + esc(req.player_id) + '" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--dim);font-size:11px;font-weight:700;cursor:pointer;">Decline</button>' +
+          '<button class="fr-req-accept" data-pid="' + esc(req.player_id) + '" data-handle="' + esc(req.handle) + '" data-action-token="' + esc(acceptTok) + '" style="padding:6px 10px;border-radius:8px;border:none;background:#22c55e;color:#04120a;font-size:11px;font-weight:800;cursor:pointer;">Accept</button>' +
+          '<button class="fr-req-decline" data-pid="' + esc(req.player_id) + '" data-action-token="' + esc(declineTok) + '" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--dim);font-size:11px;font-weight:700;cursor:pointer;">Decline</button>' +
           '</div>';
       });
       html += '</div>';
     }
 
-    // Card 5: Friends List
+    // Card 3: Friends List
     html += '<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:16px;padding:14px 16px;margin-bottom:12px;">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">' +
       '  <div style="font-weight:800;font-size:14px;color:#fff;">Friends (' + st.friends.length + ')</div>' +
@@ -974,7 +1001,7 @@
 
     if (st.friends.length === 0) {
       html += '<div style="text-align:center;padding:18px 8px;color:var(--dim);font-size:12px;line-height:1.45;">' +
-        'No linked friends yet. Share your Friend Code, search an exact handle above, or tap any player on the Leaderboard.' +
+        'No friends yet. Search an exact username above or tap any player on the Leaderboard.' +
         '</div>';
     } else {
       st.friends.forEach(function (f) {
@@ -985,7 +1012,7 @@
           '  <div style="font-size:11px;color:var(--dim);font-family:\'Space Mono\',monospace;">ELO ' + (f.rating || 1200) + ' · ' + (f.wins || 0) + 'W-' + (f.losses || 0) + 'L</div>' +
           '</div>' +
           '<button class="fr-friend-challenge" data-pid="' + esc(f.player_id) + '" data-handle="' + esc(f.handle) + '" style="padding:6px 11px;border-radius:8px;border:1px solid rgba(91,143,255,.5);background:rgba(59,110,248,.22);color:#fff;font-size:11px;font-weight:800;cursor:pointer;">Challenge</button>' +
-          '<button class="fr-friend-more" data-pid="' + esc(f.player_id) + '" data-handle="' + esc(f.handle) + '" title="Manage friend" style="padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--dim);font-size:11px;cursor:pointer;">•••</button>' +
+          '<button class="fr-friend-more" data-pid="' + esc(f.player_id) + '" data-handle="' + esc(f.handle) + '" aria-label="Manage ' + esc(f.handle) + '" title="Manage friend" style="padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--dim);font-size:11px;cursor:pointer;">•••</button>' +
           '</div>';
       });
     }
@@ -1002,6 +1029,19 @@
       html += '</div>';
     }
     html += '</div>';
+
+    // Card 4: Privacy Settings (no Friend Code clutter)
+    html += '<div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:16px;padding:14px 16px;margin-bottom:12px;">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">' +
+      '  <div>' +
+      '    <div style="font-size:13px;font-weight:700;color:#fff;">Allow Friend Requests &amp; Challenges</div>' +
+      '    <div style="font-size:11px;color:var(--dim);margin-top:2px;">When off, hides you from username search, leaderboard challenges, and incoming popups.</div>' +
+      '  </div>' +
+      '  <button id="fr-toggle-privacy" role="switch" aria-label="Allow Friend Requests and Challenges" aria-checked="' + (st.allowRequests ? 'true' : 'false') + '" style="flex-shrink:0;width:44px;height:24px;border-radius:999px;border:1px solid ' + (st.allowRequests ? '#22c55e' : 'var(--border)') + ';background:' + (st.allowRequests ? '#22c55e' : 'rgba(255,255,255,.1)') + ';position:relative;cursor:pointer;transition:background .15s;">' +
+      '    <span style="position:absolute;top:2px;left:' + (st.allowRequests ? '22px' : '2px') + ';width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s;"></span>' +
+      '  </button>' +
+      '</div>' +
+      '</div>';
 
     // Blocked list toggle
     if (st.blocked.length > 0) {
@@ -1036,78 +1076,6 @@
     if (btnFriendly) btnFriendly.addEventListener('click', function () { st.roomRanked = false; paintFriendsDOM(rootEl, profile); });
     if (btnRanked) btnRanked.addEventListener('click', function () { st.roomRanked = true; paintFriendsDOM(rootEl, profile); });
 
-    var createRoomBtn = rootEl.querySelector('#fr-create-room');
-    if (createRoomBtn) createRoomBtn.addEventListener('click', async function () {
-      createRoomBtn.disabled = true;
-      var tier = getPlayerTier(profile);
-      var deck = buildCandidateFriendDeck(tier);
-      var res = await window.friendStore.createRoom(profile.id, st.roomRanked, tier, deck, null);
-      if (res && res.ok) {
-        st.activeRoom = {
-          room_id: res.room_id,
-          room_code: res.room_code,
-          is_ranked: res.is_ranked,
-          expires_at: res.expires_at,
-          targetHandle: null
-        };
-        paintFriendsDOM(rootEl, profile);
-        startRoomPolling(res.room_id);
-      } else {
-        toast('Could not create room right now', 2000);
-        paintFriendsDOM(rootEl, profile);
-      }
-    });
-
-    var copyRoomBtn = rootEl.querySelector('#fr-copy-room');
-    if (copyRoomBtn && st.activeRoom) {
-      copyRoomBtn.addEventListener('click', function () {
-        copyText(formatRoomCodeDisplay(st.activeRoom.room_code), 'Room Code copied');
-      });
-    }
-
-    var cancelRoomBtn = rootEl.querySelector('#fr-cancel-room');
-    if (cancelRoomBtn && st.activeRoom) {
-      cancelRoomBtn.addEventListener('click', async function () {
-        var rid = st.activeRoom.room_id;
-        st.activeRoom = null;
-        stopRoomPoll();
-        await window.friendStore.cancelRoom(profile.id, rid);
-        paintFriendsDOM(rootEl, profile);
-      });
-    }
-
-    var joinBtn = rootEl.querySelector('#fr-join-btn');
-    var joinInput = rootEl.querySelector('#fr-join-input');
-    async function doJoinRoom() {
-      var code = normalizeRoomCodeInput(joinInput ? joinInput.value : '');
-      if (code.length !== 6) {
-        st.joinMsg = 'Enter a 6-character room code.';
-        paintFriendsDOM(rootEl, profile);
-        return;
-      }
-      st.joinMsg = '';
-      if (joinBtn) joinBtn.disabled = true;
-      var tier = getPlayerTier(profile);
-      var deck = buildCandidateFriendDeck(tier);
-      var res = await window.friendStore.joinRoom(profile.id, code, tier, deck);
-      if (res && res.status === 'matched') {
-        launchDirectH2HMatch(res);
-      } else {
-        var errMap = {
-          not_found: 'Room code not found. Double-check the 6 characters.',
-          room_expired: 'That room code has expired.',
-          room_closed: 'That room is already full or closed.',
-          cannot_join_own_room: 'You cannot join your own room.',
-          private_invite_only: 'That room is a direct challenge for another player.',
-          unavailable: 'Unable to join this room.'
-        };
-        st.joinMsg = errMap[(res && res.error) || ''] || 'Could not join room.';
-        paintFriendsDOM(rootEl, profile);
-      }
-    }
-    if (joinBtn) joinBtn.addEventListener('click', doJoinRoom);
-    if (joinInput) joinInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') doJoinRoom(); });
-
     var lookupBtn = rootEl.querySelector('#fr-lookup-btn');
     var lookupInput = rootEl.querySelector('#fr-lookup-input');
     async function doLookup() {
@@ -1115,8 +1083,8 @@
       if (!norm.ok) {
         st.lookupResult = null;
         st.lookupMsg = norm.kind === 'wildcard_disallowed'
-          ? 'Enter an exact username or Friend Code (wildcards are not allowed).'
-          : 'Enter an exact username (2+ characters) or MAP-XXXX Friend Code.';
+          ? 'Enter an exact username (wildcards are not allowed).'
+          : 'Enter an exact username (at least 2 characters).';
         paintFriendsDOM(rootEl, profile);
         return;
       }
@@ -1132,7 +1100,7 @@
         var rMap = {
           self: 'That is your own profile!',
           not_accepting: 'That player is currently not accepting friend requests or challenges.',
-          not_found: 'No player matched that exact username or Friend Code.'
+          not_found: 'No player matched that exact username.'
         };
         st.lookupMsg = rMap[(res && res.reason) || ''] || 'Player not found.';
       }
@@ -1144,6 +1112,7 @@
     var lookupAddBtn = rootEl.querySelector('#fr-lookup-add');
     if (lookupAddBtn) lookupAddBtn.addEventListener('click', async function () {
       var pid = lookupAddBtn.getAttribute('data-pid');
+      lookupAddBtn.disabled = true;
       var r = await window.friendStore.requestFriend(profile.id, pid);
       if (r && r.ok) {
         toast(r.status === 'accepted' ? 'You are now friends!' : 'Friend request sent!', 2000);
@@ -1151,6 +1120,7 @@
         await refreshFriendsData();
         paintFriendsDOM(rootEl, profile);
       } else {
+        lookupAddBtn.disabled = false;
         toast('Could not send request', 1800);
       }
     });
@@ -1162,28 +1132,15 @@
       sendDirectChallenge(pid, handle, st.roomRanked);
     });
 
-    var copyCodeBtn = rootEl.querySelector('#fr-copy-code');
-    if (copyCodeBtn) copyCodeBtn.addEventListener('click', function () {
-      if (st.friendCode) copyText(st.friendCode, 'Friend Code copied');
-    });
-
-    var rotateBtn = rootEl.querySelector('#fr-rotate-code');
-    if (rotateBtn) rotateBtn.addEventListener('click', async function () {
-      var res = await window.friendStore.rotateCode(profile.id);
-      if (res && res.friend_code) {
-        st.friendCode = res.friend_code;
-        toast('New Friend Code: ' + res.friend_code, 2000);
-        paintFriendsDOM(rootEl, profile);
-      }
-    });
-
     var privBtn = rootEl.querySelector('#fr-toggle-privacy');
     if (privBtn) privBtn.addEventListener('click', async function () {
       var nextVal = !st.allowRequests;
       st.allowRequests = nextVal;
+      profile.allowFriendRequests = nextVal;
+      if (!nextVal) dismissAllSocialBanners();
       paintFriendsDOM(rootEl, profile);
       await window.friendStore.setPrivacy(profile.id, nextVal);
-      toast(nextVal ? 'Friend requests & challenges enabled' : 'Requests paused (Room Codes still work)', 2200);
+      toast(nextVal ? 'Friend requests & challenges enabled' : 'Friend requests & challenges paused', 2200);
     });
 
     var refreshBtn = rootEl.querySelector('#fr-refresh');
@@ -1191,14 +1148,33 @@
 
     rootEl.querySelectorAll('.fr-req-accept').forEach(function (btn) {
       btn.addEventListener('click', async function () {
-        await window.friendStore.respondFriend(profile.id, btn.getAttribute('data-pid'), 'accept');
-        toast('Friend added!', 1800);
+        var pid = btn.getAttribute('data-pid');
+        var handle = btn.getAttribute('data-handle') || 'Player';
+        var tok = btn.getAttribute('data-action-token');
+        var active = getActiveProfile();
+        if (!active || !_popupTokens.consume(tok, active.id, pid, 'friend_request').ok) return;
+        btn.disabled = true;
+        await window.friendStore.respondFriend(active.id, pid, 'accept');
+        toast('You and ' + handle + ' are now friends!', 2000);
         renderFriendsScreen(true);
       });
     });
 
-    rootEl.querySelectorAll('.fr-req-decline, .fr-req-cancel').forEach(function (btn) {
+    rootEl.querySelectorAll('.fr-req-decline').forEach(function (btn) {
       btn.addEventListener('click', async function () {
+        var pid = btn.getAttribute('data-pid');
+        var tok = btn.getAttribute('data-action-token');
+        var active = getActiveProfile();
+        if (!active || !_popupTokens.consume(tok, active.id, pid, 'friend_request').ok) return;
+        btn.disabled = true;
+        await window.friendStore.respondFriend(active.id, pid, 'decline');
+        renderFriendsScreen(true);
+      });
+    });
+
+    rootEl.querySelectorAll('.fr-req-cancel').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        btn.disabled = true;
         await window.friendStore.respondFriend(profile.id, btn.getAttribute('data-pid'), 'decline');
         renderFriendsScreen(true);
       });
@@ -1265,6 +1241,10 @@
       toast('Sign in to send challenges', 1800);
       return;
     }
+    if (window.MapolisCompliance && !window.MapolisCompliance.isCloudSyncAllowed(profile)) {
+      toast('Parent approval is required to send challenges.', 2400);
+      return;
+    }
     var tier = getPlayerTier(profile);
     var deck = buildCandidateFriendDeck(tier);
     var res = await window.friendStore.createRoom(profile.id, !!isRanked, tier, deck, targetId);
@@ -1278,7 +1258,6 @@
 
     _friendState.activeRoom = {
       room_id: res.room_id,
-      room_code: res.room_code,
       is_ranked: res.is_ranked,
       expires_at: res.expires_at,
       targetHandle: targetHandle
@@ -1290,10 +1269,8 @@
       '  <h3 style="font-family:\'Fredoka One\',sans-serif;font-size:20px;color:#fff;margin:0;">Challenge Sent!</h3>' +
       '  <div style="font-size:13px;color:#cbd5e1;margin-top:6px;">Waiting for <strong>' + esc(targetHandle) + '</strong> to accept…</div>' +
       '  <div style="font-size:12px;color:' + (isRanked ? '#93c5fd' : '#86efac') + ';margin-top:4px;font-weight:700;">' + (isRanked ? 'Ranked (ELO)' : 'Friendly (Unranked)') + '</div>' +
-      '  <div style="margin:14px 0;padding:10px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;">' +
-      '    <div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;">Backup Room Code</div>' +
-      '    <div style="font-family:\'Space Mono\',monospace;font-size:18px;font-weight:700;color:#fff;letter-spacing:.12em;margin-top:2px;">' + esc(formatRoomCodeDisplay(res.room_code)) + '</div>' +
-      '    <div style="font-size:11px;color:var(--dim);margin-top:4px;">Expires in <span id="chal-wait-countdown" style="font-family:\'Space Mono\',monospace;color:#fff;">5:00</span></div>' +
+      '  <div style="margin:14px 0;padding:10px 12px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;font-size:12px;color:var(--dim);">' +
+      '    Live invite pops up on their screen · Expires in <span id="chal-wait-countdown" style="font-family:\'Space Mono\',monospace;color:#fff;font-weight:700;">5:00</span>' +
       '  </div>' +
       '  <button id="chal-wait-cancel" style="padding:9px 20px;border-radius:10px;border:1px solid var(--border);background:transparent;color:#cbd5e1;font-size:13px;font-weight:700;cursor:pointer;">Cancel Challenge</button>' +
       '</div>';
@@ -1372,6 +1349,8 @@
 
       if (!profile || !profile.id) {
         html += '<div style="font-size:12px;color:var(--dim);text-align:center;padding:8px 0;">Sign in to challenge players or add friends.</div>';
+      } else if (window.MapolisCompliance && !window.MapolisCompliance.isCloudSyncAllowed(profile)) {
+        html += '<div style="font-size:12px;color:var(--dim);text-align:center;padding:8px 0;">Parent approval is required before adding friends or sending challenges.</div>';
       } else if (!isUuid) {
         html += '<div style="font-size:12px;color:var(--dim);text-align:center;padding:8px 0;">This is a local-only profile and cannot receive online challenges.</div>';
       } else if (rel === 'blocked_by_you') {
@@ -1486,11 +1465,33 @@
     }
   }
 
-  // ── 4. Live Incoming Challenge Banner Poller ─────────────────────────────
+  // ── 4. Age-Gated Live Challenge & Friend Request Popup Poller ────────────
 
   var _challengePollTimer = null;
+  var _pollTickCount = 0;
+  var _lastPolledProfileId = null;
   var _dismissedRoomIds = {};
+  var _dismissedFriendReqIds = {};
   var _activeBannerRoomId = null;
+  var _activeFriendBannerSenderId = null;
+
+  function canShowSocialPopupForProfile(profile) {
+    if (!profile || !profile.id) return false;
+    if (window.MapolisCompliance && typeof window.MapolisCompliance.canReceiveSocialPopups === 'function') {
+      return window.MapolisCompliance.canReceiveSocialPopups(profile);
+    }
+    if (window.MapolisCompliance && typeof window.MapolisCompliance.isCloudSyncAllowed === 'function') {
+      return window.MapolisCompliance.isCloudSyncAllowed(profile);
+    }
+    return false;
+  }
+
+  function updateFriendsNavBadge(pendingCount) {
+    var btn = document.getElementById('btn-profile-friends');
+    if (!btn) return;
+    var n = Number(pendingCount) || 0;
+    btn.textContent = n > 0 ? ('🤝 Friends (' + n + ')') : '🤝 Friends';
+  }
 
   function dismissChallengeBanner() {
     var existing = document.getElementById('mapolis-incoming-challenge-banner');
@@ -1498,15 +1499,35 @@
     _activeBannerRoomId = null;
   }
 
+  function dismissFriendRequestBanner() {
+    var existing = document.getElementById('mapolis-incoming-friend-banner');
+    if (existing) existing.remove();
+    _activeFriendBannerSenderId = null;
+  }
+
+  function dismissAllSocialBanners() {
+    dismissChallengeBanner();
+    dismissFriendRequestBanner();
+  }
+
   function showIncomingChallengeBanner(ch) {
+    var profile = getActiveProfile();
+    if (!canShowSocialPopupForProfile(profile)) {
+      dismissAllSocialBanners();
+      return;
+    }
     if (!ch || !ch.room_id || _dismissedRoomIds[ch.room_id]) return;
     if (_activeBannerRoomId === ch.room_id && document.getElementById('mapolis-incoming-challenge-banner')) return;
-    dismissChallengeBanner();
+    dismissAllSocialBanners();
     _activeBannerRoomId = ch.room_id;
 
     var host = ch.host || {};
+    var acceptTok = _popupTokens.issue(profile.id, ch.room_id, 'challenge');
+    var declineTok = _popupTokens.issue(profile.id, ch.room_id, 'challenge');
+
     var banner = document.createElement('div');
     banner.id = 'mapolis-incoming-challenge-banner';
+    banner.setAttribute('role', 'status');
     banner.style.cssText = [
       'position:fixed', 'top:12px', 'left:50%', 'transform:translateX(-50%)',
       'z-index:9600', 'width:calc(100% - 24px)', 'max-width:440px',
@@ -1522,18 +1543,23 @@
       '  <div style="font-weight:800;font-size:13px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">⚔️ ' + esc(host.handle || 'Player') + ' challenged you!</div>' +
       '  <div style="font-size:11px;color:' + (ch.is_ranked ? '#93c5fd' : '#86efac') + ';margin-top:2px;">' + (ch.is_ranked ? 'Ranked (ELO)' : 'Friendly (Unranked)') + ' · ELO ' + (host.rating || 1200) + '</div>' +
       '</div>' +
-      '<button id="ch-banner-accept" style="padding:7px 12px;border-radius:9px;border:none;background:#22c55e;color:#04120a;font-size:12px;font-weight:800;cursor:pointer;">Accept</button>' +
-      '<button id="ch-banner-decline" style="padding:7px 10px;border-radius:9px;border:1px solid rgba(255,255,255,.18);background:transparent;color:#cbd5e1;font-size:12px;font-weight:700;cursor:pointer;">Decline</button>';
+      '<button id="ch-banner-accept" data-action-token="' + esc(acceptTok) + '" style="padding:7px 12px;border-radius:9px;border:none;background:#22c55e;color:#04120a;font-size:12px;font-weight:800;cursor:pointer;">Accept</button>' +
+      '<button id="ch-banner-decline" data-action-token="' + esc(declineTok) + '" style="padding:7px 10px;border-radius:9px;border:1px solid rgba(255,255,255,.18);background:transparent;color:#cbd5e1;font-size:12px;font-weight:700;cursor:pointer;">Decline</button>';
 
     document.body.appendChild(banner);
 
-    banner.querySelector('#ch-banner-accept').addEventListener('click', async function () {
-      var profile = getActiveProfile();
-      if (!profile || !profile.id) return;
-      banner.querySelector('#ch-banner-accept').disabled = true;
-      var tier = getPlayerTier(profile);
+    var accBtn = banner.querySelector('#ch-banner-accept');
+    var decBtn = banner.querySelector('#ch-banner-decline');
+
+    accBtn.addEventListener('click', async function () {
+      var active = getActiveProfile();
+      if (!canShowSocialPopupForProfile(active)) { dismissAllSocialBanners(); return; }
+      if (!_popupTokens.consume(accBtn.getAttribute('data-action-token'), active.id, ch.room_id, 'challenge').ok) return;
+      accBtn.disabled = true;
+      decBtn.disabled = true;
+      var tier = getPlayerTier(active);
       var deck = buildCandidateFriendDeck(tier);
-      var res = await window.friendStore.respondChallenge(profile.id, ch.room_id, 'accept', tier, deck);
+      var res = await window.friendStore.respondChallenge(active.id, ch.room_id, 'accept', tier, deck);
       dismissChallengeBanner();
       if (res && res.status === 'matched') {
         launchDirectH2HMatch(res);
@@ -1542,36 +1568,176 @@
       }
     });
 
-    banner.querySelector('#ch-banner-decline').addEventListener('click', async function () {
-      var profile = getActiveProfile();
+    decBtn.addEventListener('click', async function () {
+      var active = getActiveProfile();
+      if (!active || !_popupTokens.consume(decBtn.getAttribute('data-action-token'), active.id, ch.room_id, 'challenge').ok) return;
+      accBtn.disabled = true;
+      decBtn.disabled = true;
       _dismissedRoomIds[ch.room_id] = true;
       dismissChallengeBanner();
-      if (profile && profile.id) {
-        await window.friendStore.respondChallenge(profile.id, ch.room_id, 'decline');
-      }
+      await window.friendStore.respondChallenge(active.id, ch.room_id, 'decline');
     });
   }
 
-  function startIncomingChallengePoller() {
-    if (_challengePollTimer) return;
+  function showIncomingFriendRequestBanner(req) {
+    var profile = getActiveProfile();
+    if (!canShowSocialPopupForProfile(profile)) {
+      dismissAllSocialBanners();
+      return;
+    }
+    if (!req || !req.player_id || _dismissedFriendReqIds[req.player_id]) return;
+    // Never cover an active live H2H challenge banner
+    if (_activeBannerRoomId && document.getElementById('mapolis-incoming-challenge-banner')) return;
+    if (_activeFriendBannerSenderId === req.player_id && document.getElementById('mapolis-incoming-friend-banner')) return;
+
+    dismissFriendRequestBanner();
+    _activeFriendBannerSenderId = req.player_id;
+
+    var acceptTok = _popupTokens.issue(profile.id, req.player_id, 'friend_request');
+    var declineTok = _popupTokens.issue(profile.id, req.player_id, 'friend_request');
+
+    var banner = document.createElement('div');
+    banner.id = 'mapolis-incoming-friend-banner';
+    banner.setAttribute('role', 'status');
+    banner.style.cssText = [
+      'position:fixed', 'top:12px', 'left:50%', 'transform:translateX(-50%)',
+      'z-index:9590', 'width:calc(100% - 24px)', 'max-width:480px',
+      'background:#0f2438', 'border:1px solid rgba(74,222,128,0.55)',
+      'border-radius:14px', 'padding:12px 14px',
+      'box-shadow:0 12px 32px rgba(0,0,0,0.55)',
+      'display:flex', 'align-items:center', 'gap:10px', 'color:#fff'
+    ].join(';');
+
+    banner.innerHTML = '' +
+      avatarMarkup(req.avatar_svg, req.avatar_face, 38) +
+      '<div style="flex:1;min-width:0;">' +
+      '  <div style="font-weight:800;font-size:13px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">🤝 ' + esc(req.handle || 'Player') + '</div>' +
+      '  <div style="font-size:11px;color:#86efac;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Friend request · ELO ' + (req.rating || 1200) + '</div>' +
+      '</div>' +
+      '<button id="fr-banner-accept" data-action-token="' + esc(acceptTok) + '" aria-label="Accept friend request from ' + esc(req.handle || 'Player') + '" style="padding:7px 12px;border-radius:9px;border:none;background:#22c55e;color:#04120a;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0;">Accept</button>' +
+      '<button id="fr-banner-decline" data-action-token="' + esc(declineTok) + '" aria-label="Decline friend request from ' + esc(req.handle || 'Player') + '" style="padding:7px 10px;border-radius:9px;border:1px solid rgba(255,255,255,.18);background:transparent;color:#cbd5e1;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;">Decline</button>' +
+      '<button id="fr-banner-later" aria-label="Dismiss friend request popup for now" title="Decide later in Friends" style="background:none;border:none;color:#94a3b8;font-size:14px;padding:4px;cursor:pointer;line-height:1;flex-shrink:0;">✕</button>';
+
+    document.body.appendChild(banner);
+
+    var accBtn = banner.querySelector('#fr-banner-accept');
+    var decBtn = banner.querySelector('#fr-banner-decline');
+    var laterBtn = banner.querySelector('#fr-banner-later');
+
+    accBtn.addEventListener('click', async function () {
+      var active = getActiveProfile();
+      if (!canShowSocialPopupForProfile(active)) { dismissAllSocialBanners(); return; }
+      if (!_popupTokens.consume(accBtn.getAttribute('data-action-token'), active.id, req.player_id, 'friend_request').ok) return;
+      accBtn.disabled = true;
+      decBtn.disabled = true;
+      var res = await window.friendStore.respondFriend(active.id, req.player_id, 'accept');
+      dismissFriendRequestBanner();
+      if (res && !res.error && !res.offline) {
+        _friendState.incoming = _friendState.incoming.filter(function (r) { return r && r.player_id !== req.player_id; });
+        updateFriendsNavBadge(_friendState.incoming.length);
+        toast('You and ' + (req.handle || 'Player') + ' are now friends!', 2200);
+        if (getCurrentScreenId() === 's-friends') renderFriendsScreen(true);
+      } else {
+        toast('Could not accept friend request right now', 2000);
+      }
+    });
+
+    decBtn.addEventListener('click', async function () {
+      var active = getActiveProfile();
+      if (!active || !_popupTokens.consume(decBtn.getAttribute('data-action-token'), active.id, req.player_id, 'friend_request').ok) return;
+      accBtn.disabled = true;
+      decBtn.disabled = true;
+      _dismissedFriendReqIds[req.player_id] = true;
+      dismissFriendRequestBanner();
+      await window.friendStore.respondFriend(active.id, req.player_id, 'decline');
+      _friendState.incoming = _friendState.incoming.filter(function (r) { return r && r.player_id !== req.player_id; });
+      updateFriendsNavBadge(_friendState.incoming.length);
+      if (getCurrentScreenId() === 's-friends') renderFriendsScreen(true);
+    });
+
+    laterBtn.addEventListener('click', function () {
+      _dismissedFriendReqIds[req.player_id] = true;
+      dismissFriendRequestBanner();
+    });
+  }
+
+  async function pollIncomingSocialActivity(forceFriendCheck) {
     var NON_GAME_SCREENS = {
       's-setup': true, 's-profile': true, 's-leaderboard': true,
       's-friends': true, 's-atlas': true, 's-badges': true, 's-store': true
     };
-    _challengePollTimer = setInterval(async function () {
-      if (document.hidden) return;
-      if (!NON_GAME_SCREENS[window.currentScreen]) return;
-      var profile = getActiveProfile();
-      if (!profile || !profile.id || !window.friendStore) return;
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
-      var res = await window.friendStore.listIncomingChallenges(profile.id);
-      var list = (res && Array.isArray(res.challenges)) ? res.challenges : [];
-      var active = list.find(function (c) { return c && c.room_id && !_dismissedRoomIds[c.room_id]; });
-      if (active) {
-        showIncomingChallengeBanner(active);
-      } else if (_activeBannerRoomId) {
-        dismissChallengeBanner();
+    if (document.hidden) return;
+    var profile = getActiveProfile();
+
+    // Clear stale popups & session state immediately on profile switch or logout
+    var currentPid = profile && profile.id ? String(profile.id) : null;
+    if (currentPid !== _lastPolledProfileId) {
+      _lastPolledProfileId = currentPid;
+      _dismissedRoomIds = {};
+      _dismissedFriendReqIds = {};
+      _popupTokens.clear();
+      dismissAllSocialBanners();
+      updateFriendsNavBadge(0);
+    }
+
+    if (!canShowSocialPopupForProfile(profile)) {
+      dismissAllSocialBanners();
+      return;
+    }
+    var screenId = getCurrentScreenId();
+    if (!NON_GAME_SCREENS[screenId]) return;
+    if (!window.friendStore) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+
+    // 1. Check live incoming H2H challenges (every 5s)
+    var chalRes = await window.friendStore.listIncomingChallenges(profile.id);
+    var challenges = (chalRes && Array.isArray(chalRes.challenges)) ? chalRes.challenges : [];
+    var activeChal = challenges.find(function (c) { return c && c.room_id && !_dismissedRoomIds[c.room_id]; });
+    if (activeChal) {
+      showIncomingChallengeBanner(activeChal);
+      return;
+    } else if (_activeBannerRoomId) {
+      dismissChallengeBanner();
+    }
+
+    // 2. Check live incoming Friend Requests (immediately on first tick & every 10s)
+    var shouldCheckFriends = !!forceFriendCheck || (_pollTickCount % 2 === 0);
+    _pollTickCount += 1;
+    if (!shouldCheckFriends) return;
+
+    var frRes = await window.friendStore.listFriends(profile.id);
+    if (!frRes || frRes.offline || frRes.error) return;
+    if (typeof frRes.allow_friend_requests === 'boolean') {
+      _friendState.allowRequests = frRes.allow_friend_requests;
+      profile.allowFriendRequests = frRes.allow_friend_requests;
+      if (!frRes.allow_friend_requests) {
+        dismissFriendRequestBanner();
+        return;
       }
+    }
+    var incoming = Array.isArray(frRes.incoming) ? frRes.incoming : [];
+    _friendState.incoming = incoming;
+    updateFriendsNavBadge(incoming.length);
+
+    // Don't overlay popup when already viewing #s-friends (incoming list is shown inline)
+    if (getCurrentScreenId() === 's-friends') {
+      dismissFriendRequestBanner();
+      return;
+    }
+    var activeReq = incoming.find(function (r) { return r && r.player_id && !_dismissedFriendReqIds[r.player_id]; });
+    if (activeReq) {
+      showIncomingFriendRequestBanner(activeReq);
+    } else if (_activeFriendBannerSenderId) {
+      dismissFriendRequestBanner();
+    }
+  }
+
+  function startIncomingChallengePoller() {
+    if (_challengePollTimer) return;
+    // Run an immediate check shortly after boot so pending friend requests pop up promptly
+    pollIncomingSocialActivity(true);
+    _challengePollTimer = setInterval(function () {
+      pollIncomingSocialActivity(false);
     }, 5000);
   }
 
@@ -2638,6 +2804,7 @@
     normalizeFriendQuery: normalizeFriendQuery,
     normalizeRoomCodeInput: normalizeRoomCodeInput,
     formatRoomCodeDisplay: formatRoomCodeDisplay,
+    createActionTokenRegistry: createActionTokenRegistry,
     buildGameAssetIndex: buildGameAssetIndex,
     resolveCardAssets: resolveCardAssets,
     resolveGenesisCard: resolveGenesisCard,
@@ -2645,6 +2812,11 @@
     openH2HModePicker: openH2HModePicker,
     renderFriendsScreen: renderFriendsScreen,
     openPublicPlayerCard: openPublicPlayerCard,
+    showIncomingChallengeBanner: showIncomingChallengeBanner,
+    showIncomingFriendRequestBanner: showIncomingFriendRequestBanner,
+    dismissChallengeBanner: dismissChallengeBanner,
+    dismissFriendRequestBanner: dismissFriendRequestBanner,
+    pollIncomingSocialActivity: pollIncomingSocialActivity,
     startIncomingChallengePoller: startIncomingChallengePoller,
     renderAtlasScreen: renderAtlasScreen,
     stopAtlasGlobe: stopAtlasGlobe,
