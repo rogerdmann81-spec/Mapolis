@@ -143,6 +143,80 @@
     return { issue, consume, clear, size: () => store.size };
   }
 
+  function deriveRelationStatus(playerId, lists) {
+    if (!playerId || !lists) return 'none';
+    const pid = String(playerId);
+    const has = (arr) => Array.isArray(arr) && arr.some(function (x) { return x && String(x.player_id || x.id) === pid; });
+    if (has(lists.friends)) return 'friends';
+    if (has(lists.blocked)) return 'blocked_by_you';
+    if (has(lists.incoming)) return 'pending_received';
+    if (has(lists.outgoing)) return 'pending_sent';
+    return 'none';
+  }
+
+  function _idSignature(arr) {
+    if (!Array.isArray(arr)) return '';
+    return arr.map(function (x) { return x ? String(x.player_id || x.id || '') : ''; }).sort().join(',');
+  }
+
+  // Pure reconciliation of server listFriends snapshot against cached UI state.
+  // Keeps search-result Pending.../Friends status, Sent Requests, and Friends lists in sync.
+  function reconcileFriendsSnapshot(prevState, serverRes) {
+    const prev = prevState || {};
+    const nextFriends = Array.isArray(serverRes && serverRes.friends) ? serverRes.friends : [];
+    const nextIncoming = Array.isArray(serverRes && serverRes.incoming) ? serverRes.incoming : [];
+    const nextOutgoing = Array.isArray(serverRes && serverRes.outgoing) ? serverRes.outgoing : [];
+    const nextBlocked = Array.isArray(serverRes && serverRes.blocked) ? serverRes.blocked : [];
+    const nextAllowRequests = (serverRes && typeof serverRes.allow_friend_requests === 'boolean')
+      ? serverRes.allow_friend_requests
+      : (typeof prev.allowRequests === 'boolean' ? prev.allowRequests : true);
+
+    const lists = {
+      friends: nextFriends,
+      incoming: nextIncoming,
+      outgoing: nextOutgoing,
+      blocked: nextBlocked
+    };
+
+    const prevLookupRel = (prev.lookupResult && prev.lookupResult.player)
+      ? (prev.lookupResult.relation_status || 'none')
+      : null;
+    const nextLookupRel = (prev.lookupResult && prev.lookupResult.player)
+      ? deriveRelationStatus(prev.lookupResult.player.player_id, lists)
+      : null;
+
+    // Detect players that were previously pending_sent and are now in friends
+    const prevPendingIds = new Set();
+    if (Array.isArray(prev.outgoing)) {
+      prev.outgoing.forEach(function (o) { if (o && o.player_id) prevPendingIds.add(String(o.player_id)); });
+    }
+    if (prev.lookupResult && prev.lookupResult.player && prevLookupRel === 'pending_sent') {
+      prevPendingIds.add(String(prev.lookupResult.player.player_id));
+    }
+    const newlyAccepted = nextFriends.filter(function (f) {
+      return f && f.player_id && prevPendingIds.has(String(f.player_id));
+    });
+
+    const changed =
+      _idSignature(prev.friends) !== _idSignature(nextFriends) ||
+      _idSignature(prev.incoming) !== _idSignature(nextIncoming) ||
+      _idSignature(prev.outgoing) !== _idSignature(nextOutgoing) ||
+      _idSignature(prev.blocked) !== _idSignature(nextBlocked) ||
+      prev.allowRequests !== nextAllowRequests ||
+      prevLookupRel !== nextLookupRel;
+
+    return {
+      nextFriends: nextFriends,
+      nextIncoming: nextIncoming,
+      nextOutgoing: nextOutgoing,
+      nextBlocked: nextBlocked,
+      nextAllowRequests: nextAllowRequests,
+      nextLookupRelation: nextLookupRel,
+      newlyAccepted: newlyAccepted,
+      changed: changed
+    };
+  }
+
   function _getCardsArray(dataset) {
     if (!dataset || !dataset.cards) return [];
     return Array.isArray(dataset.cards) ? dataset.cards : Object.values(dataset.cards);
@@ -550,6 +624,8 @@
       normalizeRoomCodeInput,
       formatRoomCodeDisplay,
       createActionTokenRegistry,
+      deriveRelationStatus,
+      reconcileFriendsSnapshot,
       buildGameAssetIndex,
       resolveCardAssets,
       resolveGenesisCard,
@@ -818,21 +894,69 @@
     }, 1000);
   }
 
+  var _activePlayerCardSync = null;
+
+  function repaintFriendsPreservingInput(profile) {
+    var rootEl = document.getElementById('friends-root');
+    if (!rootEl || !profile) return;
+    var existingInput = rootEl.querySelector('#fr-lookup-input');
+    var prevVal = existingInput ? existingInput.value : '';
+    var hadFocus = existingInput && document.activeElement === existingInput;
+    var selStart = hadFocus ? existingInput.selectionStart : null;
+    var selEnd = hadFocus ? existingInput.selectionEnd : null;
+    paintFriendsDOM(rootEl, profile);
+    var nextInput = rootEl.querySelector('#fr-lookup-input');
+    if (nextInput && prevVal) {
+      nextInput.value = prevVal;
+      if (hadFocus) {
+        nextInput.focus();
+        try {
+          if (selStart !== null && selEnd !== null) nextInput.setSelectionRange(selStart, selEnd);
+        } catch (_) {}
+      }
+    }
+  }
+
+  function applyFriendsSnapshot(profile, res, opts) {
+    if (!res || res.offline || res.error) return null;
+    var rec = reconcileFriendsSnapshot(_friendState, res);
+    _friendState.allowRequests = rec.nextAllowRequests;
+    if (profile) profile.allowFriendRequests = rec.nextAllowRequests;
+    _friendState.friends = rec.nextFriends;
+    _friendState.incoming = rec.nextIncoming;
+    _friendState.outgoing = rec.nextOutgoing;
+    _friendState.blocked = rec.nextBlocked;
+    if (_friendState.lookupResult && _friendState.lookupResult.player && rec.nextLookupRelation !== null) {
+      _friendState.lookupResult.relation_status = rec.nextLookupRelation;
+    }
+    updateFriendsNavBadge(_friendState.incoming.length);
+
+    if (typeof _activePlayerCardSync === 'function') {
+      _activePlayerCardSync({
+        friends: _friendState.friends,
+        incoming: _friendState.incoming,
+        outgoing: _friendState.outgoing,
+        blocked: _friendState.blocked
+      });
+    }
+
+    if (opts && opts.notifyNewlyAccepted && rec.newlyAccepted.length > 0) {
+      var who = rec.newlyAccepted[0].handle || 'Your friend';
+      toast('🎉 ' + who + ' accepted your friend request!', 2800);
+    }
+    if (opts && opts.repaintIfVisible && rec.changed && getCurrentScreenId() === 's-friends') {
+      repaintFriendsPreservingInput(profile);
+    }
+    return rec;
+  }
+
   async function refreshFriendsData() {
     var profile = getActiveProfile();
     if (!profile || !profile.id || !window.friendStore) return;
     _friendState.loading = true;
     var res = await window.friendStore.listFriends(profile.id);
     _friendState.loading = false;
-    if (res && !res.offline && !res.error) {
-      _friendState.allowRequests = (typeof res.allow_friend_requests === 'boolean') ? res.allow_friend_requests : true;
-      profile.allowFriendRequests = _friendState.allowRequests;
-      _friendState.friends = Array.isArray(res.friends) ? res.friends : [];
-      _friendState.incoming = Array.isArray(res.incoming) ? res.incoming : [];
-      _friendState.outgoing = Array.isArray(res.outgoing) ? res.outgoing : [];
-      _friendState.blocked = Array.isArray(res.blocked) ? res.blocked : [];
-      updateFriendsNavBadge(_friendState.incoming.length);
-    }
+    applyFriendsSnapshot(profile, res, { notifyNewlyAccepted: false, repaintIfVisible: false });
   }
 
   async function renderFriendsScreen(shouldFetch) {
@@ -882,6 +1006,20 @@
         }
       });
       return;
+    }
+
+    // Track active profile to detect genuine profile switches without wiping initial searches
+    if (profile.id) {
+      var pidStr = String(profile.id);
+      if (_lastPolledProfileId && _lastPolledProfileId !== pidStr) {
+        _friendState.lookupResult = null;
+        _friendState.lookupMsg = '';
+        _friendState.friends = [];
+        _friendState.incoming = [];
+        _friendState.outgoing = [];
+        _friendState.blocked = [];
+      }
+      _lastPolledProfileId = pidStr;
     }
 
     // Inline incoming requests are visible on #s-friends, so avoid overlapping with top popup
@@ -946,9 +1084,9 @@
         '</div>' +
         '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
         (lrel === 'friends'
-          ? '<span style="font-size:11px;color:#86efac;font-weight:700;padding:6px 8px;">Friends ✓</span>'
+          ? '<span id="fr-lookup-status" data-relation="friends" style="font-size:11px;color:#86efac;font-weight:700;padding:6px 10px;border-radius:8px;border:1px solid rgba(74,222,128,.35);background:rgba(34,197,94,.12);">Friends ✓</span>'
           : lrel === 'pending_sent'
-            ? '<span style="font-size:11px;color:#fde68a;font-weight:700;padding:6px 8px;">Pending…</span>'
+            ? '<span id="fr-lookup-status" data-relation="pending_sent" style="font-size:11px;color:#fde68a;font-weight:700;padding:6px 10px;border-radius:8px;border:1px solid rgba(250,204,21,.35);background:rgba(250,204,21,.1);">Pending…</span>'
             : lrel === 'blocked_by_you'
               ? '<button class="fr-act-unblock" data-pid="' + esc(lp.player_id) + '" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;color:#cbd5e1;font-size:11px;font-weight:700;cursor:pointer;">Unblock</button>'
               : '<button id="fr-lookup-add" data-pid="' + esc(lp.player_id) + '" style="padding:6px 12px;border-radius:8px;border:none;background:#22c55e;color:#04120a;font-size:12px;font-weight:800;cursor:pointer;">' + (lrel === 'pending_received' ? 'Accept Friend' : 'Add Friend') + '</button>') +
@@ -1417,6 +1555,14 @@
         var res = await window.friendStore.requestFriend(profile.id, cardState.player.player_id);
         if (res && res.ok) {
           cardState.relation = res.status === 'accepted' ? 'friends' : 'pending_sent';
+          if (res.status === 'accepted') {
+            refreshFriendsData();
+          } else {
+            // Ensure 5s fast polling picks up acceptance promptly
+            if (!_friendState.outgoing.some(function (o) { return o && String(o.player_id) === String(cardState.player.player_id); })) {
+              _friendState.outgoing.push({ player_id: cardState.player.player_id, handle: cardState.player.handle });
+            }
+          }
           toast(res.status === 'accepted' ? 'You are now friends!' : 'Friend request sent!', 1800);
           m.sheet.innerHTML = renderCardInner();
           bindEvents();
@@ -1448,6 +1594,20 @@
     }
 
     bindEvents();
+
+    // Keep open player card synced if friend request is accepted live while modal is open
+    _activePlayerCardSync = function (lists) {
+      if (!document.getElementById('mapolis-player-card-modal')) {
+        _activePlayerCardSync = null;
+        return;
+      }
+      var nextRel = deriveRelationStatus(cardState.player.player_id, lists);
+      if (nextRel !== cardState.relation) {
+        cardState.relation = nextRel;
+        m.sheet.innerHTML = renderCardInner();
+        bindEvents();
+      }
+    };
 
     // Hydrate live relation & privacy from server
     if (profile && profile.id && isUuid && window.friendStore) {
@@ -1634,9 +1794,13 @@
       dismissFriendRequestBanner();
       if (res && !res.error && !res.offline) {
         _friendState.incoming = _friendState.incoming.filter(function (r) { return r && r.player_id !== req.player_id; });
+        if (_friendState.lookupResult && _friendState.lookupResult.player && String(_friendState.lookupResult.player.player_id) === String(req.player_id)) {
+          _friendState.lookupResult.relation_status = 'friends';
+        }
         updateFriendsNavBadge(_friendState.incoming.length);
         toast('You and ' + (req.handle || 'Player') + ' are now friends!', 2200);
         if (getCurrentScreenId() === 's-friends') renderFriendsScreen(true);
+        else refreshFriendsData();
       } else {
         toast('Could not accept friend request right now', 2000);
       }
@@ -1651,6 +1815,9 @@
       dismissFriendRequestBanner();
       await window.friendStore.respondFriend(active.id, req.player_id, 'decline');
       _friendState.incoming = _friendState.incoming.filter(function (r) { return r && r.player_id !== req.player_id; });
+      if (_friendState.lookupResult && _friendState.lookupResult.player && String(_friendState.lookupResult.player.player_id) === String(req.player_id)) {
+        _friendState.lookupResult.relation_status = 'none';
+      }
       updateFriendsNavBadge(_friendState.incoming.length);
       if (getCurrentScreenId() === 's-friends') renderFriendsScreen(true);
     });
@@ -1669,15 +1836,24 @@
     if (document.hidden) return;
     var profile = getActiveProfile();
 
-    // Clear stale popups & session state immediately on profile switch or logout
+    // Clear stale popups & cached social state on profile switch or logout (not initial first-poll bind)
     var currentPid = profile && profile.id ? String(profile.id) : null;
     if (currentPid !== _lastPolledProfileId) {
+      var switchedFromAnother = _lastPolledProfileId !== null;
       _lastPolledProfileId = currentPid;
-      _dismissedRoomIds = {};
-      _dismissedFriendReqIds = {};
-      _popupTokens.clear();
-      dismissAllSocialBanners();
-      updateFriendsNavBadge(0);
+      if (switchedFromAnother || currentPid === null) {
+        _dismissedRoomIds = {};
+        _dismissedFriendReqIds = {};
+        _friendState.lookupResult = null;
+        _friendState.lookupMsg = '';
+        _friendState.friends = [];
+        _friendState.incoming = [];
+        _friendState.outgoing = [];
+        _friendState.blocked = [];
+        _popupTokens.clear();
+        dismissAllSocialBanners();
+        updateFriendsNavBadge(0);
+      }
     }
 
     if (!canShowSocialPopupForProfile(profile)) {
@@ -1700,31 +1876,33 @@
       dismissChallengeBanner();
     }
 
-    // 2. Check live incoming Friend Requests (immediately on first tick & every 10s)
-    var shouldCheckFriends = !!forceFriendCheck || (_pollTickCount % 2 === 0);
+    // 2. Check live Friends & Requests (every 5s while on #s-friends or waiting on pending requests; every 10s otherwise)
+    var hasPendingOut = _friendState.outgoing.length > 0 ||
+      Boolean(_friendState.lookupResult && _friendState.lookupResult.relation_status === 'pending_sent') ||
+      Boolean(document.getElementById('mapolis-player-card-modal'));
+    var shouldCheckFriends = !!forceFriendCheck || screenId === 's-friends' || hasPendingOut || (_pollTickCount % 2 === 0);
     _pollTickCount += 1;
     if (!shouldCheckFriends) return;
 
     var frRes = await window.friendStore.listFriends(profile.id);
     if (!frRes || frRes.offline || frRes.error) return;
-    if (typeof frRes.allow_friend_requests === 'boolean') {
-      _friendState.allowRequests = frRes.allow_friend_requests;
-      profile.allowFriendRequests = frRes.allow_friend_requests;
-      if (!frRes.allow_friend_requests) {
-        dismissFriendRequestBanner();
-        return;
-      }
+
+    applyFriendsSnapshot(profile, frRes, {
+      notifyNewlyAccepted: true,
+      repaintIfVisible: true
+    });
+
+    if (!_friendState.allowRequests) {
+      dismissFriendRequestBanner();
+      return;
     }
-    var incoming = Array.isArray(frRes.incoming) ? frRes.incoming : [];
-    _friendState.incoming = incoming;
-    updateFriendsNavBadge(incoming.length);
 
     // Don't overlay popup when already viewing #s-friends (incoming list is shown inline)
     if (getCurrentScreenId() === 's-friends') {
       dismissFriendRequestBanner();
       return;
     }
-    var activeReq = incoming.find(function (r) { return r && r.player_id && !_dismissedFriendReqIds[r.player_id]; });
+    var activeReq = _friendState.incoming.find(function (r) { return r && r.player_id && !_dismissedFriendReqIds[r.player_id]; });
     if (activeReq) {
       showIncomingFriendRequestBanner(activeReq);
     } else if (_activeFriendBannerSenderId) {
@@ -2805,6 +2983,8 @@
     normalizeRoomCodeInput: normalizeRoomCodeInput,
     formatRoomCodeDisplay: formatRoomCodeDisplay,
     createActionTokenRegistry: createActionTokenRegistry,
+    deriveRelationStatus: deriveRelationStatus,
+    reconcileFriendsSnapshot: reconcileFriendsSnapshot,
     buildGameAssetIndex: buildGameAssetIndex,
     resolveCardAssets: resolveCardAssets,
     resolveGenesisCard: resolveGenesisCard,

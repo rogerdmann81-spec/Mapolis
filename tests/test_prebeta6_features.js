@@ -411,7 +411,7 @@ test('Section 1: security, compliance text, PBKDF2 password hashing, recovery do
   assert.match(recoveryDoc, /\/api\/request-recovery/, 'SUPABASE_RECOVERY_REPORT.md must document tokenized recovery endpoint');
 
   // sw.js version & asset lists
-  assert.match(swSrc, /CACHE_NAME\s*=\s*'mapolis-cache-v16'/, 'sw.js must be bumped to mapolis-cache-v16');
+  assert.match(swSrc, /CACHE_NAME\s*=\s*'mapolis-cache-v17'/, 'sw.js must be bumped to mapolis-cache-v17');
   assert.doesNotThrow(() => new Function(swSrc), 'sw.js must parse with valid JS syntax');
   const badgeFiles = fs.readdirSync(path.join(__dirname, '..', 'assets', 'badges')).filter(f => f.endsWith('.webp'));
   const flagFiles = fs.readdirSync(path.join(__dirname, '..', 'assets', 'flags')).filter(f => f.endsWith('.svg'));
@@ -908,6 +908,42 @@ test('Section 6: Age-gated social popups, single-use tokenized buttons, and remo
   assert.ok(!featSrc.includes('fr-create-room'), 'Friends UI must not include Create Private Room button ID');
   assert.ok(featSrc.includes('showIncomingFriendRequestBanner'), 'Live incoming friend request popup must be implemented');
   assert.ok(featSrc.includes('data-action-token'), 'Popup action buttons must carry single-use action tokens');
+
+  // 4. reconcileFriendsSnapshot immediately flips Pending -> Friends when accepted (or -> none if declined)
+  const prevState = {
+    allowRequests: true,
+    friends: [],
+    incoming: [],
+    outgoing: [{ player_id: 'p-b', handle: 'Cartographer99' }],
+    blocked: [],
+    lookupResult: {
+      found: true,
+      relation_status: 'pending_sent',
+      player: { player_id: 'p-b', handle: 'Cartographer99' }
+    }
+  };
+  const afterAccept = prebeta6.reconcileFriendsSnapshot(prevState, {
+    allow_friend_requests: true,
+    friends: [{ player_id: 'p-b', handle: 'Cartographer99', rating: 1410 }],
+    incoming: [],
+    outgoing: [],
+    blocked: []
+  });
+  assert.equal(afterAccept.nextLookupRelation, 'friends', 'Accepted friend must flip lookupResult from pending_sent to friends');
+  assert.equal(afterAccept.changed, true);
+  assert.equal(afterAccept.newlyAccepted.length, 1);
+  assert.equal(afterAccept.newlyAccepted[0].handle, 'Cartographer99');
+
+  const afterDecline = prebeta6.reconcileFriendsSnapshot(prevState, {
+    allow_friend_requests: true,
+    friends: [],
+    incoming: [],
+    outgoing: [],
+    blocked: []
+  });
+  assert.equal(afterDecline.nextLookupRelation, 'none', 'Declined request must reset lookupResult from pending_sent back to none');
+  assert.equal(afterDecline.changed, true);
+  assert.equal(afterDecline.newlyAccepted.length, 0);
 });
 
 
