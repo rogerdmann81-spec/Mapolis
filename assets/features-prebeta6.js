@@ -132,6 +132,34 @@
     culture:   { label: 'Culture',   color: '#c4b5fd' }
   };
 
+  // Declarative Atlas display metadata for all 24 map-data.js language questions (never display raw quiz questions)
+  const LANGUAGE_DISPLAY_META = {
+    lang_gaelic:     { name: 'Irish Gaelic', note: 'official language' },
+    lang_welsh:      { name: 'Welsh', note: 'official language in Wales' },
+    lang_icelandic:  { name: 'Icelandic', note: 'national language' },
+    lang_maltese:    { name: 'Maltese', note: "Europe's only Semitic national language" },
+    lang_hungarian:  { name: 'Hungarian (Magyar)', note: 'official language' },
+    lang_finnish:    { name: 'Finnish', note: 'official language' },
+    lang_catalan:    { name: 'Catalan', note: 'official in Andorra; co-official in northeastern Spain' },
+    lang_basque:     { name: 'Basque (Euskara)', note: 'language isolate of the western Pyrenees' },
+    lang_romanian:   { name: 'Romanian', note: 'official language' },
+    lang_greek:      { name: 'Greek', note: 'official language' },
+    lang_swiss:      { name: 'German, French, Italian, and Romansh', note: 'four official languages' },
+    lang_faroese:    { name: 'Faroese', note: 'official in the Faroe Islands' },
+    lang_mandarin:   { name: 'Mandarin Chinese', note: 'most widely spoken language' },
+    lang_hindi:      { name: 'Hindi', note: 'most widely spoken language' },
+    lang_japanese:   { name: 'Japanese', note: 'national language' },
+    lang_korean:     { name: 'Korean', note: 'official language' },
+    lang_thai:       { name: 'Thai', note: 'official language' },
+    lang_vietnamese: { name: 'Vietnamese', note: 'official language' },
+    lang_arabic_sa:  { name: 'Arabic', note: 'official language' },
+    lang_farsi:      { name: 'Farsi (Persian)', note: 'official language' },
+    lang_urdu:       { name: 'Urdu', note: 'national language' },
+    lang_tagalog:    { name: 'Tagalog (Filipino)', note: 'national language' },
+    lang_bahasa:     { name: 'Bahasa Indonesia', note: 'official language' },
+    lang_hebrew:     { name: 'Hebrew', note: 'official language' }
+  };
+
   function buildGameAssetIndex(globalRoot) {
     const g = globalRoot || (typeof window !== 'undefined' ? window : null);
     const idx = {
@@ -255,8 +283,17 @@
     (cul.languageIds || []).forEach(function (lid) {
       const l = idx.language[lid];
       if (l) {
-        const langName = String(l.label || '').replace(/^Where is\s+/i, '').replace(/\s+spoken\??$/i, '').trim();
-        languages.push({ id: lid, name: langName || l.label || lid, clue: l.clue || '' });
+        const meta = LANGUAGE_DISPLAY_META[lid];
+        if (meta) {
+          languages.push({ id: lid, name: meta.name, clue: meta.note || '' });
+        } else {
+          const fallbackName = String(l.label || '')
+            .replace(/^\s*(?:In\s+which\s+country\s+is|Which\s+[^?]*?speaks?|Where\s+is|Find\s+the\s+country\s+where)\s+/i, '')
+            .replace(/\s+(?:is\s+the\s+official\s+language\s+of\s+which\s+country|is\s+spoken\s+in\s+which\s+country|widely\s+spoken|an?\s+official\s+language|spoken)\s*\??$/i, '')
+            .replace(/\?+$/g, '')
+            .trim();
+          languages.push({ id: lid, name: fallbackName || lid.replace(/^lang_/, ''), clue: '' });
+        }
       }
     });
 
@@ -336,8 +373,10 @@
             parts.push(ci ? (ci.name || ci.label || cid) : String(cid).replace(/_/g, ' '));
           });
           (c.culture.languageIds || []).forEach(function (lid) {
+            const meta = LANGUAGE_DISPLAY_META[lid];
             const la = idx && idx.language && idx.language[lid];
-            parts.push(la ? (la.label || lid) : String(lid).replace(/^lang_/, '').replace(/_/g, ' '));
+            if (meta) parts.push(meta.name + ' ' + (meta.note || ''));
+            else parts.push(la ? (la.label || lid) : String(lid).replace(/^lang_/, '').replace(/_/g, ' '));
           });
           (c.culture.triviaItems || []).forEach(function (ti) {
             if (ti && ti.fact) parts.push(ti.fact);
@@ -433,6 +472,7 @@
       CONTINENT_META,
       CONTINENT_LABELS,
       TRIVIA_KIND_META,
+      LANGUAGE_DISPLAY_META,
       ATLAS_GLOBE_TARGETS,
       normalizeFriendQuery,
       normalizeRoomCodeInput,

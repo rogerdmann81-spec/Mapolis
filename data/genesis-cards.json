@@ -168,7 +168,12 @@
       "environment": {
         "biomeLabel": "Pyrenean Alpine",
         "summary": "Perched high in the eastern Pyrenees, Andorra combines steep glacial valleys, pine-and-fir forests, and snowy mountain ridges.",
-        "landFeatureIds": [],
+        "landFeatureIds": [
+          {
+            "type": "mountain",
+            "id": "pyrenees"
+          }
+        ],
         "waterFeatureIds": [],
         "animalIds": []
       },
@@ -248,7 +253,7 @@
       "flag": "🇦🇬",
       "environment": {
         "biomeLabel": "Tropical Marine & Limestone Island",
-        "summary": "Low-lying coral limestone islands ringed by shallow turquoise reefs, mangrove lagoons, and warm trade-wind beaches.",
+        "summary": "Antigua and Barbuda consists of low-lying coral limestone islands ringed by shallow turquoise reefs, mangrove lagoons, and trade-wind beaches.",
         "landFeatureIds": [
           {
             "type": "archipelago",
@@ -257,10 +262,6 @@
           {
             "type": "archipelago",
             "id": "west_indies"
-          },
-          {
-            "type": "archipelago",
-            "id": "west_indies_sa"
           }
         ],
         "waterFeatureIds": [],
@@ -296,7 +297,7 @@
       "flag": "🇦🇷",
       "environment": {
         "biomeLabel": "Pampas, Andes & Subpolar Patagonia",
-        "summary": "Stretches from subtropical northeastern rainforests and fertile Pampas grasslands to towering Andean peaks, windswept Patagonian steppe, and subantarctic fjords.",
+        "summary": "Argentina stretches from subtropical northeastern rainforests and fertile Pampas grasslands to towering Andean peaks, windswept Patagonian steppe, and subantarctic fjords.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -355,12 +356,12 @@
           {
             "id": "tri_empanadas",
             "kind": "tradition",
-            "fact": "The 'asado' (barbecue) a national culinary tradition is in Argentina."
+            "fact": "The asado (open-fire barbecue) is a cornerstone culinary tradition of Argentina."
           },
           {
             "id": "tri_tango",
             "kind": "tradition",
-            "fact": "The tango originated in Argentina."
+            "fact": "The tango originated along the Río de la Plata in Argentina and Uruguay and is jointly recognized by UNESCO."
           },
           {
             "id": "tri_wine_sa",
@@ -392,7 +393,7 @@
       "flag": "🇦🇲",
       "environment": {
         "biomeLabel": "Highland Steppe & Volcanic Plateau",
-        "summary": "A high mountainous plateau of extinct volcanic cones, alpine meadows, deep river canyons, and high-elevation freshwater Lake Sevan.",
+        "summary": "Armenia occupies a high mountainous plateau of extinct volcanic cones, alpine meadows, deep river canyons, and high-elevation freshwater Lake Sevan.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -405,7 +406,7 @@
           {
             "id": "tri_armenia_duduk",
             "kind": "festival",
-            "fact": "The apricot-wood duduk flute (UNESCO-listed) and the summer Vardavar water-splashing festival belong to Armenia."
+            "fact": "The UNESCO-listed apricot-wood duduk flute and the summer Vardavar water-splashing festival are signature traditions of Armenia."
           }
         ]
       }
@@ -427,7 +428,7 @@
       "flag": "🇦🇺",
       "environment": {
         "biomeLabel": "Arid Outback, Eucalypt Forest & Coral Reef",
-        "summary": "An ancient, flat continent dominated by red desert interior, eucalyptus bushland, temperate southern coasts, tropical northern savannas, and the Great Barrier Reef.",
+        "summary": "Australia is an ancient, largely flat continent of red desert interior, eucalyptus bushland, temperate southern coasts, tropical northern savannas, and the Great Barrier Reef.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -565,7 +566,7 @@
       "flag": "🇦🇹",
       "environment": {
         "biomeLabel": "Alpine Mountain & Temperate Forest",
-        "summary": "Dominated by snow-capped Alpine ridges, glacier-fed valleys, and lush spruce forests descending toward the fertile Danube basin in the east.",
+        "summary": "Austria is dominated by snow-capped Alpine ridges, glacier-fed valleys, and spruce forests descending toward the fertile Danube basin in the east.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -580,6 +581,10 @@
           {
             "type": "waterBody",
             "id": "bodensee"
+          },
+          {
+            "type": "river",
+            "id": "rhine"
           }
         ],
         "animalIds": []
@@ -614,7 +619,7 @@
       "flag": "🇦🇿",
       "environment": {
         "biomeLabel": "Caspian Lowland & Caucasus Mountain",
-        "summary": "Spans sub-sea-level Caspian mud-volcano plains, semi-arid steppe, subtropical Lenkoran forests, and snowy Greater Caucasus peaks.",
+        "summary": "Azerbaijan spans sub-sea-level Caspian mud-volcano plains, semi-arid steppe, subtropical Lenkoran forests, and snowy Greater Caucasus peaks.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -632,7 +637,7 @@
           {
             "id": "tri_azerbaijan_mugham",
             "kind": "festival",
-            "fact": "UNESCO-listed Mugham classical music and fire-leaping Novruz spring celebrations in Baku belong to Azerbaijan."
+            "fact": "UNESCO-listed Mugham classical music and fire-leaping Novruz spring celebrations in Baku are central cultural traditions of Azerbaijan."
           }
         ]
       }
@@ -654,7 +659,7 @@
       "flag": "🇧🇸",
       "environment": {
         "biomeLabel": "Subtropical Coral Archipelago",
-        "summary": "Over 700 low-lying limestone islands and cays surrounded by shallow carbonate banks, blue holes, pineyards, and vibrant barrier reefs.",
+        "summary": "The Bahamas comprises over 700 low-lying limestone islands and cays surrounded by shallow carbonate banks, blue holes, pineyards, and vibrant barrier reefs.",
         "landFeatureIds": [
           {
             "type": "archipelago",
@@ -663,10 +668,6 @@
           {
             "type": "archipelago",
             "id": "west_indies"
-          },
-          {
-            "type": "archipelago",
-            "id": "west_indies_sa"
           }
         ],
         "waterFeatureIds": [],
@@ -702,7 +703,7 @@
       "flag": "🇧🇭",
       "environment": {
         "biomeLabel": "Arid Gulf Archipelago",
-        "summary": "Low-lying desert limestone islands in the Persian Gulf fed historically by freshwater artesian springs, date palm groves, and shallow seagrass beds.",
+        "summary": "Bahrain consists of low-lying desert limestone islands in the Persian Gulf historically nourished by freshwater artesian springs, date palm groves, and shallow seagrass beds.",
         "landFeatureIds": [
           {
             "type": "peninsula",
@@ -720,7 +721,7 @@
           {
             "id": "tri_bahrain_pearling",
             "kind": "tradition",
-            "fact": "Centuries-old free-diving pearl traditions along the UNESCO-listed Muharraq Pearling Path belong to Bahrain."
+            "fact": "Centuries-old free-diving pearl traditions are preserved along Bahrain's UNESCO-listed Muharraq Pearling Path."
           }
         ]
       }
@@ -742,7 +743,7 @@
       "flag": "🇧🇩",
       "environment": {
         "biomeLabel": "Monsoon River Delta & Mangrove",
-        "summary": "Earth's largest active river delta, laced with braided monsoon channels, fertile alluvial floodplains, and the vast Sundarbans mangrove forest.",
+        "summary": "Bangladesh occupies Earth's largest active river delta, laced with braided monsoon channels, fertile alluvial floodplains, and the vast Sundarbans mangrove forest.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -786,7 +787,7 @@
       "flag": "🇧🇧",
       "environment": {
         "biomeLabel": "Tropical Coral Limestone Island",
-        "summary": "An uplifted coral island with rolling cane-clad hills, underground limestone caverns, Atlantic sea cliffs, and calm Caribbean reefs.",
+        "summary": "Barbados is an uplifted coral island featuring rolling hills, underground limestone caverns, Atlantic sea cliffs, and calm Caribbean reefs.",
         "landFeatureIds": [
           {
             "type": "archipelago",
@@ -795,10 +796,6 @@
           {
             "type": "archipelago",
             "id": "west_indies"
-          },
-          {
-            "type": "archipelago",
-            "id": "west_indies_sa"
           }
         ],
         "waterFeatureIds": [],
@@ -812,7 +809,7 @@
           {
             "id": "tri_barbados_cropover",
             "kind": "festival",
-            "fact": "Crop Over, a summer harvest festival culminating in Grand Kadooment Day, originated on Barbados."
+            "fact": "Crop Over, a summer harvest festival culminating in Grand Kadooment Day, originated in Barbados."
           }
         ]
       }
@@ -834,7 +831,7 @@
       "flag": "🇧🇾",
       "environment": {
         "biomeLabel": "Temperate Mixed Forest & Peat Marsh",
-        "summary": "Gently rolling glacial plains covered by dense pine-and-birch forests, ancient Białowieża woodland, thousands of lakes, and the Pripyat marshes.",
+        "summary": "Belarus is a land of gently rolling glacial plains covered by pine-and-birch forests, ancient Białowieża woodland, thousands of lakes, and the Pripyat marshes.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -997,7 +994,7 @@
       "flag": "🇧🇹",
       "environment": {
         "biomeLabel": "Eastern Himalayan Forest & Alpine",
-        "summary": "Steep north-to-south elevation climbs from subtropical jungle foothills through pristine temperate pine valleys to glaciated 7,000-meter Himalayan peaks.",
+        "summary": "Bhutan climbs steeply from southern subtropical jungle foothills through temperate pine valleys to glaciated 7,000-meter Himalayan peaks.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -1037,7 +1034,7 @@
       "flag": "🇧🇴",
       "environment": {
         "biomeLabel": "Andean Altiplano & Amazon Basin",
-        "summary": "Encompasses high-altitude cold desert plains and gleaming salt flats in the Andes alongside steamy cloud forests (Yungas) and lowland Amazonian rainforest.",
+        "summary": "Bolivia encompasses high-altitude Andean plains and gleaming salt flats alongside misty Yungas cloud forests and lowland Amazonian rainforest.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -1132,7 +1129,7 @@
       "flag": "🇧🇼",
       "environment": {
         "biomeLabel": "Kalahari Savanna & Inland Delta",
-        "summary": "Mostly flat Kalahari thornveld and shimmering Makgadikgadi salt pans, dramatically transformed in the north by the lush seasonal Okavango Delta.",
+        "summary": "Botswana is mostly flat Kalahari thornveld and Makgadikgadi salt pans, dramatically transformed in the north by the seasonal wetlands of the Okavango Delta.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -1184,7 +1181,7 @@
       "flag": "🇧🇷",
       "environment": {
         "biomeLabel": "Amazon Rainforest, Cerrado & Atlantic Coast",
-        "summary": "Home to Earth's largest tropical rainforest, vast Pantanal wetlands, Cerrado savanna highlands, semi-arid Caatinga scrub, and Atlantic coastal forests.",
+        "summary": "Brazil holds Earth's largest tropical rainforest alongside vast Pantanal wetlands, Cerrado savanna highlands, semi-arid Caatinga scrub, and Atlantic coastal forests.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -1299,7 +1296,7 @@
       "flag": "🇧🇳",
       "environment": {
         "biomeLabel": "Equatorial Rainforest & Coastal Mangrove",
-        "summary": "Over three-quarters blanketed in ancient Bornean dipterocarp rainforest, peat swamps, and winding tidal rivers along the South China Sea.",
+        "summary": "More than three-quarters of Brunei is blanketed in ancient Bornean rainforest, peat swamps, and winding tidal rivers along the South China Sea.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -1343,7 +1340,7 @@
       "flag": "🇧🇬",
       "environment": {
         "biomeLabel": "Balkan Mountain, Valley & Black Sea Coast",
-        "summary": "Split by the Balkan and Rila-Pirin mountain chains between fertile Danubian plains, sheltered rose valleys, and sandy Black Sea beaches.",
+        "summary": "Bulgaria is divided by the Balkan and Rila-Pirin mountain chains into fertile Danubian plains, sheltered rose valleys, and sandy Black Sea beaches.",
         "landFeatureIds": [
           {
             "type": "peninsula",
@@ -1394,7 +1391,7 @@
       "flag": "🇧🇫",
       "environment": {
         "biomeLabel": "Sahelian & Sudanian Savanna",
-        "summary": "A sun-baked plateau of open baobab and shea-tree savannas, seasonal Volta river valleys, and dry harmattan winds sweeping down from the Sahel.",
+        "summary": "Burkina Faso sits on a sun-baked plateau of baobab and shea-tree savannas, seasonal Volta river valleys, and dry harmattan winds blowing from the Sahel.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -1464,7 +1461,7 @@
       "flag": "🇰🇭",
       "environment": {
         "biomeLabel": "Monsoon Floodplain & Tropical Forest",
-        "summary": "A broad fertile central basin shaped by the Mekong River and the seasonal pulse of Tonlé Sap lake, rimmed by the Cardamom and Dângrêk mountains.",
+        "summary": "Cambodia centers on a fertile central basin shaped by the Mekong River and the seasonal pulse of Tonlé Sap lake, rimmed by the Cardamom and Dângrêk mountains.",
         "landFeatureIds": [
           {
             "type": "peninsula",
@@ -1499,7 +1496,7 @@
           {
             "id": "tri_angkor",
             "kind": "landmark",
-            "fact": "Angkor Wat, the largest religious monument, is in Cambodia."
+            "fact": "Angkor Wat, the world's largest religious monument, stands in northwestern Cambodia."
           }
         ]
       }
@@ -1521,7 +1518,7 @@
       "flag": "🇨🇲",
       "environment": {
         "biomeLabel": "Equatorial Rainforest, Volcano & Sahel",
-        "summary": "Called Africa in miniature for spanning southern Congo-basin jungle, volcanic Mount Cameroon, grassy western highlands, and dry northern Sahel plains.",
+        "summary": "Cameroon is often called Africa in miniature because it spans southern Congo-basin jungle, volcanic Mount Cameroon, grassy western highlands, and northern Sahel plains.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -1563,7 +1560,7 @@
       "flag": "🇨🇦",
       "environment": {
         "biomeLabel": "Boreal Taiga, Arctic Tundra & Alpine",
-        "summary": "Vast spruce-and-pine boreal forests, millions of glacier-carved lakes, fertile prairies, towering Rockies, temperate Pacific rainforests, and expansive Arctic tundra.",
+        "summary": "Canada encompasses vast boreal forests, millions of glacier-carved lakes, fertile prairies, towering Rockies, temperate Pacific rainforests, and expansive Arctic tundra.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -1600,10 +1597,6 @@
           {
             "type": "mountain",
             "id": "cascades"
-          },
-          {
-            "type": "mountain",
-            "id": "brooks_range"
           },
           {
             "type": "mountain",
@@ -1707,7 +1700,7 @@
           {
             "id": "tri_inuit",
             "kind": "culture",
-            "fact": "The Inuit people traditionally inhabit the Arctic regions of Canada."
+            "fact": "Inuit peoples have traditionally inhabited the Arctic regions of northern Canada for millennia."
           },
           {
             "id": "tri_maple",
@@ -1727,7 +1720,7 @@
           {
             "id": "tri_rocky_mtn",
             "kind": "culture",
-            "fact": "The Rocky Mountains stretch from New Mexico to Canada."
+            "fact": "The Rocky Mountains stretch more than 3,000 miles from New Mexico across western Canada."
           }
         ]
       }
@@ -1749,7 +1742,7 @@
       "flag": "🇨🇻",
       "environment": {
         "biomeLabel": "Volcanic Arid Atlantic Archipelago",
-        "summary": "Ten volcanic islands swept by dry trade winds, contrasting rugged basalt peaks and cinder cones with green cloud-fed valleys and marine reefs.",
+        "summary": "Cape Verde consists of ten volcanic islands swept by dry trade winds, contrasting rugged basalt peaks with green cloud-fed valleys and marine reefs.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -1771,7 +1764,7 @@
           {
             "id": "tri_cape_verde_morna",
             "kind": "festival",
-            "fact": "UNESCO-listed Morna music, made world-famous by Cesária Évora, and the Mindelo Carnival belong to Cape Verde."
+            "fact": "UNESCO-listed Morna music—made world-famous by Cesária Évora—and the vibrant Mindelo Carnival are cultural hallmarks of Cape Verde."
           }
         ]
       }
@@ -1828,7 +1821,7 @@
       "flag": "🇹🇩",
       "environment": {
         "biomeLabel": "Sahara Desert, Sahel & Lake Basin",
-        "summary": "Ranges from the volcanic Tibesti Mountains and Saharan dunes in the north through semi-arid Sahel grasslands to the wetlands of Lake Chad in the south.",
+        "summary": "Chad ranges from the volcanic Tibesti Mountains and Saharan dunes in the north through semi-arid Sahel grasslands to the wetlands of Lake Chad in the south.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -1873,7 +1866,7 @@
       "flag": "🇨🇱",
       "environment": {
         "biomeLabel": "Atacama Desert, Mediterranean Valley & Fjords",
-        "summary": "A narrow Pacific ribbon spanning Earth's driest non-polar desert in the north, fertile central wine valleys, volcanic lake districts, and glaciated Patagonian fjords.",
+        "summary": "Chile forms a narrow Pacific ribbon spanning Earth's driest non-polar desert in the north, fertile central valleys, volcanic lake districts, and glaciated Patagonian fjords.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -1945,8 +1938,8 @@
         "triviaItems": [
           {
             "id": "tri_atacama",
-            "kind": "tradition",
-            "fact": "The Atacama Desert, one of the driest places on Earth, is in Chile."
+            "kind": "landmark",
+            "fact": "The Atacama Desert in northern Chile is one of the driest non-polar places on Earth."
           },
           {
             "id": "tri_easter",
@@ -1973,7 +1966,7 @@
       "flag": "🇨🇳",
       "environment": {
         "biomeLabel": "Himalayan Plateau, Steppe & Monsoon Plains",
-        "summary": "Spans the towering Tibetan Plateau, arid Gobi and Taklamakan deserts, temperate northern loess plains, and lush subtropical karst hills and river deltas.",
+        "summary": "China spans the towering Tibetan Plateau, arid Gobi and Taklamakan deserts, northern loess plains, and lush subtropical karst hills and river deltas.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -1982,10 +1975,6 @@
           {
             "type": "mountain",
             "id": "himalayas"
-          },
-          {
-            "type": "mountain",
-            "id": "hindu_kush"
           },
           {
             "type": "mountain",
@@ -2024,10 +2013,6 @@
           {
             "type": "river",
             "id": "brahmaputra"
-          },
-          {
-            "type": "river",
-            "id": "ganges"
           },
           {
             "type": "river",
@@ -2151,6 +2136,10 @@
           {
             "type": "waterBody",
             "id": "golfo_de_uraba"
+          },
+          {
+            "type": "river",
+            "id": "amazon"
           }
         ],
         "animalIds": [
@@ -2197,7 +2186,7 @@
       "flag": "🇰🇲",
       "environment": {
         "biomeLabel": "Volcanic Tropical Island",
-        "summary": "Four lush volcanic islands in the Mozambique Channel with crater lakes, ylang-ylang hillsides, active Mount Karthala, and fringing coral reefs.",
+        "summary": "The Comoros consists of four lush volcanic islands in the Mozambique Channel with crater lakes, ylang-ylang hillsides, active Mount Karthala, and fringing coral reefs.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -2387,10 +2376,6 @@
           {
             "type": "archipelago",
             "id": "west_indies"
-          },
-          {
-            "type": "archipelago",
-            "id": "west_indies_sa"
           }
         ],
         "waterFeatureIds": [],
@@ -2455,7 +2440,7 @@
           {
             "id": "tri_cyprus_limassol",
             "kind": "festival",
-            "fact": "The Limassol Carnival is a centuries-old spring parade tradition on Cyprus."
+            "fact": "The Limassol Carnival is a centuries-old spring parade tradition celebrated in Cyprus."
           }
         ]
       }
@@ -2477,7 +2462,7 @@
       "flag": "🇨🇿",
       "environment": {
         "biomeLabel": "Temperate Basin & Border Highlands",
-        "summary": "Fertile Bohemian and Moravian rolling hills, river valleys, and sandstone rock labyrinths encircled by forested Šumava, Ore, and Krkonoše mountain rims.",
+        "summary": "The Czech Republic combines rolling Bohemian and Moravian hills, river valleys, and sandstone rock formations ringed by the forested Šumava, Ore, and Krkonoše mountains.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -2487,19 +2472,11 @@
         "waterFeatureIds": [
           {
             "type": "river",
-            "id": "danube"
-          },
-          {
-            "type": "river",
             "id": "elbe"
           },
           {
             "type": "river",
             "id": "oder"
-          },
-          {
-            "type": "river",
-            "id": "vistula"
           }
         ],
         "animalIds": []
@@ -2514,7 +2491,7 @@
           {
             "id": "tri_czech_prague_spring",
             "kind": "festival",
-            "fact": "The Prague Spring International Music Festival opens each year with Smetana's Má vlast in Czech Republic."
+            "fact": "The Prague Spring International Music Festival opens each year with Smetana's Má vlast in the Czech Republic."
           }
         ]
       }
@@ -2536,7 +2513,7 @@
       "flag": "🇩🇰",
       "environment": {
         "biomeLabel": "Temperate Maritime Lowland",
-        "summary": "Flat glacial moraine plains, chalk sea cliffs, wind-swept North Sea dunes, and hundreds of low-lying Baltic islands connected by straits.",
+        "summary": "Denmark consists of flat glacial plains, chalk sea cliffs, wind-swept North Sea dunes, and hundreds of low-lying Baltic islands separated by narrow straits.",
         "landFeatureIds": [
           {
             "type": "peninsula",
@@ -2587,12 +2564,12 @@
           {
             "id": "tri_inuit",
             "kind": "culture",
-            "fact": "The Inuit people traditionally inhabit the Arctic regions of Denmark."
+            "fact": "Inuit communities (Kalaallit) have inhabited Greenland, an autonomous Arctic territory within the Kingdom of Denmark, for centuries."
           },
           {
             "id": "tri_lego",
             "kind": "culture",
-            "fact": "LEGO invented was in Denmark."
+            "fact": "LEGO building bricks were invented in Billund, Denmark, in 1932."
           }
         ]
       }
@@ -2614,7 +2591,7 @@
       "flag": "🇩🇯",
       "environment": {
         "biomeLabel": "Arid Rift Valley & Volcanic Salt Lake",
-        "summary": "A sun-scorched tectonic crossroads of basalt deserts, steaming fumaroles, coral-rich Red Sea reefs, and sunken hypersaline Lake Assal.",
+        "summary": "Djibouti sits at a sun-scorched tectonic crossroads of basalt deserts, steaming fumaroles, Red Sea coral reefs, and sunken hypersaline Lake Assal.",
         "landFeatureIds": [
           {
             "type": "peninsula",
@@ -2637,7 +2614,7 @@
           {
             "id": "tri_djibouti_lac_assal",
             "kind": "culture",
-            "fact": "Lake Assal, Africa's lowest land point, and Afar and Somali poetic traditions belong to Djibouti."
+            "fact": "Lake Assal—Africa's lowest point on land—and rich Afar and Somali poetic traditions are hallmarks of Djibouti."
           }
         ]
       }
@@ -2659,7 +2636,7 @@
       "flag": "🇩🇲",
       "environment": {
         "biomeLabel": "Volcanic Tropical Rainforest Island",
-        "summary": "Known as the Nature Island for its steep volcanic peaks, boiling geothermal lakes, dense mountain rainforests, and hundreds of rushing rivers.",
+        "summary": "Known as the Nature Island, Dominica features steep volcanic peaks, boiling geothermal lakes, dense mountain rainforests, and hundreds of rushing rivers.",
         "landFeatureIds": [
           {
             "type": "archipelago",
@@ -2668,10 +2645,6 @@
           {
             "type": "archipelago",
             "id": "west_indies"
-          },
-          {
-            "type": "archipelago",
-            "id": "west_indies_sa"
           }
         ],
         "waterFeatureIds": [],
@@ -2685,7 +2658,7 @@
           {
             "id": "tri_dominica_creole",
             "kind": "festival",
-            "fact": "The World Creole Music Festival and Kalinago Indigenous heritage are celebrated on Dominica."
+            "fact": "The World Creole Music Festival and Kalinago Indigenous heritage are celebrated in Dominica."
           }
         ]
       }
@@ -2707,7 +2680,7 @@
       "flag": "🇩🇴",
       "environment": {
         "biomeLabel": "Tropical Mountain, Valley & Reef Coast",
-        "summary": "Features the Caribbean's highest peak (Pico Duarte) and lowest salt lake (Lake Enriquillo) alongside lush valleys, pine highlands, and coral beaches.",
+        "summary": "The Dominican Republic features both the Caribbean's highest peak (Pico Duarte) and lowest salt lake (Lake Enriquillo) alongside fertile valleys, pine highlands, and coral coasts.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -2720,10 +2693,6 @@
           {
             "type": "archipelago",
             "id": "west_indies"
-          },
-          {
-            "type": "archipelago",
-            "id": "west_indies_sa"
           }
         ],
         "waterFeatureIds": [
@@ -2766,7 +2735,7 @@
       "flag": "🇨🇩",
       "environment": {
         "biomeLabel": "Equatorial Congo Rainforest & Rift Highlands",
-        "summary": "Centers on the world's second-largest tropical rainforest along the Congo River, flanked by southern savannas and volcanic eastern Great Lakes highlands.",
+        "summary": "The Democratic Republic of the Congo centers on the world's second-largest tropical rainforest along the Congo River, flanked by southern savannas and volcanic Great Lakes highlands.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -2781,14 +2750,6 @@
           {
             "type": "river",
             "id": "congo"
-          },
-          {
-            "type": "river",
-            "id": "nile"
-          },
-          {
-            "type": "river",
-            "id": "zambezi"
           },
           {
             "type": "waterBody",
@@ -2815,7 +2776,7 @@
           {
             "id": "tri_congo_rumba",
             "kind": "festival",
-            "fact": "Congolese Rumba (inscribed by UNESCO) and Brazzaville's Pan-African Music Festival (FESPAM) are celebrated in DR Congo."
+            "fact": "Congolese Rumba, jointly recognized by UNESCO with the neighboring Republic of the Congo, is a foundational musical tradition of DR Congo."
           },
           {
             "id": "tri_gorillas",
@@ -2842,7 +2803,7 @@
       "flag": "🇹🇱",
       "environment": {
         "biomeLabel": "Tropical Mountain & Coral Coast",
-        "summary": "Steep rugged Ramelau mountain ridges, seasonal eucalyptus-and-sandalwood savannas, and biodiverse Coral Triangle reefs.",
+        "summary": "East Timor combines steep Ramelau mountain ridges and seasonal eucalyptus-and-sandalwood savannas with biodiverse Coral Triangle reefs.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -2886,7 +2847,7 @@
       "flag": "🇪🇨",
       "environment": {
         "biomeLabel": "Andes, Amazon, Pacific & Galápagos",
-        "summary": "Packs four distinct worlds into a compact equatorial nation: coastal plains, volcanic Andean Avenue of Volcanoes, Amazon jungle, and the Galápagos archipelago.",
+        "summary": "Ecuador packs four distinct environments into a compact equatorial nation: Pacific coastal plains, the volcanic Andes, Amazon jungle, and the Galápagos archipelago.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -2899,10 +2860,6 @@
           {
             "type": "mountain",
             "id": "andes_north"
-          },
-          {
-            "type": "mountain",
-            "id": "andes_central"
           }
         ],
         "waterFeatureIds": [
@@ -2933,7 +2890,7 @@
           {
             "id": "tri_galapagos",
             "kind": "culture",
-            "fact": "The Galápagos Islands belong to Ecuador."
+            "fact": "Ecuador's volcanic Galápagos Islands are renowned for endemic wildlife such as giant tortoises and marine iguanas."
           }
         ]
       }
@@ -3019,7 +2976,7 @@
       "flag": "🇸🇻",
       "environment": {
         "biomeLabel": "Volcanic Tropical Pacific Highlands",
-        "summary": "A compact chain of more than twenty volcanoes, crater lakes, fertile volcanic coffee slopes, and dark-sand Pacific beaches.",
+        "summary": "El Salvador features a compact chain of more than twenty volcanoes, crater lakes, fertile volcanic coffee slopes, and dark-sand Pacific beaches.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -3032,7 +2989,7 @@
           {
             "id": "tri_elsalvador_pupusa",
             "kind": "festival",
-            "fact": "Stuffed corn-masa pupusas (honored with National Pupusa Day) and Izalco folk festivals belong to El Salvador."
+            "fact": "Stuffed corn-masa pupusas—honored with National Pupusa Day—and Izalco folk festivals are beloved traditions of El Salvador."
           }
         ]
       }
@@ -3054,7 +3011,7 @@
       "flag": "🇬🇶",
       "environment": {
         "biomeLabel": "Equatorial Rainforest & Volcanic Island",
-        "summary": "Combines dense mainland Rio Muni tropical jungle with lush, volcanic Bioko Island and remote Annobón in the Gulf of Guinea.",
+        "summary": "Equatorial Guinea combines dense mainland Rio Muni tropical rainforest with lush, volcanic Bioko Island and remote Annobón in the Gulf of Guinea.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -3077,7 +3034,7 @@
           {
             "id": "tri_eq_guinea_balele",
             "kind": "tradition",
-            "fact": "Traditional Fang Balélé dances and Africa's only Spanish-speaking national culture belong to Equatorial Guinea."
+            "fact": "Traditional Fang Balélé dances and Africa's only Spanish-speaking national culture distinguish Equatorial Guinea."
           }
         ]
       }
@@ -3099,7 +3056,7 @@
       "flag": "🇪🇷",
       "environment": {
         "biomeLabel": "Red Sea Coast, Desert & Cool Highlands",
-        "summary": "Climbs steeply from scorching Danakil salt deserts and coral-fringed Dahlak islands up to crisp, terraced central highlands around Asmara.",
+        "summary": "Eritrea climbs steeply from scorching Danakil salt deserts and coral-fringed Dahlak islands up to cool, terraced central highlands around Asmara.",
         "landFeatureIds": [
           {
             "type": "peninsula",
@@ -3150,7 +3107,7 @@
       "flag": "🇪🇪",
       "environment": {
         "biomeLabel": "Boreal Forest, Raised Bog & Baltic Coast",
-        "summary": "Low-lying coastal plains dotted with over 2,000 Baltic islands, ancient raised peat bogs, glacial erratic boulders, and pine-spruce woodlands.",
+        "summary": "Estonia comprises low-lying coastal plains dotted with over 2,000 Baltic islands, ancient raised peat bogs, glacial boulders, and pine-spruce woodlands.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -3192,7 +3149,7 @@
       "flag": "🇸🇿",
       "environment": {
         "biomeLabel": "Southern African Highveld & Bushveld",
-        "summary": "Steps down rapidly from cool, misty granite mountains in the western Highveld through fertile Middleveld valleys to warm acacia savanna Lowveld.",
+        "summary": "Eswatini steps down rapidly from cool, misty granite mountains in the western Highveld through fertile Middleveld valleys to warm acacia savanna in the east.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -3232,7 +3189,7 @@
       "flag": "🇪🇹",
       "environment": {
         "biomeLabel": "Ethiopian Highlands, Rift Valley & Danakil",
-        "summary": "Towering volcanic Simien and Bale plateaus cut by the Great Rift Valley, contrasting cool mountain grasslands with the blazing Danakil Depression.",
+        "summary": "Ethiopia is built around the towering volcanic Simien and Bale plateaus cut by the Great Rift Valley, contrasting cool mountain grasslands with the blazing Danakil Depression.",
         "landFeatureIds": [
           {
             "type": "peninsula",
@@ -3247,6 +3204,10 @@
           {
             "type": "waterBody",
             "id": "l_tana"
+          },
+          {
+            "type": "river",
+            "id": "nile"
           }
         ],
         "animalIds": [
@@ -3297,12 +3258,8 @@
       "flag": "🇫🇯",
       "environment": {
         "biomeLabel": "Volcanic Pacific Archipelago & Coral Reef",
-        "summary": "More than 300 volcanic and coral islands marked by rain-soaked windward jungles, drier leeward hills, and expansive barrier reef lagoons.",
+        "summary": "Fiji spans more than 300 volcanic and coral islands marked by rain-soaked windward jungles, drier leeward hills, and expansive barrier reef lagoons.",
         "landFeatureIds": [
-          {
-            "type": "mountain",
-            "id": "andes_central"
-          },
           {
             "type": "island",
             "id": "fiji_islands"
@@ -3312,20 +3269,7 @@
             "id": "fiji_arch"
           }
         ],
-        "waterFeatureIds": [
-          {
-            "type": "river",
-            "id": "sao_francisco"
-          },
-          {
-            "type": "river",
-            "id": "zambezi"
-          },
-          {
-            "type": "waterBody",
-            "id": "l_argyle"
-          }
-        ],
+        "waterFeatureIds": [],
         "animalIds": []
       },
       "culture": {
@@ -3337,8 +3281,8 @@
         "triviaItems": [
           {
             "id": "tri_fiji_islands",
-            "kind": "tradition",
-            "fact": "Fiji is known for its coral reefs and rugby culture."
+            "kind": "culture",
+            "fact": "Fiji is celebrated for its vibrant coral reefs and passionate rugby culture."
           },
           {
             "id": "tri_bula",
@@ -3365,7 +3309,7 @@
       "flag": "🇫🇮",
       "environment": {
         "biomeLabel": "Boreal Taiga, Lakeland & Arctic Lapland",
-        "summary": "Blanketed in coniferous forest and roughly 188,000 glacier-carved lakes, rising north into treeless Arctic fells under midnight sun and aurora skies.",
+        "summary": "Finland is blanketed in coniferous forest and roughly 188,000 glacier-carved lakes, rising northward into treeless Arctic fells under midnight sun and aurora skies.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -3419,7 +3363,7 @@
       "flag": "🇫🇷",
       "environment": {
         "biomeLabel": "Temperate Plains, Alps & Mediterranean Coast",
-        "summary": "Connects Atlantic maritime lowlands and fertile river basins with snow-capped Alps and Pyrenees, volcanic Massif Central, and warm Mediterranean shores.",
+        "summary": "France connects Atlantic maritime lowlands and fertile river basins with the snow-capped Alps and Pyrenees, the volcanic Massif Central, and warm Mediterranean shores.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -3436,32 +3380,12 @@
           {
             "type": "island",
             "id": "reunion"
-          },
-          {
-            "type": "archipelago",
-            "id": "comoros_arch"
-          },
-          {
-            "type": "archipelago",
-            "id": "lesser_antilles"
-          },
-          {
-            "type": "archipelago",
-            "id": "west_indies"
-          },
-          {
-            "type": "archipelago",
-            "id": "west_indies_sa"
           }
         ],
         "waterFeatureIds": [
           {
             "type": "river",
             "id": "loire"
-          },
-          {
-            "type": "river",
-            "id": "po"
           },
           {
             "type": "river",
@@ -3507,7 +3431,7 @@
           {
             "id": "tri_euro_tunnel",
             "kind": "landmark",
-            "fact": "The Channel Tunnel connects the UK with France."
+            "fact": "The Channel Tunnel runs beneath the English Channel, connecting France with the United Kingdom."
           }
         ]
       }
@@ -3529,7 +3453,7 @@
       "flag": "🇬🇫",
       "environment": {
         "biomeLabel": "Equatorial Amazon Rainforest & Coast",
-        "summary": "Over 95% covered by dense, largely untouched Guiana Shield tropical rainforest crossed by wide blackwater rivers and coastal mangrove mudflats.",
+        "summary": "More than 95% of French Guiana is covered by dense Guiana Shield tropical rainforest crossed by wide blackwater rivers and coastal mangrove mudflats.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -3564,7 +3488,7 @@
       "flag": "🇬🇦",
       "environment": {
         "biomeLabel": "Equatorial Atlantic Rainforest",
-        "summary": "Nearly 88% carpeted in dense Congo-basin rainforest, coastal lagoons, and winding Ogooué river valleys sheltering forest elephants and gorillas.",
+        "summary": "Nearly 88% of Gabon is carpeted in dense Congo-basin rainforest, coastal lagoons, and winding Ogooué river valleys sheltering forest elephants and gorillas.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -3599,7 +3523,7 @@
       "flag": "🇬🇲",
       "environment": {
         "biomeLabel": "West African Riverine & Mangrove",
-        "summary": "A narrow coastal strip hugging the winding, tidal Gambia River, lined with rich mangrove swamps, gallery forest, and dry upland savanna.",
+        "summary": "The Gambia forms a narrow coastal corridor hugging the winding, tidal Gambia River, lined with mangrove swamps, gallery forest, and dry upland savanna.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -3612,7 +3536,7 @@
           {
             "id": "tri_gambia_kora",
             "kind": "tradition",
-            "fact": "The 21-string kora harp and griot (jali) oral storytelling are deeply rooted along the river of the Gambia."
+            "fact": "The 21-string kora harp and griot (jali) oral storytelling are deeply rooted along the Gambia River."
           }
         ]
       }
@@ -3634,7 +3558,7 @@
       "flag": "🇬🇪",
       "environment": {
         "biomeLabel": "Greater Caucasus Alpine & Black Sea Subtropical",
-        "summary": "Dramatically bridges humid subtropical Black Sea lowlands and lush wine valleys with glaciated 5,000-meter Greater Caucasus mountain peaks.",
+        "summary": "Georgia bridges humid subtropical Black Sea lowlands and lush wine valleys with glaciated 5,000-meter peaks in the Greater Caucasus.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -3676,7 +3600,7 @@
       "flag": "🇩🇪",
       "environment": {
         "biomeLabel": "Temperate Lowland, Uplands & Alpine South",
-        "summary": "Transitions from flat North and Baltic Sea coastal marshes through rolling forested Mittelgebirge highlands and Rhine valleys to the Bavarian Alps.",
+        "summary": "Germany transitions from flat North and Baltic Sea coastal marshes through rolling forested highlands and Rhine valleys to the Bavarian Alps.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -3826,7 +3750,7 @@
       "flag": "🇬🇷",
       "environment": {
         "biomeLabel": "Mediterranean Mountain & Aegean Archipelago",
-        "summary": "Rocky limestone mountains, olive-and-cypress valleys, and thousands of sun-drenched Aegean and Ionian islands sculpted by tectonic coasts.",
+        "summary": "Greece combines rocky limestone mountains and olive-and-cypress valleys with thousands of sun-drenched Aegean and Ionian islands.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -3884,7 +3808,7 @@
       "flag": "🇬🇩",
       "environment": {
         "biomeLabel": "Volcanic Tropical Spice Island",
-        "summary": "Lush volcanic mountains, crater lakes like Grand Etang, nutmeg-and-cocoa hillsides, and sheltered Caribbean coral bays.",
+        "summary": "Grenada features lush volcanic mountains, crater lakes like Grand Etang, nutmeg-and-cocoa hillsides, and sheltered Caribbean coral bays.",
         "landFeatureIds": [
           {
             "type": "archipelago",
@@ -3893,10 +3817,6 @@
           {
             "type": "archipelago",
             "id": "west_indies"
-          },
-          {
-            "type": "archipelago",
-            "id": "west_indies_sa"
           }
         ],
         "waterFeatureIds": [],
@@ -3910,7 +3830,7 @@
           {
             "id": "tri_grenada_spicemas",
             "kind": "festival",
-            "fact": "Spicemas Carnival—famous for Jab Jab masqueraders—and nutmeg spice estates belong to Grenada."
+            "fact": "Spicemas Carnival—famous for Jab Jab masqueraders—and fragrant nutmeg estates are signature traditions of Grenada."
           }
         ]
       }
@@ -3974,7 +3894,7 @@
       "flag": "🇬🇳",
       "environment": {
         "biomeLabel": "Fouta Djallon Highlands & Tropical Forest",
-        "summary": "West Africa's water tower—its misty Fouta Djallon plateau feeds the Niger, Senegal, and Gambia rivers, bordered by coastal mangroves and southern jungle.",
+        "summary": "Known as West Africa's water tower, Guinea's misty Fouta Djallon plateau feeds the Niger, Senegal, and Gambia rivers between coastal mangroves and southern rainforest.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -3998,7 +3918,7 @@
           {
             "id": "tri_gambia_kora",
             "kind": "tradition",
-            "fact": "The 21-string kora harp and griot (jali) oral storytelling are deeply rooted along the river of Guinea."
+            "fact": "The 21-string kora harp and griot (jali) oral storytelling are deeply rooted musical traditions of Guinea."
           },
           {
             "id": "tri_guinea_djembe",
@@ -4025,7 +3945,7 @@
       "flag": "🇬🇼",
       "environment": {
         "biomeLabel": "Tropical Mangrove Estuary & Bijagós Islands",
-        "summary": "Low-lying coastal plains cut by broad tidal estuaries, rice-growing mangrove swamps, and the wildlife-rich Bijagós archipelago offshore.",
+        "summary": "Guinea-Bissau consists of low-lying coastal plains cut by broad tidal estuaries, rice-growing mangrove swamps, and the wildlife-rich Bijagós archipelago offshore.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -4060,7 +3980,7 @@
       "flag": "🇬🇾",
       "environment": {
         "biomeLabel": "Guiana Shield Rainforest & Tepui Highlands",
-        "summary": "Dense Amazonian rainforest, ancient flat-topped sandstone tepuis, Kaieteur Falls, Rupununi savannas, and fertile Atlantic coastal flats.",
+        "summary": "Guyana spans dense Amazonian rainforest, ancient flat-topped sandstone tepuis, Kaieteur Falls, Rupununi savannas, and fertile Atlantic coastal flats.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -4115,10 +4035,6 @@
           {
             "type": "archipelago",
             "id": "west_indies"
-          },
-          {
-            "type": "archipelago",
-            "id": "west_indies_sa"
           }
         ],
         "waterFeatureIds": [
@@ -4176,7 +4092,7 @@
           {
             "id": "tri_honduras_copan",
             "kind": "festival",
-            "fact": "The Maya Hieroglyphic Stairway of Copán and La Ceiba's May Carnival belong to Honduras."
+            "fact": "The Maya Hieroglyphic Stairway of Copán and La Ceiba's lively May Carnival are cultural landmarks of Honduras."
           }
         ]
       }
@@ -4198,7 +4114,7 @@
       "flag": "🇭🇺",
       "environment": {
         "biomeLabel": "Carpathian Basin & Pannonian Steppe",
-        "summary": "Centered on the flat, fertile Great Hungarian Plain (Puszta) bisected by the Danube and Tisza rivers, with shallow Lake Balaton and gentle northern hills.",
+        "summary": "Hungary centers on the flat, fertile Great Hungarian Plain (Puszta) crossed by the Danube and Tisza rivers, alongside shallow Lake Balaton and gentle northern hills.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -4245,7 +4161,7 @@
       "flag": "🇮🇸",
       "environment": {
         "biomeLabel": "Subarctic Volcanic Tundra & Glaciers",
-        "summary": "A geologically young Mid-Atlantic Ridge island of active volcanoes, geothermal springs, massive ice caps, black-sand outwash plains, and mossy lava fields.",
+        "summary": "Iceland is a geologically young Mid-Atlantic Ridge island shaped by active volcanoes, geothermal springs, massive ice caps, black-sand plains, and mossy lava fields.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -4295,7 +4211,7 @@
       "flag": "🇮🇳",
       "environment": {
         "biomeLabel": "Monsoon Plains, Himalayas, Desert & Rainforest",
-        "summary": "Spans glaciated Himalayan peaks, the arid Thar Desert, fertile Indo-Gangetic river plains, the Deccan plateau, and biodiversity-rich Western Ghats rainforests.",
+        "summary": "India spans glaciated Himalayan peaks, the arid Thar Desert, fertile Indo-Gangetic river plains, the Deccan plateau, and biodiversity-rich Western Ghats rainforests.",
         "landFeatureIds": [
           {
             "type": "peninsula",
@@ -4395,7 +4311,7 @@
           {
             "id": "tri_monsoon",
             "kind": "culture",
-            "fact": "India experiences the world's heaviest monsoon rains."
+            "fact": "India's seasonal summer monsoon brings some of the heaviest rainfall on Earth, especially in Meghalaya."
           }
         ]
       }
@@ -4417,7 +4333,7 @@
       "flag": "🇮🇩",
       "environment": {
         "biomeLabel": "Equatorial Volcanic Archipelago",
-        "summary": "Over 17,000 Ring of Fire islands uniting active volcanoes, lush Sunda and Papua rainforests, terraced rice basins, and Earth's richest coral reefs.",
+        "summary": "Indonesia stretches across over 17,000 Ring of Fire islands uniting active volcanoes, Sunda and Papua rainforests, terraced rice basins, and rich coral reefs.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -4512,8 +4428,8 @@
         "triviaItems": [
           {
             "id": "tri_tsunami",
-            "kind": "landmark",
-            "fact": "Indonesia was hit hardest by the 2004 Indian Ocean tsunami."
+            "kind": "culture",
+            "fact": "Aceh in northern Sumatra, Indonesia, suffered the heaviest impact of the 2004 Indian Ocean tsunami."
           }
         ]
       }
@@ -4535,7 +4451,7 @@
       "flag": "🇮🇷",
       "environment": {
         "biomeLabel": "Arid Central Plateau & Zagros-Alborz Peaks",
-        "summary": "A high interior basin of salty Dasht-e Kavir and Lut deserts encircled by snow-capped Zagros and Alborz mountains and a lush Caspian rainforest fringe.",
+        "summary": "Iran centers on a high interior basin of salty Dasht-e Kavir and Lut deserts ringed by the snow-capped Zagros and Alborz mountains and a lush Caspian rainforest fringe.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -4551,10 +4467,6 @@
           }
         ],
         "waterFeatureIds": [
-          {
-            "type": "river",
-            "id": "euphrates"
-          },
           {
             "type": "river",
             "id": "tigris"
@@ -4687,7 +4599,7 @@
       "flag": "🇮🇱",
       "environment": {
         "biomeLabel": "Mediterranean Coast, Rift Valley & Negev Desert",
-        "summary": "Transitions within short distances from Mediterranean coastal plains and wooded Galilee hills to the sunken Jordan Rift Valley, Dead Sea, and arid Negev Desert.",
+        "summary": "Israel transitions within short distances from Mediterranean coastal plains and wooded Galilee hills to the sunken Jordan Rift Valley, the Dead Sea, and the arid Negev Desert.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -4733,7 +4645,7 @@
       "flag": "🇮🇹",
       "environment": {
         "biomeLabel": "Mediterranean Peninsula & Alpine Arc",
-        "summary": "Crowned by the snowy Alps and bisected by the forested Apennines, pairing fertile Po River plains with sun-warmed Mediterranean coasts and volcanic islands.",
+        "summary": "Italy is crowned by the snowy Alps and bisected by the forested Apennines, pairing fertile Po River plains with Mediterranean coasts and volcanic islands.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -4754,10 +4666,6 @@
           {
             "type": "mountain",
             "id": "apennines"
-          },
-          {
-            "type": "mountain",
-            "id": "dinaric_alps"
           }
         ],
         "waterFeatureIds": [
@@ -4820,7 +4728,7 @@
       "flag": "🇯🇲",
       "environment": {
         "biomeLabel": "Tropical Limestone Karst & Blue Mountains",
-        "summary": "Misty coffee-growing Blue Mountains, rugged Cockpit Country sinkholes, lush river waterfalls, and coral-rimmed Caribbean shores.",
+        "summary": "Jamaica blends misty coffee-growing Blue Mountains and rugged Cockpit Country limestone karst with lush river waterfalls and coral-rimmed Caribbean shores.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -4833,10 +4741,6 @@
           {
             "type": "archipelago",
             "id": "west_indies"
-          },
-          {
-            "type": "archipelago",
-            "id": "west_indies_sa"
           }
         ],
         "waterFeatureIds": [],
@@ -4874,7 +4778,7 @@
       "flag": "🇯🇵",
       "environment": {
         "biomeLabel": "Temperate Volcanic Archipelago",
-        "summary": "Four main mountainous islands and thousands of islets spanning snowy subarctic Hokkaido, temperate forested Honshu volcanoes, and subtropical Okinawan reefs.",
+        "summary": "Japan is an archipelago of four main mountainous islands and thousands of islets spanning snowy subarctic Hokkaido, volcanic Honshu, and subtropical Okinawan reefs.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -5053,7 +4957,7 @@
           {
             "id": "tri_kazakhstan_nauryz",
             "kind": "festival",
-            "fact": "Traditional eagle hunting (berkutchi), dombra lute music, and Nauryz spring festivals belong to Kazakhstan."
+            "fact": "Traditional eagle hunting (berkutchi), dombra lute music, and Nauryz spring festivals are treasured traditions of Kazakhstan."
           }
         ]
       }
@@ -5075,7 +4979,7 @@
       "flag": "🇰🇪",
       "environment": {
         "biomeLabel": "East African Savanna, Rift Lakes & Alpine Peak",
-        "summary": "Bisected by the Great Rift Valley with soda lakes and wildlife-rich savannas, rising to glacier-topped Mount Kenya and meeting warm Indian Ocean reefs.",
+        "summary": "Kenya is bisected by the Great Rift Valley with soda lakes and wildlife-rich savannas, rising to glacier-topped Mount Kenya and meeting warm Indian Ocean reefs.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -5126,7 +5030,7 @@
       "flag": "🇰🇮",
       "environment": {
         "biomeLabel": "Equatorial Coral Atoll & Ocean",
-        "summary": "Thirty-three low-lying coral atolls and one raised reef island scattered across 3.5 million square kilometers of equatorial Pacific Ocean.",
+        "summary": "Kiribati consists of thirty-three low-lying coral atolls and one raised reef island scattered across 3.5 million square kilometers of equatorial Pacific Ocean.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -5139,7 +5043,7 @@
           {
             "id": "tri_kiribati_mwaie",
             "kind": "tradition",
-            "fact": "Te Mwaie frigatebird-inspired dance performed in traditional maneaba meeting houses belongs to Kiribati."
+            "fact": "Te Mwaie, a frigatebird-inspired dance performed in traditional maneaba meeting houses, is a signature art of Kiribati."
           }
         ]
       }
@@ -5161,7 +5065,7 @@
       "flag": "🇽🇰",
       "environment": {
         "biomeLabel": "Balkan Intermontane Basin & Alpine Peaks",
-        "summary": "Two fertile high plains framed by the Accursed Mountains (Prokletije) and Šar Mountains, with glacial lakes, beech forests, and karst river gorges.",
+        "summary": "Kosovo comprises two fertile highland plains framed by the Accursed Mountains (Prokletije) and Šar Mountains, with glacial lakes, beech forests, and karst river gorges.",
         "landFeatureIds": [
           {
             "type": "peninsula",
@@ -5205,7 +5109,7 @@
       "flag": "🇰🇼",
       "environment": {
         "biomeLabel": "Arid Persian Gulf Desert & Tidal Flats",
-        "summary": "Flat sandy and gravel desert plains bordering the shallow waters, mudflats, and coral islets of Kuwait Bay and the northwestern Persian Gulf.",
+        "summary": "Kuwait consists of flat sandy and gravel desert plains bordering the shallow waters, tidal mudflats, and coral islets of Kuwait Bay and the northwestern Persian Gulf.",
         "landFeatureIds": [
           {
             "type": "peninsula",
@@ -5245,7 +5149,7 @@
       "flag": "🇰🇬",
       "environment": {
         "biomeLabel": "High Alpine Tian Shan & Mountain Steppe",
-        "summary": "Over 90% mountainous, dominated by glaciated Tian Shan ridges, walnut forests, summer jailoo alpine pastures, and immense high-altitude Lake Issyk-Kul.",
+        "summary": "More than 90% of Kyrgyzstan is mountainous, dominated by glaciated Tian Shan ridges, walnut forests, alpine summer pastures, and high-altitude Lake Issyk-Kul.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -5351,7 +5255,7 @@
       "flag": "🇱🇻",
       "environment": {
         "biomeLabel": "Temperate Baltic Forest & Coastal Plain",
-        "summary": "More than half forested with pine and birch, crisscrossed by winding rivers, raised peat bogs, glacial lakes, and long sandy Baltic beaches.",
+        "summary": "More than half of Latvia is forested with pine and birch, crisscrossed by winding rivers, raised peat bogs, glacial lakes, and long sandy Baltic beaches.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -5428,7 +5332,7 @@
       "flag": "🇱🇸",
       "environment": {
         "biomeLabel": "High-Altitude Alpine Kingdom",
-        "summary": "The only country lying entirely above 1,000 meters, characterized by dramatic basalt Drakensberg/Maloti plateaus, alpine grasslands, and deep river gorges.",
+        "summary": "Lesotho is the only country lying entirely above 1,000 meters, marked by basalt Drakensberg and Maloti plateaus, alpine grasslands, and deep river gorges.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -5473,7 +5377,7 @@
       "flag": "🇱🇷",
       "environment": {
         "biomeLabel": "Upper Guinean Tropical Rainforest",
-        "summary": "Humid Atlantic mangrove coasts and rolling hills cloaked in West Africa's largest remaining tracts of Upper Guinean equatorial rainforest.",
+        "summary": "Liberia rises from humid Atlantic mangrove coasts into rolling hills cloaked in West Africa's largest remaining tracts of Upper Guinean rainforest.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -5508,7 +5412,7 @@
       "flag": "🇱🇾",
       "environment": {
         "biomeLabel": "Sahara Desert & Mediterranean Coast",
-        "summary": "More than 90% arid Saharan ergs, rocky hamadas, and oasis depressions, bordered in the north by a narrow Mediterranean coastal belt and Green Mountains.",
+        "summary": "More than 90% of Libya consists of arid Saharan sand seas, rocky plateaus, and oasis depressions, bordered in the north by a narrow Mediterranean coastal belt.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -5550,12 +5454,21 @@
       "flag": "🇱🇮",
       "environment": {
         "biomeLabel": "Alpine Rhine Valley & Mountain",
-        "summary": "A compact Alpine principality rising from the fertile floodplains of the Upper Rhine up to steep forested slopes and rugged Rätikon limestone peaks.",
-        "landFeatureIds": [],
+        "summary": "Liechtenstein is a compact Alpine principality rising from fertile Upper Rhine floodplains to steep forested slopes and rugged Rätikon limestone peaks.",
+        "landFeatureIds": [
+          {
+            "type": "mountain",
+            "id": "alps"
+          }
+        ],
         "waterFeatureIds": [
           {
             "type": "waterBody",
             "id": "bodensee"
+          },
+          {
+            "type": "river",
+            "id": "rhine"
           }
         ],
         "animalIds": []
@@ -5590,7 +5503,7 @@
       "flag": "🇱🇹",
       "environment": {
         "biomeLabel": "Temperate Baltic Plains, Forests & Dunes",
-        "summary": "Rolling glacial hills, pine-and-oak woodlands, thousands of lakes, the Nemunas River basin, and the sweeping coastal sand dunes of the Curonian Spit.",
+        "summary": "Lithuania features rolling glacial hills, pine-and-oak woodlands, thousands of lakes, the Nemunas River basin, and the sweeping coastal dunes of the Curonian Spit.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -5627,7 +5540,7 @@
       "flag": "🇱🇺",
       "environment": {
         "biomeLabel": "Temperate Woodland & Ardennes Uplands",
-        "summary": "Combines the rocky forested valleys of the northern Oesling (Ardennes) with fertile southern Gutland farmland and Moselle wine-growing riverbanks.",
+        "summary": "Luxembourg combines the rocky forested valleys of the northern Oesling (Ardennes) with fertile southern Gutland farmland and Moselle wine-growing riverbanks.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -5662,7 +5575,7 @@
       "flag": "🇲🇬",
       "environment": {
         "biomeLabel": "Endemic Rainforest, Spiny Desert & Highlands",
-        "summary": "Long isolated in the Indian Ocean, featuring lush eastern rainforests, central highlands, western baobab dry forests, and southern spiny desert full of unique wildlife.",
+        "summary": "Long isolated in the Indian Ocean, Madagascar spans lush eastern rainforests, central highlands, western baobab dry forests, and southern spiny desert filled with endemic wildlife.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -5717,7 +5630,7 @@
       "flag": "🇲🇼",
       "environment": {
         "biomeLabel": "East African Rift Lake & Highland Plateau",
-        "summary": "Dominated by deep, biodiverse freshwater Lake Malawi along the Great Rift Valley, flanked by forested Nyika plateaus and granite Mount Mulanje.",
+        "summary": "Malawi is dominated by deep, biodiverse Lake Malawi along the Great Rift Valley, flanked by forested Nyika plateaus and granite Mount Mulanje.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -5735,7 +5648,7 @@
           {
             "id": "tri_malawi_gule",
             "kind": "festival",
-            "fact": "The UNESCO-listed Gule Wamkulu masked dance of the Chewa people and the Lake of Stars arts festival belong to Malawi."
+            "fact": "The UNESCO-listed Gule Wamkulu masked dance of the Chewa people and the Lake of Stars arts festival are cultural highlights of Malawi."
           }
         ]
       }
@@ -5757,7 +5670,7 @@
       "flag": "🇲🇾",
       "environment": {
         "biomeLabel": "Equatorial Rainforest, Karst & Borneo Highlands",
-        "summary": "Splits between Peninsular Malaysia's ancient Taman Negara rainforest and limestone hills, and Malaysian Borneo's towering Mount Kinabalu and river jungles.",
+        "summary": "Malaysia splits between Peninsular Malaysia's ancient Taman Negara rainforest and limestone hills, and Malaysian Borneo's towering Mount Kinabalu and river jungles.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -5812,7 +5725,7 @@
       "flag": "🇲🇻",
       "environment": {
         "biomeLabel": "Tropical Coral Atoll Archipelago",
-        "summary": "Nearly 1,200 low-lying coral islands grouped into 26 natural ring-shaped atolls surrounded by turquoise lagoons and thriving Indian Ocean reefs.",
+        "summary": "The Maldives comprises nearly 1,200 low-lying coral islands grouped into 26 natural ring-shaped atolls surrounded by turquoise lagoons and Indian Ocean reefs.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -5829,7 +5742,7 @@
         "triviaItems": [
           {
             "id": "tri_maldives_boduberu",
-            "kind": "landmark",
+            "kind": "tradition",
             "fact": "Bodu Beru coconut-wood drumming and coral-stone mosques characterize the island culture of the Maldives."
           }
         ]
@@ -5852,7 +5765,7 @@
       "flag": "🇲🇱",
       "environment": {
         "biomeLabel": "Sahara Desert, Sahel & Niger Inland Delta",
-        "summary": "Transitions from arid northern Saharan ergs through dry Sahel plains to the seasonally flooded wetlands of the Inner Niger Delta and southern savannas.",
+        "summary": "Mali transitions from arid northern Saharan dunes through dry Sahel plains to the seasonally flooded wetlands of the Inner Niger Delta and southern savannas.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -5879,7 +5792,7 @@
           {
             "id": "tri_gambia_kora",
             "kind": "tradition",
-            "fact": "The 21-string kora harp and griot (jali) oral storytelling are deeply rooted along the river of Mali."
+            "fact": "The 21-string kora harp and griot (jali) oral storytelling are deeply rooted musical traditions of Mali."
           },
           {
             "id": "tri_guinea_djembe",
@@ -5911,7 +5824,7 @@
       "flag": "🇲🇹",
       "environment": {
         "biomeLabel": "Mediterranean Limestone Archipelago",
-        "summary": "Sun-drenched honey-colored limestone islands sculpted into sea cliffs, natural harbors, rocky garrigue scrub, and clear central Mediterranean waters.",
+        "summary": "Malta consists of sun-drenched honey-colored limestone islands sculpted into sea cliffs, natural harbors, rocky scrubland, and clear central Mediterranean waters.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -5942,7 +5855,7 @@
       "flag": "🇲🇭",
       "environment": {
         "biomeLabel": "Tropical Pacific Coral Atolls",
-        "summary": "Twenty-nine narrow coral atolls and five isolated islands arranged in two parallel chains across the central Pacific, enclosing vast blue lagoons.",
+        "summary": "The Marshall Islands comprises twenty-nine narrow coral atolls and five isolated islands arranged in two parallel chains across the central Pacific.",
         "landFeatureIds": [
           {
             "type": "archipelago",
@@ -6000,7 +5913,7 @@
           {
             "id": "tri_mauritania_chinguetti",
             "kind": "landmark",
-            "fact": "The ancient desert manuscript libraries of Chinguetti and Moorish tidinit lute music belong to Mauritania."
+            "fact": "The ancient desert manuscript libraries of Chinguetti and Moorish tidinit lute music are cultural treasures of Mauritania."
           }
         ]
       }
@@ -6022,7 +5935,7 @@
       "flag": "🇲🇺",
       "environment": {
         "biomeLabel": "Volcanic Tropical Island & Lagoon",
-        "summary": "Ringed by one of the world's largest unbroken coral reefs, rising inland to volcanic peaks, sugarcane plains, waterfalls, and remnant ebony forests.",
+        "summary": "Mauritius is ringed by one of the world's largest unbroken coral reefs and rises inland to volcanic peaks, sugarcane plains, waterfalls, and remnant ebony forests.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -6062,7 +5975,7 @@
       "flag": "🇲🇽",
       "environment": {
         "biomeLabel": "Desert, Sierra Madre & Tropical Rainforest",
-        "summary": "Remarkably diverse—combining Sonoran and Chihuahuan deserts, pine-oak Sierra Madre ranges, central volcanic plateaus, Pacific reefs, and Yucatán jungle cenotes.",
+        "summary": "Mexico spans extraordinary geographic diversity, uniting Sonoran and Chihuahuan deserts, pine-oak Sierra Madre ranges, central volcanic plateaus, Pacific reefs, and Yucatán jungle cenotes.",
         "landFeatureIds": [
           {
             "type": "peninsula",
@@ -6167,7 +6080,7 @@
       "flag": "🇫🇲",
       "environment": {
         "biomeLabel": "Volcanic High Islands & Pacific Atolls",
-        "summary": "Over 600 western Pacific islands combining lush basalt rainforest peaks on Pohnpei, Kosrae, Chuuk, and Yap with outer low-lying coral atolls.",
+        "summary": "The Federated States of Micronesia spans over 600 western Pacific islands, combining lush volcanic peaks on Pohnpei, Kosrae, Chuuk, and Yap with outer coral atolls.",
         "landFeatureIds": [
           {
             "type": "archipelago",
@@ -6187,7 +6100,7 @@
           {
             "id": "tri_micronesia_nan_madol",
             "kind": "landmark",
-            "fact": "The ancient basalt-log canal city of Nan Madol and Yap's giant carved Rai stone discs belong to Micronesia."
+            "fact": "The ancient basalt-log canal city of Nan Madol on Pohnpei and Yap's giant carved Rai stone discs are iconic heritage sites of Micronesia."
           }
         ]
       }
@@ -6209,7 +6122,7 @@
       "flag": "🇲🇩",
       "environment": {
         "biomeLabel": "Temperate Rolling Steppe & River Valleys",
-        "summary": "Fertile black-earth chernozem hills, orchards, and vineyards nestled between the winding Dniester and Prut rivers.",
+        "summary": "Moldova consists of fertile black-earth hills, orchards, and vineyards nestled between the winding Dniester and Prut rivers.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -6245,7 +6158,7 @@
       "flag": "🇲🇨",
       "environment": {
         "biomeLabel": "Mediterranean Coastal Cliff",
-        "summary": "A steep limestone headland where the Maritime Alps plunge directly into the warm Ligurian Sea along the French Riviera.",
+        "summary": "Monaco sits on a steep limestone headland where the Maritime Alps plunge directly into the warm Ligurian Sea along the French Riviera.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -6280,7 +6193,7 @@
       "flag": "🇲🇳",
       "environment": {
         "biomeLabel": "Highland Steppe, Gobi Desert & Altai Peaks",
-        "summary": "Broad wind-swept nomadic grasslands and arid Gobi gravel deserts framed by snowy Altai mountains in the west and Siberian taiga forests in the north.",
+        "summary": "Mongolia spans wind-swept nomadic grasslands and arid Gobi gravel deserts framed by the snowy Altai Mountains in the west and Siberian taiga in the north.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -6370,7 +6283,7 @@
       "flag": "🇲🇦",
       "environment": {
         "biomeLabel": "Atlas Mountains, Atlantic Coast & Sahara",
-        "summary": "Spans Mediterranean and Atlantic coastlines, snow-capped High Atlas ranges, cedar-clad Rif hills, and golden Erg Chebbi Saharan dunes.",
+        "summary": "Morocco spans Mediterranean and Atlantic coastlines, snow-capped High Atlas ranges, cedar-clad Rif hills, and golden Saharan dunes.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -6422,7 +6335,7 @@
       "flag": "🇲🇿",
       "environment": {
         "biomeLabel": "Indian Ocean Coast, Coral Reef & Miombo Savanna",
-        "summary": "A long tropical coastline of mangrove estuaries and Bazaruto coral islands rising into inland miombo woodlands and broad Zambezi River floodplains.",
+        "summary": "Mozambique stretches along a long tropical coastline of mangrove estuaries and Bazaruto coral islands, rising inland to miombo woodlands and Zambezi River floodplains.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -6454,7 +6367,7 @@
           {
             "id": "tri_malawi_gule",
             "kind": "festival",
-            "fact": "The UNESCO-listed Gule Wamkulu masked dance of the Chewa people and the Lake of Stars arts festival belong to Mozambique."
+            "fact": "The UNESCO-listed Gule Wamkulu masked dance of the Chewa people is a shared cultural tradition across Malawi, Zambia, and Mozambique."
           },
           {
             "id": "tri_mozambique_marrabenta",
@@ -6520,7 +6433,7 @@
           {
             "id": "tri_myanmar_thingyan",
             "kind": "festival",
-            "fact": "Thingyan, the traditional Burmese New Year water festival, and golden stupas like Shwedagon Pagoda belong to Myanmar."
+            "fact": "Thingyan, the traditional Burmese New Year water festival, and golden stupas like Shwedagon Pagoda are icons of Myanmar."
           }
         ]
       }
@@ -6542,7 +6455,7 @@
       "flag": "🇳🇦",
       "environment": {
         "biomeLabel": "Namib Coastal Desert & Kalahari Savanna",
-        "summary": "Defined by the ancient towering red dunes of the Namib Desert, fog-fed Skeleton Coast, Etosha salt pan, and dry inland acacia savannas.",
+        "summary": "Namibia is defined by the towering red dunes of the Namib Desert, the fog-fed Skeleton Coast, Etosha salt pan, and dry inland acacia savannas.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -6590,7 +6503,7 @@
       "flag": "🇳🇷",
       "environment": {
         "biomeLabel": "Raised Pacific Coral Island",
-        "summary": "A tiny oval phosphate-rich limestone island in Micronesia ringed by a coastal palm belt and narrow fringing coral reef.",
+        "summary": "Nauru is a tiny oval phosphate-rich limestone island in Micronesia ringed by a coastal palm belt and a narrow fringing coral reef.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -6625,7 +6538,7 @@
       "flag": "🇳🇵",
       "environment": {
         "biomeLabel": "Himalayan Alpine, Mid-Hills & Terai Jungle",
-        "summary": "Rises across just 200 kilometers from humid subtropical Terai plains and tiger jungles through terraced mid-hills to eight of Earth's ten highest peaks.",
+        "summary": "Within just 200 kilometers, Nepal rises from humid subtropical Terai plains and jungles through terraced mid-hills to eight of Earth's ten highest peaks.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -6646,7 +6559,7 @@
           {
             "id": "tri_india_diwali",
             "kind": "festival",
-            "fact": "Diwali, the five-day Festival of Lights celebrated with clay oil lamps (diyas) and rangoli, originated in Nepal."
+            "fact": "Deepawali—celebrated as the five-day Tihar festival of lights with oil lamps and marigold garlands—is one of Nepal's major annual holidays."
           },
           {
             "id": "tri_buddha",
@@ -6678,21 +6591,8 @@
       "flag": "🇳🇱",
       "environment": {
         "biomeLabel": "Temperate North Sea Delta & Polders",
-        "summary": "A low-lying river delta of the Rhine, Meuse, and Scheldt shaped by coastal dunes, Wadden Sea mudflats, canals, and reclaimed polder lowlands.",
-        "landFeatureIds": [
-          {
-            "type": "archipelago",
-            "id": "lesser_antilles"
-          },
-          {
-            "type": "archipelago",
-            "id": "west_indies"
-          },
-          {
-            "type": "archipelago",
-            "id": "west_indies_sa"
-          }
-        ],
+        "summary": "The Netherlands sits on the low-lying delta of the Rhine, Meuse, and Scheldt rivers, shaped by coastal dunes, Wadden Sea mudflats, canals, and reclaimed polders.",
+        "landFeatureIds": [],
         "waterFeatureIds": [
           {
             "type": "river",
@@ -6719,12 +6619,12 @@
           {
             "id": "tri_tulips",
             "kind": "culture",
-            "fact": "Netherlands is known for tulips and windmills."
+            "fact": "The Netherlands is famous for its tulip fields and historic windmills."
           },
           {
             "id": "tri_windmills",
             "kind": "culture",
-            "fact": "Netherlands has the most windmills historically."
+            "fact": "The Netherlands built more historic drainage and grain windmills than any other country."
           }
         ]
       }
@@ -6746,7 +6646,7 @@
       "flag": "🇳🇨",
       "environment": {
         "biomeLabel": "Tropical Pacific Island & Barrier Reef Lagoon",
-        "summary": "A rugged nickel-rich main island (Grande Terre) surrounded by one of Earth's largest coral reef lagoons, endemic pine forests, and Loyalty Islands.",
+        "summary": "New Caledonia centers on a rugged main island (Grande Terre) surrounded by one of Earth's largest coral reef lagoons, endemic pine forests, and the Loyalty Islands.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -6788,7 +6688,7 @@
       "flag": "🇳🇿",
       "environment": {
         "biomeLabel": "Temperate Rainforest, Volcanoes & Southern Alps",
-        "summary": "Two dramatic Pacific islands pairing geothermal volcanic plateaus in the north with glacier-carved Southern Alps, fjords, and ancient beech rainforests.",
+        "summary": "New Zealand comprises two dramatic Pacific islands pairing geothermal volcanic plateaus in the north with glacier-carved Southern Alps, fjords, and ancient beech rainforests.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -6889,7 +6789,7 @@
           {
             "id": "tri_nicaragua_gueguense",
             "kind": "festival",
-            "fact": "El Güegüense, a UNESCO-listed satirical street drama from colonial times, and the La Purísima festival belong to Nicaragua."
+            "fact": "El Güegüense, a UNESCO-listed satirical street drama from colonial times, and the La Purísima festival are signature traditions of Nicaragua."
           }
         ]
       }
@@ -6911,7 +6811,7 @@
       "flag": "🇳🇪",
       "environment": {
         "biomeLabel": "Sahara Desert, Aïr Mountains & Sahel",
-        "summary": "Mostly arid Saharan sand seas and the rugged volcanic Aïr massif, narrowing southward to semi-arid Sahel pastures and the fertile Niger River valley.",
+        "summary": "Niger is largely arid Saharan sand seas and the rugged volcanic Aïr massif, narrowing southward to semi-arid Sahel pastures and the fertile Niger River valley.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -6934,7 +6834,7 @@
           {
             "id": "tri_chad_gerewol",
             "kind": "festival",
-            "fact": "The Gerewol courtship festival and ancient Ennedi desert rock art are celebrated cultural traditions in Niger."
+            "fact": "The Wodaabe Gerewol courtship festival—shared across the Sahel with neighboring Chad—is a vibrant annual gathering in Niger."
           },
           {
             "id": "tri_niger_cure_salee",
@@ -6961,7 +6861,7 @@
       "flag": "🇳🇬",
       "environment": {
         "biomeLabel": "Coastal Mangrove, Rainforest & Northern Savanna",
-        "summary": "Progresses from the vast Niger Delta mangroves and southern tropical forest through the Jos Plateau uplands to semi-arid northern Sahel grasslands.",
+        "summary": "Nigeria progresses from vast Niger Delta mangroves and southern tropical forest through the Jos Plateau uplands to semi-arid northern Sahel grasslands.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -7008,7 +6908,7 @@
       "flag": "🇰🇵",
       "environment": {
         "biomeLabel": "Temperate Mountain Peninsula",
-        "summary": "Roughly 80% rugged forested mountains—including volcanic Mount Paektu—descending to western Yellow Sea agricultural plains and eastern Sea of Japan coasts.",
+        "summary": "Roughly 80% of North Korea consists of rugged forested mountains—including volcanic Mount Paektu—descending to western Yellow Sea plains and eastern Sea of Japan coasts.",
         "landFeatureIds": [
           {
             "type": "peninsula",
@@ -7033,12 +6933,12 @@
           {
             "id": "tri_korea_chuseok",
             "kind": "festival",
-            "fact": "Chuseok, a major autumn harvest festival featuring songpyeon rice cakes and ancestral rites, is celebrated in North Korea."
+            "fact": "Chuseok (Hangawi), a traditional autumn harvest holiday honoring ancestors with crescent-shaped songpyeon rice cakes, is observed across North Korea."
           },
           {
             "id": "tri_dmz",
             "kind": "culture",
-            "fact": "The Demilitarized Zone (DMZ) separates North Korea."
+            "fact": "The Korean Demilitarized Zone (DMZ) separates North Korea and South Korea along the 38th parallel."
           }
         ]
       }
@@ -7100,7 +7000,7 @@
       "flag": "🇳🇴",
       "environment": {
         "biomeLabel": "Subarctic Fjords, Alpine Plateaus & Boreal Forest",
-        "summary": "Deep glacier-carved Atlantic fjords, high Hardangervidda mountain plateaus, spruce forests, and Arctic Lofoten and Svalbard archipelagos.",
+        "summary": "Norway is sculpted by deep glacier-carved Atlantic fjords, high mountain plateaus, spruce forests, and the Arctic Lofoten and Svalbard archipelagos.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -7225,11 +7125,6 @@
         "languageIds": [],
         "triviaItems": [
           {
-            "id": "tri_uae_ayyala",
-            "kind": "landmark",
-            "fact": "Al-Ayyala traditional stick-dance performances alongside the Burj Khalifa skyscraper belong to Oman."
-          },
-          {
             "id": "tri_oman_frankincense",
             "kind": "culture",
             "fact": "Ancient Dhofar frankincense trade routes and traditional Omani khanjar daggers are cultural icons of Oman."
@@ -7254,7 +7149,7 @@
       "flag": "🇵🇰",
       "environment": {
         "biomeLabel": "Karakoram Peaks, Indus Plains & Baluchistan Desert",
-        "summary": "Unites glaciated Karakoram and Himalayan giants—including K2—with fertile irrigated Indus River plains, dry Baluchistan plateaus, and Arabian Sea mangroves.",
+        "summary": "Pakistan unites glaciated Karakoram and Himalayan giants—including K2—with fertile irrigated Indus River plains, dry Balochistan plateaus, and Arabian Sea mangroves.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -7301,7 +7196,7 @@
       "flag": "🇵🇼",
       "environment": {
         "biomeLabel": "Tropical Limestone Rock Islands & Coral Reef",
-        "summary": "Hundreds of emerald mushroom-shaped limestone Rock Islands, marine lakes, rainforest hills, and pristine western Pacific barrier reefs.",
+        "summary": "Palau features hundreds of emerald mushroom-shaped limestone Rock Islands, marine lakes, rainforest hills, and western Pacific barrier reefs.",
         "landFeatureIds": [
           {
             "type": "archipelago",
@@ -7321,7 +7216,7 @@
           {
             "id": "tri_palau_bai",
             "kind": "culture",
-            "fact": "Painted wooden bai meeting houses with carved storyboard legends and Jellyfish Lake belong to Palau."
+            "fact": "Painted wooden bai meeting houses with carved storyboard legends and marine Jellyfish Lake are iconic sights of Palau."
           }
         ]
       }
@@ -7343,7 +7238,7 @@
       "flag": "🇵🇸",
       "environment": {
         "biomeLabel": "Mediterranean Hills, Jordan Valley & Coastal Plain",
-        "summary": "Combines terraced olive-clad limestone highlands of the West Bank descending to the Jordan Valley and Dead Sea with the sandy Mediterranean plain of Gaza.",
+        "summary": "Palestine combines the terraced olive-clad limestone highlands of the West Bank, descending toward the Jordan Valley and Dead Sea, with the sandy Mediterranean plain of Gaza.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -7385,7 +7280,7 @@
       "flag": "🇵🇦",
       "environment": {
         "biomeLabel": "Tropical Isthmus Rainforest & Dual Coasts",
-        "summary": "A narrow mountainous land bridge cloaked in lush Darién and cloud rainforests linking Caribbean coral islands with Pacific mangrove bays.",
+        "summary": "Panama forms a narrow mountainous land bridge cloaked in Darién and cloud rainforests linking Caribbean coral islands with Pacific mangrove bays.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -7483,7 +7378,7 @@
       "flag": "🇵🇾",
       "environment": {
         "biomeLabel": "Dry Gran Chaco & Subtropical Forest",
-        "summary": "Divided by the Paraguay River between the vast semi-arid thorny savannas of the western Gran Chaco and fertile rolling eastern subtropical hills.",
+        "summary": "Paraguay is divided by the Paraguay River between the semi-arid thorny savannas of the western Gran Chaco and fertile rolling eastern subtropical hills.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -7525,7 +7420,7 @@
       "flag": "🇵🇪",
       "environment": {
         "biomeLabel": "Pacific Coastal Desert, Andes & Amazon Basin",
-        "summary": "Divides sharply into an arid Pacific coastal strip, towering glacier-capped Andean cordilleras, high Lake Titicaca, and sprawling lowland Amazonian jungle.",
+        "summary": "Peru divides sharply into an arid Pacific coastal strip, towering glacier-capped Andean cordilleras, high Lake Titicaca, and sprawling lowland Amazonian jungle.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -7602,7 +7497,7 @@
       "flag": "🇵🇭",
       "environment": {
         "biomeLabel": "Tropical Volcanic Archipelago",
-        "summary": "Over 7,600 Ring of Fire islands combining verdant volcanic cones, karst Palawan lagoons, terraced mountain highlands, and rich Coral Triangle reefs.",
+        "summary": "The Philippines spans over 7,600 Ring of Fire islands combining volcanic cones, karst Palawan lagoons, terraced mountain highlands, and Coral Triangle reefs.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -7695,10 +7590,6 @@
         "waterFeatureIds": [
           {
             "type": "river",
-            "id": "elbe"
-          },
-          {
-            "type": "river",
             "id": "oder"
           },
           {
@@ -7732,7 +7623,7 @@
           {
             "id": "tri_belarus_kupalle",
             "kind": "festival",
-            "fact": "The midsummer Kupalle folk festival of bonfires and floating flower wreaths is a major tradition in Poland."
+            "fact": "Midsummer solstice celebrations (Noc Kupały) with bonfires and floating flower wreaths are a beloved folk tradition in Poland."
           },
           {
             "id": "tri_gdansk",
@@ -7810,7 +7701,7 @@
       "flag": "🇶🇦",
       "environment": {
         "biomeLabel": "Arid Gulf Peninsula & Coastal Sabkha",
-        "summary": "A flat limestone-and-sand desert peninsula jutting into the Persian Gulf, edged by salty sabkha flats, Khor Al Adaid inland sea dunes, and coastal mangroves.",
+        "summary": "Qatar is a flat limestone-and-sand desert peninsula jutting into the Persian Gulf, edged by salty sabkha flats, Khor Al Adaid inland dunes, and coastal mangroves.",
         "landFeatureIds": [
           {
             "type": "peninsula",
@@ -7850,7 +7741,7 @@
       "flag": "🇨🇬",
       "environment": {
         "biomeLabel": "Congo Basin Rainforest & Flooded Swamp",
-        "summary": "Over two-thirds draped in dense equatorial rainforest and vast Cuvette Centrale peatlands, draining into the mighty Congo River and Atlantic coast.",
+        "summary": "More than two-thirds of the Republic of the Congo is draped in dense equatorial rainforest and Cuvette Centrale peatlands draining into the Congo River and Atlantic coast.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -7955,14 +7846,6 @@
             "id": "kola"
           },
           {
-            "type": "peninsula",
-            "id": "crimean"
-          },
-          {
-            "type": "mountain",
-            "id": "scandinavian"
-          },
-          {
             "type": "mountain",
             "id": "urals"
           },
@@ -8014,10 +7897,6 @@
           },
           {
             "type": "river",
-            "id": "mackenzie"
-          },
-          {
-            "type": "river",
             "id": "n_dvina"
           },
           {
@@ -8039,10 +7918,6 @@
           {
             "type": "river",
             "id": "yenisey"
-          },
-          {
-            "type": "river",
-            "id": "yukon"
           }
         ],
         "animalIds": []
@@ -8133,7 +8008,7 @@
       "flag": "🇼🇸",
       "environment": {
         "biomeLabel": "Volcanic Polynesian Rainforest Islands",
-        "summary": "Lush emerald volcanic islands of Upolu and Savai'i featuring cloud-forest craters, lava fields, cascading waterfalls, and turquoise fringing coral reefs.",
+        "summary": "Samoa comprises the lush emerald volcanic islands of Upolu and Savai'i, featuring cloud-forest craters, lava fields, cascading waterfalls, and turquoise fringing reefs.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -8153,7 +8028,7 @@
           {
             "id": "tri_samoa_teuila",
             "kind": "festival",
-            "fact": "The Teuila Cultural Festival, Fa'a Sāmoa communal life, and traditional pe'a tattooing (tatau) belong to Samoa."
+            "fact": "The Teuila Cultural Festival, Fa'a Sāmoa communal life, and traditional pe'a tattooing (tatau) are central pillars of Samoan culture."
           }
         ]
       }
@@ -8175,7 +8050,7 @@
       "flag": "🇸🇲",
       "environment": {
         "biomeLabel": "Apennine Limestone Ridge",
-        "summary": "Crowned by the dramatic three-peaked limestone outcrop of Mount Titano overlooking rolling Adriatic foothills and Mediterranean oak-and-olive slopes.",
+        "summary": "San Marino is crowned by the three-peaked limestone outcrop of Mount Titano overlooking rolling Adriatic foothills and Mediterranean oak-and-olive slopes.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -8210,7 +8085,7 @@
       "flag": "🇸🇹",
       "environment": {
         "biomeLabel": "Equatorial Volcanic Island Rainforest",
-        "summary": "Two lush volcanic islands in the Gulf of Guinea featuring dramatic phonolite rock spires like Pico Cão Grande, mist forests, and coastal cocoa groves.",
+        "summary": "São Tomé and Príncipe consists of two lush volcanic islands in the Gulf of Guinea featuring dramatic rock spires like Pico Cão Grande, mist forests, and coastal cocoa groves.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -8223,7 +8098,7 @@
           {
             "id": "tri_sao_tome_tchiloli",
             "kind": "tradition",
-            "fact": "Tchiloli, a centuries-old open-air folk drama blending Renaissance theater with African percussion, is performed on São Tomé & Príncipe."
+            "fact": "Tchiloli, a centuries-old open-air folk drama blending Renaissance theater with African percussion, is performed in São Tomé & Príncipe."
           }
         ]
       }
@@ -8245,7 +8120,7 @@
       "flag": "🇸🇦",
       "environment": {
         "biomeLabel": "Arabian Desert, Lava Fields & Red Sea Reef",
-        "summary": "Dominated by the immense Rub' al Khali sand desert and central Najd plateau, bordered by towering Hejaz-Asir escarpments and vibrant Red Sea coral reefs.",
+        "summary": "Saudi Arabia is dominated by the immense Rub' al Khali sand desert and central Najd plateau, bordered by Hejaz-Asir escarpments and Red Sea coral reefs.",
         "landFeatureIds": [
           {
             "type": "peninsula",
@@ -8335,7 +8210,7 @@
           {
             "id": "tri_gambia_kora",
             "kind": "tradition",
-            "fact": "The 21-string kora harp and griot (jali) oral storytelling are deeply rooted along the river of Senegal."
+            "fact": "The 21-string kora harp and griot (jali) oral storytelling are deeply rooted musical traditions of Senegal."
           }
         ]
       }
@@ -8416,7 +8291,7 @@
       "flag": "🇸🇨",
       "environment": {
         "biomeLabel": "Granitic & Coral Indian Ocean Archipelago",
-        "summary": "Ancient granite islands draped in endemic coco-de-mer palm forests and boulder-strewn beaches alongside remote coral atolls like Aldabra.",
+        "summary": "The Seychelles combines ancient granite islands draped in endemic coco-de-mer palm forests and boulder-strewn beaches with remote coral atolls like Aldabra.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -8496,7 +8371,7 @@
       "flag": "🇸🇬",
       "environment": {
         "biomeLabel": "Equatorial Coastal City-Island",
-        "summary": "A warm, humid island at the tip of the Malay Peninsula preserving pockets of primary Bukit Timah rainforest, Sungei Buloh mangroves, and tropical gardens.",
+        "summary": "Singapore is a warm, humid island at the tip of the Malay Peninsula that preserves pockets of Bukit Timah rainforest, Sungei Buloh mangroves, and tropical gardens.",
         "landFeatureIds": [
           {
             "type": "archipelago",
@@ -8543,7 +8418,7 @@
       "flag": "🇸🇰",
       "environment": {
         "biomeLabel": "Carpathian Alpine & Forested River Valleys",
-        "summary": "Dominated by the dramatic granite High Tatras and forested Carpathian ranges, descending to fertile Danube lowlands in the southwest.",
+        "summary": "Slovakia is dominated by the granite High Tatras and forested Carpathian ranges, descending to fertile Danube lowlands in the southwest.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -8554,10 +8429,6 @@
           {
             "type": "river",
             "id": "danube"
-          },
-          {
-            "type": "river",
-            "id": "vistula"
           }
         ],
         "animalIds": []
@@ -8594,7 +8465,7 @@
       "flag": "🇸🇮",
       "environment": {
         "biomeLabel": "Julian Alps, Karst Caves & Adriatic Coast",
-        "summary": "Packs snow-capped Julian Alps, emerald glacial lakes, vast subterranean limestone karst caves, dense forests, and a sunny Adriatic strip into a compact landscape.",
+        "summary": "Slovenia packs snow-capped Julian Alps, emerald glacial lakes, subterranean limestone karst caves, dense forests, and a sunny Adriatic coast into a compact landscape.",
         "landFeatureIds": [
           {
             "type": "peninsula",
@@ -8642,7 +8513,7 @@
       "flag": "🇸🇧",
       "environment": {
         "biomeLabel": "Equatorial Volcanic Archipelago & Lagoon",
-        "summary": "Nearly a thousand mountainous volcanic islands and coral atolls covered in dense tropical rainforest and surrounded by clear Melanesian lagoons.",
+        "summary": "The Solomon Islands spans nearly a thousand mountainous volcanic islands and coral atolls covered in dense tropical rainforest and clear Melanesian lagoons.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -8706,7 +8577,7 @@
           {
             "id": "tri_somalia_poetry",
             "kind": "tradition",
-            "fact": "Known as the 'Nation of Poets' for its rich oral gabay verse and Dhaanto dance, Somalia sits on the Horn of Africa."
+            "fact": "Somalia is celebrated as the 'Nation of Poets' for its rich oral gabay verse and traditional Dhaanto dance."
           }
         ]
       }
@@ -8728,7 +8599,7 @@
       "flag": "🇿🇦",
       "environment": {
         "biomeLabel": "Fynbos, Karoo Desert, Savanna & Drakensberg",
-        "summary": "Bridges two oceans across extraordinary biomes: floral Cape Fynbos, semi-desert Karoo, towering Drakensberg escarpments, and wildlife-rich Kruger savanna.",
+        "summary": "South Africa bridges two oceans across extraordinary biomes, including floral Cape Fynbos, the semi-desert Karoo, towering Drakensberg escarpments, and Kruger savanna.",
         "landFeatureIds": [
           {
             "type": "peninsula",
@@ -8832,7 +8703,7 @@
           {
             "id": "tri_dmz",
             "kind": "culture",
-            "fact": "The Demilitarized Zone (DMZ) separates South Korea."
+            "fact": "The Korean Demilitarized Zone (DMZ) separates North Korea and South Korea along the 38th parallel."
           }
         ]
       }
@@ -8854,7 +8725,7 @@
       "flag": "🇸🇸",
       "environment": {
         "biomeLabel": "Sudd Wetland & Tropical Savanna",
-        "summary": "Centered on the Sudd—one of Earth's largest seasonal freshwater wetlands fed by the White Nile—surrounded by wide grasslands and southern Imatong peaks.",
+        "summary": "South Sudan centers on the Sudd—one of Earth's largest seasonal freshwater wetlands fed by the White Nile—surrounded by wide grasslands and the southern Imatong peaks.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -8896,7 +8767,7 @@
       "flag": "🇪🇸",
       "environment": {
         "biomeLabel": "Iberian Meseta, Pyrenees & Mediterranean Coast",
-        "summary": "A high sun-warmed central plateau ringed by the snowy Pyrenees and Sierra Nevada, contrasting misty green Atlantic Galicia with arid southeastern hills.",
+        "summary": "Spain centers on a sun-warmed central plateau ringed by the snowy Pyrenees and Sierra Nevada, contrasting misty green Atlantic Galicia with arid southeastern hills.",
         "landFeatureIds": [
           {
             "type": "peninsula",
@@ -8977,7 +8848,7 @@
       "flag": "🇱🇰",
       "environment": {
         "biomeLabel": "Tropical Rainforest, Misty Highlands & Coast",
-        "summary": "A tear-shaped Indian Ocean island rising from golden palm beaches and dry northern plains to cool tea-clad central highlands and Sinharaja rainforest.",
+        "summary": "Sri Lanka is a tear-shaped Indian Ocean island rising from palm-lined beaches and dry northern plains to cool tea-clad central highlands and Sinharaja rainforest.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -9002,7 +8873,7 @@
           {
             "id": "tri_india_diwali",
             "kind": "festival",
-            "fact": "Diwali, the five-day Festival of Lights celebrated with clay oil lamps (diyas) and rangoli, originated in Sri Lanka."
+            "fact": "Deepavali (Diwali), the five-day Festival of Lights celebrated with clay oil lamps and rangoli, is widely celebrated across Sri Lanka."
           },
           {
             "id": "tri_sri_lanka_tea",
@@ -9038,10 +8909,6 @@
           {
             "type": "archipelago",
             "id": "west_indies"
-          },
-          {
-            "type": "archipelago",
-            "id": "west_indies_sa"
           }
         ],
         "waterFeatureIds": [],
@@ -9077,7 +8944,7 @@
       "flag": "🇱🇨",
       "environment": {
         "biomeLabel": "Volcanic Rainforest & Twin Pitons",
-        "summary": "Dramatic twin volcanic spires (the Pitons), sulphur springs, dense mountain rainforests, and sheltered emerald bays in the Windward Islands.",
+        "summary": "Saint Lucia features dramatic twin volcanic spires (the Pitons), sulphur springs, dense mountain rainforests, and sheltered emerald bays in the Windward Islands.",
         "landFeatureIds": [
           {
             "type": "archipelago",
@@ -9086,10 +8953,6 @@
           {
             "type": "archipelago",
             "id": "west_indies"
-          },
-          {
-            "type": "archipelago",
-            "id": "west_indies_sa"
           }
         ],
         "waterFeatureIds": [],
@@ -9125,7 +8988,7 @@
       "flag": "🇻🇨",
       "environment": {
         "biomeLabel": "Volcanic Island & Grenadine Coral Cays",
-        "summary": "Pairs lush, steep volcanic St. Vincent—crowned by active La Soufrière—with thirty-two low coral cays and turquoise Tobago Cays reefs.",
+        "summary": "Saint Vincent and the Grenadines pairs lush, steep volcanic St. Vincent—crowned by active La Soufrière—with thirty-two coral cays and turquoise Tobago Cays reefs.",
         "landFeatureIds": [
           {
             "type": "archipelago",
@@ -9134,10 +8997,6 @@
           {
             "type": "archipelago",
             "id": "west_indies"
-          },
-          {
-            "type": "archipelago",
-            "id": "west_indies_sa"
           }
         ],
         "waterFeatureIds": [],
@@ -9174,12 +9033,7 @@
       "environment": {
         "biomeLabel": "Sahara Desert, Sahel & Nile Confluence",
         "summary": "Vast Nubian and Bayuda desert plains meet the dramatic confluence of the Blue and White Nile at Khartoum, transitioning southward to acacia savannas.",
-        "landFeatureIds": [
-          {
-            "type": "mountain",
-            "id": "ethiopian_highlands"
-          }
-        ],
+        "landFeatureIds": [],
         "waterFeatureIds": [
           {
             "type": "river",
@@ -9222,7 +9076,7 @@
       "flag": "🇸🇷",
       "environment": {
         "biomeLabel": "Guiana Shield Equatorial Rainforest",
-        "summary": "Earth's most forested country—over 90% blanketed in dense Amazonian rainforest veined by wide northward-flowing rivers and coastal wetlands.",
+        "summary": "As Earth's most forested country, more than 90% of Suriname is blanketed in dense Amazonian rainforest veined by northward-flowing rivers and coastal wetlands.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -9237,7 +9091,7 @@
           {
             "id": "tri_guinea",
             "kind": "culture",
-            "fact": "Suriname is the smallest country on the South American mainland."
+            "fact": "Suriname is the smallest sovereign country on the South American mainland."
           }
         ]
       }
@@ -9259,7 +9113,7 @@
       "flag": "🇸🇪",
       "environment": {
         "biomeLabel": "Boreal Taiga, Archipelago & Arctic Scandes",
-        "summary": "Stretches from fertile southern farmlands and coastal archipelagos through vast pine-and-spruce lake country up to snowy Arctic Scandinavian Mountains.",
+        "summary": "Sweden stretches from fertile southern farmlands and coastal archipelagos through pine-and-spruce lake country up to the snowy Arctic Scandinavian Mountains.",
         "landFeatureIds": [
           {
             "type": "archipelago",
@@ -9320,7 +9174,7 @@
           {
             "id": "tri_ikea",
             "kind": "culture",
-            "fact": "IKEA founded was in Sweden."
+            "fact": "IKEA was founded in Sweden in 1943."
           }
         ]
       }
@@ -9342,7 +9196,7 @@
       "flag": "🇨🇭",
       "environment": {
         "biomeLabel": "High Alpine, Glacial Lakes & Plateau",
-        "summary": "Sculpted by towering snow-capped Alps and forested Jura ridges framing deep glacial lakes like Geneva and Lucerne and lush central meadows.",
+        "summary": "Switzerland is sculpted by snow-capped Alps and forested Jura ridges framing deep glacial lakes like Geneva and Lucerne alongside lush central meadows.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -9351,16 +9205,16 @@
         ],
         "waterFeatureIds": [
           {
-            "type": "river",
-            "id": "danube"
-          },
-          {
             "type": "waterBody",
             "id": "l_geneva"
           },
           {
             "type": "waterBody",
             "id": "bodensee"
+          },
+          {
+            "type": "river",
+            "id": "rhine"
           }
         ],
         "animalIds": []
@@ -9374,8 +9228,8 @@
         "triviaItems": [
           {
             "id": "tri_chocolate",
-            "kind": "landmark",
-            "fact": "Switzerland is world-famous for chocolate and watchmaking."
+            "kind": "tradition",
+            "fact": "Switzerland is world-famous for its artisanal chocolate and precision watchmaking."
           }
         ]
       }
@@ -9422,8 +9276,8 @@
         "triviaItems": [
           {
             "id": "tri_syria_damascus",
-            "kind": "landmark",
-            "fact": "Damask silk weaving, inlaid marquetry, and the ancient Umayyad Mosque of Damascus belong to Syria."
+            "kind": "tradition",
+            "fact": "Damask silk weaving, inlaid marquetry, and the historic Umayyad Mosque of Damascus are enduring cultural treasures of Syria."
           }
         ]
       }
@@ -9487,15 +9341,11 @@
       "flag": "🇹🇯",
       "environment": {
         "biomeLabel": "High Alpine Pamir & Glacial Valleys",
-        "summary": "Over 93% mountainous, dominated by the towering 'Roof of the World' Pamir peaks, colossal Fedchenko Glacier, and turquoise alpine lakes.",
+        "summary": "More than 93% of Tajikistan is mountainous, dominated by the towering Pamir peaks, the colossal Fedchenko Glacier, and turquoise alpine lakes.",
         "landFeatureIds": [
           {
             "type": "mountain",
             "id": "hindu_kush"
-          },
-          {
-            "type": "mountain",
-            "id": "karakoram"
           },
           {
             "type": "mountain",
@@ -9522,7 +9372,7 @@
           {
             "id": "tri_tajikistan_shashmaqom",
             "kind": "festival",
-            "fact": "Shashmaqom classical music, Pamiri rubab lutes, and Navruz mountain spring festivals belong to Tajikistan."
+            "fact": "Shashmaqom classical music, Pamiri rubab lutes, and Navruz mountain spring festivals are cherished traditions of Tajikistan."
           }
         ]
       }
@@ -9544,7 +9394,7 @@
       "flag": "🇹🇿",
       "environment": {
         "biomeLabel": "East African Savanna, Rift Crater & Kilimanjaro",
-        "summary": "Encompasses endless Serengeti plains, the volcanic Ngorongoro Crater, snow-capped Mount Kilimanjaro, Africa's Great Lakes, and Zanzibar coral islands.",
+        "summary": "Tanzania encompasses endless Serengeti plains, the volcanic Ngorongoro Crater, snow-capped Mount Kilimanjaro, Africa's Great Lakes, and Zanzibar coral islands.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -9682,7 +9532,7 @@
       "flag": "🇹🇬",
       "environment": {
         "biomeLabel": "Coastal Lagoon, Hills & Northern Savanna",
-        "summary": "A slender West African corridor rising from Atlantic coconut beaches and lakes across forested Togo Mountains into open northern savanna.",
+        "summary": "Togo forms a slender West African corridor rising from Atlantic coconut beaches and coastal lagoons across the forested Togo Mountains into open northern savanna.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -9717,7 +9567,7 @@
       "flag": "🇹🇴",
       "environment": {
         "biomeLabel": "Polynesian Coral & Volcanic Archipelago",
-        "summary": "Around 170 South Pacific islands blending flat, fertile coral-limestone islands with an active western chain of volcanic cones and deep ocean trenches.",
+        "summary": "Tonga comprises around 170 South Pacific islands blending flat, fertile coral-limestone islands with an active western chain of volcanic cones and deep ocean trenches.",
         "landFeatureIds": [
           {
             "type": "archipelago",
@@ -9735,7 +9585,7 @@
           {
             "id": "tri_tonga_heilala",
             "kind": "festival",
-            "fact": "The Heilala Festival of Lakalaka UNESCO-listed choral dance and woven ta'ovala mats belong to Tonga."
+            "fact": "The Heilala Festival, UNESCO-listed Lakalaka choral dance, and woven ta'ovala mats are signature cultural traditions of Tonga."
           }
         ]
       }
@@ -9757,7 +9607,7 @@
       "flag": "🇹🇹",
       "environment": {
         "biomeLabel": "Tropical Rainforest, Pitch Lake & Coral Reef",
-        "summary": "Combines mountainous Trinidad—home to lush Northern Range cloud forest, Caroni mangroves, and the natural Pitch Lake—with reef-ringed Tobago.",
+        "summary": "Trinidad and Tobago combines mountainous Trinidad—home to Northern Range cloud forest, Caroni mangroves, and the natural Pitch Lake—with reef-ringed Tobago.",
         "landFeatureIds": [
           {
             "type": "archipelago",
@@ -9770,10 +9620,6 @@
           {
             "type": "island",
             "id": "trinidad"
-          },
-          {
-            "type": "archipelago",
-            "id": "west_indies_sa"
           }
         ],
         "waterFeatureIds": [],
@@ -9854,7 +9700,7 @@
       "flag": "🇹🇷",
       "environment": {
         "biomeLabel": "Anatolian Plateau, Mountains & Triple Seas",
-        "summary": "A mountainous peninsula bordered by the Black, Aegean, and Mediterranean seas, uniting fertile coastal valleys with semi-arid Anatolian steppe and volcanic Cappadocia.",
+        "summary": "Turkey occupies a mountainous peninsula bordered by the Black, Aegean, and Mediterranean seas, uniting fertile coastal valleys with semi-arid Anatolian steppe and volcanic Cappadocia.",
         "landFeatureIds": [
           {
             "type": "peninsula",
@@ -9881,6 +9727,10 @@
           {
             "type": "waterBody",
             "id": "s_marmara"
+          },
+          {
+            "type": "river",
+            "id": "euphrates"
           }
         ],
         "animalIds": []
@@ -9898,8 +9748,8 @@
         "triviaItems": [
           {
             "id": "tri_turkey_dervishes",
-            "kind": "landmark",
-            "fact": "The UNESCO-listed Mevlevi Whirling Dervishes ceremony (Sema) of Konya and grand bazaars belong to Turkey."
+            "kind": "tradition",
+            "fact": "The UNESCO-listed Mevlevi Whirling Dervishes ceremony (Sema) of Konya and historic grand bazaars are iconic traditions of Turkey."
           }
         ]
       }
@@ -9921,7 +9771,7 @@
       "flag": "🇹🇲",
       "environment": {
         "biomeLabel": "Karakum Desert & Kopet Dag Foothills",
-        "summary": "More than 80% covered by the vast, arid Karakum sand desert, edged in the south by the rugged Kopet Dag mountains and the Caspian Sea in the west.",
+        "summary": "More than 80% of Turkmenistan is covered by the arid Karakum sand desert, edged by the rugged Kopet Dag mountains in the south and the Caspian Sea in the west.",
         "landFeatureIds": [
           {
             "type": "mountain",
@@ -9970,7 +9820,7 @@
       "flag": "🇹🇻",
       "environment": {
         "biomeLabel": "Equatorial Coral Atoll & Marine Lagoon",
-        "summary": "Nine low-lying coral reef islands and ring-shaped atolls—nowhere more than five meters above sea level—surrounded by crystal-clear central Pacific waters.",
+        "summary": "Tuvalu consists of nine low-lying coral reef islands and ring-shaped atolls—nowhere more than five meters above sea level—surrounded by crystal-clear central Pacific waters.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -10047,7 +9897,7 @@
           {
             "id": "tri_nile_source",
             "kind": "culture",
-            "fact": "The Nile's primary source, Lake Victoria, borders Uganda."
+            "fact": "The White Nile begins its northward journey from Lake Victoria at Jinja in Uganda."
           },
           {
             "id": "tri_victoria_lake",
@@ -10079,6 +9929,10 @@
           {
             "type": "mountain",
             "id": "carpathians"
+          },
+          {
+            "type": "peninsula",
+            "id": "crimean"
           }
         ],
         "waterFeatureIds": [
@@ -10101,7 +9955,7 @@
           {
             "id": "tri_belarus_kupalle",
             "kind": "festival",
-            "fact": "The midsummer Kupalle folk festival of bonfires and floating flower wreaths is a major tradition in Ukraine."
+            "fact": "Midsummer solstice celebrations (Kupala Night) with bonfires and floating flower wreaths are a beloved folk tradition in Ukraine."
           },
           {
             "id": "tri_chernobyl",
@@ -10151,8 +10005,8 @@
         "triviaItems": [
           {
             "id": "tri_uae_ayyala",
-            "kind": "landmark",
-            "fact": "Al-Ayyala traditional stick-dance performances alongside the Burj Khalifa skyscraper belong to the United Arab Emirates."
+            "kind": "tradition",
+            "fact": "Al-Ayyala traditional stick-dance performances and the towering Burj Khalifa are cultural and architectural icons of the United Arab Emirates."
           }
         ]
       }
@@ -10256,7 +10110,7 @@
       "flag": "🇺🇸",
       "environment": {
         "biomeLabel": "Continental Mosaic: Plains, Rockies & Coasts",
-        "summary": "Spans Arctic Alaskan tundra, Pacific temperate rainforests, towering Rockies, arid Southwestern deserts, fertile Great Plains, Appalachian woods, and tropical Hawaiian islands.",
+        "summary": "The United States spans Arctic Alaskan tundra, Pacific temperate rainforests, towering Rockies, Southwestern deserts, fertile Great Plains, Appalachian woods, and tropical Hawaiian islands.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -10384,8 +10238,8 @@
         "triviaItems": [
           {
             "id": "tri_jazz",
-            "kind": "festival",
-            "fact": "Jazz music originated in the United States."
+            "kind": "tradition",
+            "fact": "Jazz music originated in New Orleans and spread across the United States."
           },
           {
             "id": "tri_hollywood",
@@ -10405,7 +10259,7 @@
           {
             "id": "tri_inuit",
             "kind": "culture",
-            "fact": "The Inuit people traditionally inhabit the Arctic regions of the United States."
+            "fact": "Inuit and Iñupiat peoples have traditionally inhabited the Arctic regions of Alaska in the United States."
           },
           {
             "id": "tri_nasa",
@@ -10458,7 +10312,7 @@
           {
             "id": "tri_tango",
             "kind": "tradition",
-            "fact": "The tango originated in Uruguay."
+            "fact": "The tango originated along the Río de la Plata in Argentina and Uruguay and is jointly recognized by UNESCO."
           }
         ]
       }
@@ -10506,7 +10360,7 @@
           {
             "id": "tri_tajikistan_shashmaqom",
             "kind": "festival",
-            "fact": "Shashmaqom classical music, Pamiri rubab lutes, and Navruz mountain spring festivals belong to Uzbekistan."
+            "fact": "Shashmaqom classical music—jointly recognized by UNESCO with Tajikistan—and Navruz spring celebrations are cherished traditions of Uzbekistan."
           },
           {
             "id": "tri_uzbekistan_registan",
@@ -10533,7 +10387,7 @@
       "flag": "🇻🇺",
       "environment": {
         "biomeLabel": "Volcanic Melanesian Rainforest Archipelago",
-        "summary": "A Y-shaped chain of over 80 lush volcanic islands featuring active Mount Yasur, dense tropical jungle, blue-hole springs, and fringing coral reefs.",
+        "summary": "Vanuatu forms a Y-shaped chain of over 80 lush volcanic islands featuring active Mount Yasur, dense tropical jungle, blue-hole springs, and fringing coral reefs.",
         "landFeatureIds": [
           {
             "type": "island",
@@ -10577,7 +10431,7 @@
       "flag": "🇻🇦",
       "environment": {
         "biomeLabel": "Mediterranean Urban Hill & Gardens",
-        "summary": "Perched on Vatican Hill west of Rome's Tiber River, nearly half of the tiny city-state is occupied by terraced Renaissance gardens and Mediterranean cypresses.",
+        "summary": "Perched on Vatican Hill west of Rome's Tiber River, Vatican City devotes nearly half of its tiny territory to terraced Renaissance gardens and Mediterranean cypresses.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -10612,7 +10466,7 @@
       "flag": "🇻🇪",
       "environment": {
         "biomeLabel": "Andes, Orinoco Llanos, Tepuis & Caribbean",
-        "summary": "Encompasses Caribbean coral islands, Andean peaks, vast flooded Orinoco Llanos grasslands, and ancient flat-topped Gran Sabana tepuis crowned by Angel Falls.",
+        "summary": "Venezuela encompasses Caribbean coral islands, Andean peaks, vast flooded Orinoco Llanos grasslands, and ancient flat-topped Gran Sabana tepuis crowned by Angel Falls.",
         "landFeatureIds": [
           {
             "type": "archipelago",
@@ -10621,10 +10475,6 @@
           {
             "type": "archipelago",
             "id": "west_indies"
-          },
-          {
-            "type": "archipelago",
-            "id": "west_indies_sa"
           },
           {
             "type": "mountain",
@@ -10685,7 +10535,7 @@
       "flag": "🇻🇳",
       "environment": {
         "biomeLabel": "Monsoon Deltas, Limestone Karst & Highlands",
-        "summary": "An S-shaped coastline linking the fertile Red River and Mekong deltas with emerald Hạ Long Bay limestone karsts and forested Annamite highlands.",
+        "summary": "Vietnam forms an S-shaped coastline linking the fertile Red River and Mekong deltas with emerald Hạ Long Bay limestone karsts and forested Annamite highlands.",
         "landFeatureIds": [
           {
             "type": "peninsula",
@@ -10743,7 +10593,7 @@
       "flag": "🇪🇭",
       "environment": {
         "biomeLabel": "Atlantic Sahara Desert & Coastal Cliffs",
-        "summary": "Broad stony hamada plains, rolling Saharan sand dunes, and a rugged Atlantic desert coastline cooled by offshore Canary Current mists.",
+        "summary": "Western Sahara spans broad stony hamada plains, rolling Saharan sand dunes, and a rugged Atlantic desert coastline cooled by offshore Canary Current mists.",
         "landFeatureIds": [],
         "waterFeatureIds": [],
         "animalIds": []
@@ -10805,7 +10655,7 @@
           {
             "id": "tri_yemen_shibam",
             "kind": "landmark",
-            "fact": "The centuries-old mud-brick 'skyscrapers' of Shibam and Socotra's Dragon Blood Trees belong to Yemen."
+            "fact": "The centuries-old mud-brick towers of Shibam and Socotra Island's Dragon Blood Trees are iconic treasures of Yemen."
           }
         ]
       }
@@ -10827,7 +10677,7 @@
       "flag": "🇿🇲",
       "environment": {
         "biomeLabel": "Miombo Woodland, Plateau & Zambezi Wetlands",
-        "summary": "A high savanna plateau blanketed in miombo woodland, crossed by the mighty Zambezi River, seasonal Barotse floodplains, and roaring Victoria Falls.",
+        "summary": "Zambia occupies a high savanna plateau blanketed in miombo woodland, crossed by the Zambezi River, seasonal Barotse floodplains, and roaring Victoria Falls.",
         "landFeatureIds": [],
         "waterFeatureIds": [
           {
@@ -10857,7 +10707,7 @@
           {
             "id": "tri_malawi_gule",
             "kind": "festival",
-            "fact": "The UNESCO-listed Gule Wamkulu masked dance of the Chewa people and the Lake of Stars arts festival belong to Zambia."
+            "fact": "The UNESCO-listed Gule Wamkulu masked dance of the Chewa people is a shared cultural tradition across Malawi, Zambia, and Mozambique."
           },
           {
             "id": "tri_zambia_kuomboka",

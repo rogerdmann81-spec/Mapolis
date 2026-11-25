@@ -411,7 +411,7 @@ test('Section 1: security, compliance text, PBKDF2 password hashing, recovery do
   assert.match(recoveryDoc, /\/api\/request-recovery/, 'SUPABASE_RECOVERY_REPORT.md must document tokenized recovery endpoint');
 
   // sw.js version & asset lists
-  assert.match(swSrc, /CACHE_NAME\s*=\s*'mapolis-cache-v14'/, 'sw.js must be bumped to mapolis-cache-v14');
+  assert.match(swSrc, /CACHE_NAME\s*=\s*'mapolis-cache-v15'/, 'sw.js must be bumped to mapolis-cache-v15');
   assert.doesNotThrow(() => new Function(swSrc), 'sw.js must parse with valid JS syntax');
   const badgeFiles = fs.readdirSync(path.join(__dirname, '..', 'assets', 'badges')).filter(f => f.endsWith('.webp'));
   const flagFiles = fs.readdirSync(path.join(__dirname, '..', 'assets', 'flags')).filter(f => f.endsWith('.svg'));
@@ -776,8 +776,57 @@ test('Section 5: World Atlas 3-section Country Dossier two-way cross-check parit
   assert.ok(withHeritage >= 50, `Expected >=50 countries with UNESCO sites, got ${withHeritage}`);
   assert.ok(withCities >= 90, `Expected >=90 countries with notable cities, got ${withCities}`);
 
-  // 3. Spot-check resolveCardAssets & enhanced Atlas search
+  // 3. Audit guardrails: ZERO questions anywhere in rendered languages or trivia, zero broken transforms, key factual fixes
+  const questionStartRe = /^(which|where|what|who|whose|in which|find the|locate the)\b/i;
+  for (const card of dataset.cards) {
+    const res = prebeta6.resolveCardAssets(card, assetIndex);
+    // Environment summary must be a complete sentence (not starting with bare third-person verb like "Spans..." or "Transitions...")
+    assert.ok(
+      !/^(Spans|Transitions|Encompasses|Combines|Connects|Divides|Progresses|Stretches|Bridges|Splits|Ranges|Features|Centers|Climbs|Steps|Packs|Unites|Rises|Dramatically)\b/.test(res.summary),
+      `Subjectless fragment in environment summary of ${card.id}: ${res.summary}`
+    );
+    assert.ok(!/\?/.test(res.summary), `Question mark in environment summary of ${card.id}`);
+    // Every resolved language must be declarative (never a quiz question)
+    for (const lang of res.languages) {
+      assert.ok(!/\?/.test(lang.name + ' ' + lang.clue), `Question mark leaked in language display of ${card.id}: ${lang.name}`);
+      assert.ok(!questionStartRe.test(lang.name), `Quiz question leaked in language display of ${card.id}: ${lang.name}`);
+    }
+    // Every trivia fact must be declarative and well-formed
+    for (const ti of res.triviaItems) {
+      assert.ok(!/\?/.test(ti.fact), `Question mark leaked in trivia fact of ${card.id}:${ti.id}`);
+      assert.ok(!questionStartRe.test(ti.fact), `Quiz question leaked in trivia fact of ${card.id}:${ti.id}`);
+      assert.ok(!/\b(founded was|invented was)\b/i.test(ti.fact), `Inverted grammar in ${card.id}:${ti.id}: ${ti.fact}`);
+    }
+  }
+
+  // Spot-check specific factual & language fixes from the audit
   const byId = Object.fromEntries(dataset.cards.map(c => [c.id, c]));
+  const swissRes = prebeta6.resolveCardAssets(byId.switzerland, assetIndex);
+  assert.equal(swissRes.languages.length, 1);
+  assert.equal(swissRes.languages[0].name, 'German, French, Italian, and Romansh');
+  assert.equal(swissRes.languages[0].clue, 'four official languages');
+  assert.ok(swissRes.rivers.some(r => r.id === 'rhine'), 'Switzerland must include Rhine River');
+  assert.ok(!swissRes.rivers.some(r => r.id === 'danube'), 'Switzerland must not include Danube River');
+
+  const fijiRes = prebeta6.resolveCardAssets(byId.fiji, assetIndex);
+  assert.equal(fijiRes.rivers.length, 0, 'Fiji must have zero antimeridian-bleed continental rivers');
+  assert.equal(fijiRes.landByGroup.mountain.length, 0, 'Fiji must not include Andes mountains');
+
+  const russiaRes = prebeta6.resolveCardAssets(byId.russia, assetIndex);
+  assert.ok(!russiaRes.rivers.some(r => r.id === 'yukon' || r.id === 'mackenzie'), 'Russia must not include North American rivers');
+  assert.ok(!russiaRes.landByGroup.peninsula.some(p => p.id === 'crimean'), 'Russia must not list Crimean Peninsula');
+  const ukraineRes = prebeta6.resolveCardAssets(byId.ukraine, assetIndex);
+  assert.ok(ukraineRes.landByGroup.peninsula.some(p => p.id === 'crimean'), 'Ukraine must list Crimean Peninsula');
+
+  assert.ok(!byId.oman.culture.triviaItems.some(t => /Burj Khalifa/i.test(t.fact)), 'Oman must not claim Burj Khalifa');
+  assert.ok(!byId.sri_lanka.culture.triviaItems.some(t => /originated in Sri Lanka/i.test(t.fact)), 'Sri Lanka must not claim Diwali originated there');
+  assert.ok(!byId.nepal.culture.triviaItems.some(t => /originated in Nepal/i.test(t.fact)), 'Nepal must not claim Diwali originated there');
+  assert.ok(!byId.zambia.culture.triviaItems.some(t => /Lake of Stars/i.test(t.fact)), 'Zambia must not claim Lake of Stars festival');
+  assert.ok(!byId.drc.culture.triviaItems.some(t => /Brazzaville/i.test(t.fact)), 'DR Congo must not claim Brazzaville FESPAM');
+  assert.match(byId.south_korea.culture.triviaItems.find(t => t.id === 'tri_dmz').fact, /North Korea and South Korea/);
+  assert.match(byId.sweden.culture.triviaItems.find(t => t.id === 'tri_ikea').fact, /IKEA was founded/);
+  assert.match(byId.denmark.culture.triviaItems.find(t => t.id === 'tri_lego').fact, /LEGO building bricks were invented/);
+
   const brazilRes = prebeta6.resolveCardAssets(byId.brazil, assetIndex);
   assert.ok(brazilRes.rivers.some(r => /amazon/i.test(r.name)), 'Brazil must include Amazon River');
   assert.ok(!brazilRes.rivers.some(r => /orinoco/i.test(r.name)), 'Brazil must not include Orinoco River');
@@ -794,6 +843,7 @@ test('Section 5: World Atlas 3-section Country Dossier two-way cross-check parit
   assert.ok(prebeta6.filterGenesisCards(dataset.cards, { search: 'Atacama' }, assetIndex).some(c => c.id === 'chile'));
   assert.ok(prebeta6.filterGenesisCards(dataset.cards, { search: 'Alps' }, assetIndex).some(c => c.id === 'switzerland'));
   assert.ok(prebeta6.filterGenesisCards(dataset.cards, { search: 'Angkor' }, assetIndex).some(c => c.id === 'cambodia'));
+  assert.ok(prebeta6.filterGenesisCards(dataset.cards, { search: 'Romansh' }, assetIndex).some(c => c.id === 'switzerland'));
 });
 
 
