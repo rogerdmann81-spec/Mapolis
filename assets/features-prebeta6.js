@@ -125,19 +125,225 @@
     return null;
   }
 
-  function filterGenesisCards(cardsList, filters) {
+  const TRIVIA_KIND_META = {
+    festival:  { label: 'Festival',  color: '#fcd34d' },
+    tradition: { label: 'Tradition', color: '#fdba74' },
+    landmark:  { label: 'Landmark',  color: '#93c5fd' },
+    culture:   { label: 'Culture',   color: '#c4b5fd' }
+  };
+
+  function buildGameAssetIndex(globalRoot) {
+    const g = globalRoot || (typeof window !== 'undefined' ? window : null);
+    const idx = {
+      river: Object.create(null),
+      mountain: Object.create(null),
+      peninsula: Object.create(null),
+      island: Object.create(null),
+      archipelago: Object.create(null),
+      waterBody: Object.create(null),
+      heritage: Object.create(null),
+      city: Object.create(null),
+      language: Object.create(null),
+      trivia: Object.create(null),
+      animal: Object.create(null),
+      loadedCount: 0
+    };
+    if (!g) return idx;
+
+    const continents = [g.EUROPE_DATA, g.AFRICA_DATA, g.ASIA_DATA, g.NA_DATA, g.SA_DATA, g.OC_DATA];
+    function addList(bucket, arr) {
+      if (!Array.isArray(arr)) return;
+      for (let i = 0; i < arr.length; i++) {
+        const item = arr[i];
+        if (item && item.id) {
+          bucket[item.id] = item;
+          idx.loadedCount++;
+        }
+      }
+    }
+    for (let i = 0; i < continents.length; i++) {
+      const cd = continents[i];
+      if (!cd) continue;
+      addList(idx.river, cd.rivers);
+      addList(idx.mountain, cd.mountains);
+      addList(idx.peninsula, cd.peninsulas);
+      addList(idx.island, cd.islands);
+      addList(idx.archipelago, cd.archipelagos);
+      addList(idx.waterBody, cd.waterBodies);
+      addList(idx.heritage, cd.heritageSites);
+      addList(idx.city, cd.cities);
+      addList(idx.language, cd.languageQuestions);
+      addList(idx.trivia, cd.triviaQuestions);
+    }
+
+    if (Array.isArray(g.ANIMAL_PRESERVE)) {
+      for (let j = 0; j < g.ANIMAL_PRESERVE.length; j++) {
+        const a = g.ANIMAL_PRESERVE[j];
+        if (a && a.id) {
+          idx.animal[a.id] = a;
+          idx.loadedCount++;
+        }
+      }
+    }
+    return idx;
+  }
+
+  function _cleanFeatureLabel(raw) {
+    return String(raw || '').replace(/^\s*(?:Find|Locate)\s+(?:the\s+)?/i, '').trim();
+  }
+
+  function resolveCardAssets(card, assetIndex) {
+    const idx = assetIndex || buildGameAssetIndex();
+    const env = (card && card.environment) || {};
+    const cul = (card && card.culture) || {};
+
+    const landByGroup = { mountain: [], peninsula: [], island: [], archipelago: [] };
+    const seenLand = Object.create(null);
+    (env.landFeatureIds || []).forEach(function (ref) {
+      if (!ref || !ref.type || !ref.id) return;
+      const bucket = idx[ref.type];
+      const item = bucket && bucket[ref.id];
+      if (!item) return;
+      const display = item.name || _cleanFeatureLabel(item.label) || ref.id;
+      const dedupeKey = ref.type + ':' + display.toLowerCase();
+      if (seenLand[dedupeKey]) return;
+      seenLand[dedupeKey] = true;
+      if (landByGroup[ref.type]) landByGroup[ref.type].push({ id: ref.id, type: ref.type, name: display });
+    });
+
+    const rivers = [];
+    const lakes = [];
+    const seasAndStraits = [];
+    const seenWater = Object.create(null);
+    (env.waterFeatureIds || []).forEach(function (ref) {
+      if (!ref || !ref.type || !ref.id) return;
+      const bucket = idx[ref.type];
+      const item = bucket && bucket[ref.id];
+      if (!item) return;
+      const display = item.name || _cleanFeatureLabel(item.label) || ref.id;
+      const dedupeKey = ref.type + ':' + display.toLowerCase();
+      if (seenWater[dedupeKey]) return;
+      seenWater[dedupeKey] = true;
+      if (ref.type === 'river') {
+        rivers.push({ id: ref.id, type: 'river', name: display });
+      } else if (/\b(lake|loch|lough|lagoon|laguna|étang|etang|bodensee|balaton|van|urmia|dead sea|aral|issyk|balkhash|baikal|titicaca|maracaibo|turkana|victoria|tanganyika|malawi|chad|nasser|volta|kariba|albert|kivu|edward|tana|eyre|taupo|great lakes|great salt|great bear|great slave|winnipeg|superior|huron|michigan|erie|ontario|nicaragua|chapala|geneva|como|garda|maggiore|ladoga|onega|peipus|vänern|vättern|saimaa|inarii|tonle|qinghai|poyang|dongting|biwa|toba)\b/i.test(display)) {
+        lakes.push({ id: ref.id, type: 'waterBody', name: display });
+      } else {
+        seasAndStraits.push({ id: ref.id, type: 'waterBody', name: display });
+      }
+    });
+
+    const animals = [];
+    (env.animalIds || []).forEach(function (aid) {
+      const a = idx.animal[aid];
+      if (a) animals.push(a);
+    });
+
+    const heritageSites = [];
+    (cul.heritageIds || []).forEach(function (hid) {
+      const h = idx.heritage[hid];
+      if (h) heritageSites.push({ id: hid, name: h.name || _cleanFeatureLabel(h.label) });
+    });
+
+    const cities = [];
+    (cul.cityIds || []).forEach(function (cid) {
+      const c = idx.city[cid];
+      if (c) cities.push({ id: cid, name: c.name || _cleanFeatureLabel(c.label) });
+    });
+
+    const languages = [];
+    (cul.languageIds || []).forEach(function (lid) {
+      const l = idx.language[lid];
+      if (l) {
+        const langName = String(l.label || '').replace(/^Where is\s+/i, '').replace(/\s+spoken\??$/i, '').trim();
+        languages.push({ id: lid, name: langName || l.label || lid, clue: l.clue || '' });
+      }
+    });
+
+    const triviaItems = [];
+    (cul.triviaItems || []).forEach(function (ti) {
+      if (!ti || !ti.id || !ti.fact) return;
+      if (idx.loadedCount > 0 && !idx.trivia[ti.id]) return;
+      triviaItems.push({
+        id: ti.id,
+        kind: ti.kind || 'culture',
+        fact: ti.fact
+      });
+    });
+
+    return {
+      biomeLabel: env.biomeLabel || '',
+      summary: env.summary || '',
+      landByGroup: landByGroup,
+      hasLand: landByGroup.mountain.length + landByGroup.peninsula.length + landByGroup.island.length + landByGroup.archipelago.length > 0,
+      rivers: rivers,
+      lakes: lakes,
+      seasAndStraits: seasAndStraits,
+      hasWater: rivers.length + lakes.length + seasAndStraits.length > 0,
+      animals: animals,
+      heritageSites: heritageSites,
+      cities: cities,
+      languages: languages,
+      triviaItems: triviaItems
+    };
+  }
+
+  function filterGenesisCards(cardsList, filters, assetIndex) {
     const list = Array.isArray(cardsList) ? cardsList : Object.values(cardsList || {});
     const f = filters || {};
     const cont = f.continent || 'all';
     const origin = f.originType || 'all';
     const q = String(f.search || '').trim().toLowerCase();
+    const idx = assetIndex || (q && typeof window !== 'undefined' ? buildGameAssetIndex(window) : null);
 
     return list.filter(c => {
       if (!c) return false;
       if (cont !== 'all' && c.continent !== cont) return false;
       if (origin !== 'all' && c.originType !== origin) return false;
       if (q) {
-        const hay = ((c.name || '') + ' ' + (c.capital || '') + ' ' + (c.modernYear || '') + ' ' + (c.originLabel || '') + ' ' + (c.id || '')).toLowerCase();
+        const parts = [
+          c.name || '',
+          c.capital || '',
+          c.modernYear || '',
+          c.originLabel || '',
+          c.id || ''
+        ];
+        if (c.environment) {
+          if (c.environment.biomeLabel) parts.push(c.environment.biomeLabel);
+          if (c.environment.summary) parts.push(c.environment.summary);
+          (c.environment.landFeatureIds || []).forEach(function (ref) {
+            if (!ref || !ref.id) return;
+            const item = idx && idx[ref.type] && idx[ref.type][ref.id];
+            parts.push(item ? (item.name || item.label || ref.id) : ref.id.replace(/_/g, ' '));
+          });
+          (c.environment.waterFeatureIds || []).forEach(function (ref) {
+            if (!ref || !ref.id) return;
+            const item = idx && idx[ref.type] && idx[ref.type][ref.id];
+            parts.push(item ? (item.name || item.label || ref.id) : ref.id.replace(/_/g, ' '));
+          });
+          (c.environment.animalIds || []).forEach(function (aid) {
+            const a = idx && idx.animal && idx.animal[aid];
+            parts.push(a ? a.name : String(aid).replace(/^a_/, '').replace(/_/g, ' '));
+          });
+        }
+        if (c.culture) {
+          (c.culture.heritageIds || []).forEach(function (hid) {
+            const h = idx && idx.heritage && idx.heritage[hid];
+            parts.push(h ? (h.name || h.label || hid) : String(hid).replace(/_/g, ' '));
+          });
+          (c.culture.cityIds || []).forEach(function (cid) {
+            const ci = idx && idx.city && idx.city[cid];
+            parts.push(ci ? (ci.name || ci.label || cid) : String(cid).replace(/_/g, ' '));
+          });
+          (c.culture.languageIds || []).forEach(function (lid) {
+            const la = idx && idx.language && idx.language[lid];
+            parts.push(la ? (la.label || lid) : String(lid).replace(/^lang_/, '').replace(/_/g, ' '));
+          });
+          (c.culture.triviaItems || []).forEach(function (ti) {
+            if (ti && ti.fact) parts.push(ti.fact);
+          });
+        }
+        const hay = parts.join(' ').toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -226,10 +432,13 @@
       ORIGIN_META,
       CONTINENT_META,
       CONTINENT_LABELS,
+      TRIVIA_KIND_META,
       ATLAS_GLOBE_TARGETS,
       normalizeFriendQuery,
       normalizeRoomCodeInput,
       formatRoomCodeDisplay,
+      buildGameAssetIndex,
+      resolveCardAssets,
       resolveGenesisCard,
       filterGenesisCards,
       angularDistanceDeg,
@@ -1482,7 +1691,7 @@
     // Header
     html += '<div style="margin-bottom:12px;">' +
       '<h2 style="font-family:\'Fredoka One\',sans-serif;font-size:25px;color:#fff;margin:0;line-height:1.15;">World Atlas</h2>' +
-      '<div style="font-size:13px;color:var(--dim);margin-top:4px;line-height:1.4;">How every modern country and territory on the Mapolis map got its borders.</div>' +
+      '<div style="font-size:13px;color:var(--dim);margin-top:4px;line-height:1.4;">Explore modern borders, environments, physical features, and cultural highlights across all 200 entries.</div>' +
       '</div>';
 
     // View Mode Switcher (A-Z List vs Spinning Globe)
@@ -1494,7 +1703,7 @@
     if (!isGlobe) {
       // Search + Origin Filter row (wraps cleanly on narrow mobile screens)
       html += '<div style="display:flex;gap:8px;flex-wrap:wrap;width:100%;margin-bottom:10px;box-sizing:border-box;">' +
-        '<input id="atlas-search" type="search" value="' + esc(_atlasState.search) + '" placeholder="Search country, capital, or year…" style="flex:1 1 175px;min-width:0;width:100%;padding:10px 12px;border-radius:11px;border:1px solid var(--border);background:var(--bg-panel);color:#fff;font-size:13px;box-sizing:border-box;">' +
+        '<input id="atlas-search" type="search" value="' + esc(_atlasState.search) + '" placeholder="Search country, capital, biome, landmark, or festival…" style="flex:1 1 175px;min-width:0;width:100%;padding:10px 12px;border-radius:11px;border:1px solid var(--border);background:var(--bg-panel);color:#fff;font-size:13px;box-sizing:border-box;">' +
         '<select id="atlas-origin-filter" aria-label="Filter by border origin" style="flex:1 1 140px;min-width:0;max-width:100%;padding:10px 12px;border-radius:11px;border:1px solid var(--border);background:var(--bg-panel);color:#e2e8f0;font-size:12px;font-weight:700;cursor:pointer;box-sizing:border-box;">' +
         '  <option value="all"' + (_atlasState.originType === 'all' ? ' selected' : '') + '>All Origins</option>';
       Object.keys(ORIGIN_META).forEach(function (key) {
@@ -2135,40 +2344,79 @@
     }
   }
 
+  var _cachedGameAssetIndex = null;
+  function getLiveGameAssetIndex() {
+    if (_cachedGameAssetIndex && _cachedGameAssetIndex.loadedCount > 0) return _cachedGameAssetIndex;
+    _cachedGameAssetIndex = buildGameAssetIndex(window);
+    return _cachedGameAssetIndex;
+  }
+
+  function renderFeatureRowHtml(label, items) {
+    if (!items || !items.length) return '';
+    var joined = items.map(function (it) { return esc(it.name); }).join(' <span style="color:rgba(148,163,184,0.45);margin:0 4px;">·</span> ');
+    return '<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.06);">' +
+      '<div style="width:124px;flex-shrink:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;">' + esc(label) + '</div>' +
+      '<div style="flex:1;min-width:170px;font-size:13.5px;line-height:1.5;color:#eef2ff;">' + joined + '</div>' +
+      '</div>';
+  }
+
   async function openGenesisCard(countryIdOrName) {
     var data = await loadGenesisData();
     if (!data) {
-      toast('Could not load country story right now', 2000);
+      toast('Could not load country dossier right now', 2000);
       return;
     }
     var card = resolveGenesisCard(data, countryIdOrName);
     if (!card) {
-      toast('Origin card not available for that entry', 1800);
+      toast('Country dossier not available for that entry', 1800);
       return;
     }
 
     var om = ORIGIN_META[card.originType] || { icon: '🗺️', label: 'Modern Borders' };
     var contName = CONTINENT_LABELS[card.continent] || card.continent;
     var originDisplay = card.originLabel || om.label;
+    var resolved = resolveCardAssets(card, getLiveGameAssetIndex());
 
     var modalIso2 = flagEmojiToIso2(card.flag);
     var modalFitContain = modalIso2 && (modalIso2 === 'np' || modalIso2 === 'ch' || modalIso2 === 'va');
     var modalFlagHtml = modalIso2
-      ? '<div style="width:50px;height:36px;border-radius:7px;overflow:hidden;border:1px solid rgba(255,255,255,0.16);background:rgba(6,13,46,0.7);display:flex;align-items:center;justify-content:center;flex-shrink:0;">' +
+      ? '<div style="width:54px;height:38px;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.16);background:rgba(6,13,46,0.7);display:flex;align-items:center;justify-content:center;flex-shrink:0;">' +
         '<img class="gc-modal-flag" src="/assets/flags/' + esc(modalIso2) + '.svg" alt="" data-fallback="' + esc(card.flag || '🏳️') + '" style="width:100%;height:100%;object-fit:' + (modalFitContain ? 'contain' : 'cover') + ';' + (modalFitContain ? 'padding:2px;box-sizing:border-box;' : '') + 'display:block;">' +
         '</div>'
       : '<span style="font-size:34px;line-height:1;">' + esc(card.flag || '🏳️') + '</span>';
 
+    var hasCultureSection = (resolved.triviaItems.length + resolved.heritageSites.length + resolved.cities.length + resolved.languages.length) > 0;
+
+    // ── Header + Lightweight Inline Jump Bar ──
     var html = '' +
-      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px;">' +
-      '  <div style="display:flex;align-items:center;gap:10px;">' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;">' +
+      '  <div style="display:flex;align-items:center;gap:12px;min-width:0;">' +
       '    ' + modalFlagHtml +
-      '    <div>' +
-      '      <h3 style="font-family:\'Fredoka One\',sans-serif;font-size:23px;color:#fff;margin:0;line-height:1.15;">' + esc(card.name) + '</h3>' +
-      '      <div style="font-size:12px;color:var(--dim);margin-top:3px;">' + esc(contName) + (card.capital ? ' · Capital: ' + esc(card.capital) : '') + ' · Modern Borders: <span style="font-family:\'Space Mono\',monospace;color:#e2e8f0;">' + esc(card.modernYear || '') + '</span></div>' +
+      '    <div style="min-width:0;">' +
+      '      <h3 style="font-family:\'Fredoka One\',sans-serif;font-size:24px;color:#fff;margin:0;line-height:1.15;overflow-wrap:anywhere;">' + esc(card.name) + '</h3>' +
+      '      <div style="font-size:12px;color:#a5b4cf;margin-top:4px;line-height:1.4;">' +
+               esc(contName) +
+               (card.capital ? ' · Capital: <span style="color:#e2e8f0;font-weight:600;">' + esc(card.capital) + '</span>' : '') +
+               ' · Modern Borders: <span style="font-family:\'Space Mono\',monospace;color:#e2e8f0;">' + esc(card.modernYear || '') + '</span>' +
+      '      </div>' +
       '    </div>' +
       '  </div>' +
       '  <button id="gc-close" aria-label="Close" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#cbd5e1;width:32px;height:32px;border-radius:10px;cursor:pointer;font-size:16px;flex-shrink:0;">✕</button>' +
+      '</div>' +
+
+      // Lightweight inline section jump bar (unboxed typographic navigation, hairline bottom border)
+      '<nav aria-label="Country dossier sections" style="display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:0 0 10px;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.1);font-size:12px;">' +
+      '  <button type="button" class="gc-jump-btn" data-target="gc-sec-borders" style="background:none;border:none;padding:2px 0;color:#93c5fd;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.02em;white-space:nowrap;"><span style="font-family:\'Space Mono\',monospace;opacity:.75;margin-right:4px;">01</span>Borders</button>' +
+      '  <button type="button" class="gc-jump-btn" data-target="gc-sec-environment" style="background:none;border:none;padding:2px 0;color:#94a3b8;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.02em;white-space:nowrap;"><span style="font-family:\'Space Mono\',monospace;opacity:.75;margin-right:4px;">02</span>Environment</button>' +
+      (hasCultureSection
+        ? '  <button type="button" class="gc-jump-btn" data-target="gc-sec-culture" style="background:none;border:none;padding:2px 0;color:#94a3b8;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.02em;white-space:nowrap;"><span style="font-family:\'Space Mono\',monospace;opacity:.75;margin-right:4px;">03</span>Culture</button>'
+        : '') +
+      '</nav>';
+
+    // ── Section 1: Genesis of Modern Borders ──
+    html += '<section id="gc-sec-borders" style="scroll-margin-top:12px;">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">' +
+      '  <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.11em;color:#93c5fd;">🗺️ 01 · Genesis of Modern Borders</div>' +
       '</div>' +
 
       // Live D3 TopoJSON Silhouette Frame
@@ -2181,34 +2429,117 @@
       om.icon + ' ' + esc(originDisplay) +
       '</div>' +
 
-      // Main 2-3 sentence prose story
-      '<p style="font-size:14px;line-height:1.62;color:#e2e8f0;margin:0 0 14px;">' + esc(card.story || '') + '</p>';
+      // Main border prose
+      '<p style="font-size:14px;line-height:1.65;color:#e2e8f0;margin:0 0 14px;">' + esc(card.story || '') + '</p>';
 
     // Hairline-bordered Key Turning Point inset (no thick colored left bar)
     if (card.turningPoint) {
       var tpText = (typeof card.turningPoint === 'string')
         ? card.turningPoint
         : ((card.turningPoint.year ? card.turningPoint.year + ' · ' : '') + (card.turningPoint.title || '') + (card.turningPoint.detail ? ' — ' + card.turningPoint.detail : ''));
-      html += '<div style="background:rgba(255,255,255,0.035);border:1px solid rgba(91,143,255,0.22);border-radius:12px;padding:12px 14px;margin-bottom:12px;">' +
-        '<div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">Key Turning Point</div>' +
-        '<div style="font-size:13px;font-weight:800;color:#ffe135;line-height:1.4;">' + esc(tpText) + '</div>' +
+      html += '<div style="background:rgba(255,255,255,0.035);border:1px solid rgba(91,143,255,0.22);border-radius:12px;padding:11px 14px;margin-bottom:12px;">' +
+        '<div style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">Key Turning Point</div>' +
+        '<div style="font-size:13px;font-weight:800;color:#ffe135;line-height:1.45;">' + esc(tpText) + '</div>' +
         '</div>';
     }
 
     // Optional calm Contested Borders note
     if (card.contestedNote) {
-      html += '<div style="background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:12px;line-height:1.5;color:#cbd5e1;">' +
+      html += '<div style="background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:10px 13px;margin-bottom:4px;font-size:12.5px;line-height:1.55;color:#cbd5e1;">' +
         '<strong style="color:#fde68a;">Border Note:</strong> ' + esc(card.contestedNote) +
         '</div>';
     }
+    html += '</section>';
+
+    // ── Section 2: Environment & Physical Features ──
+    html += '<section id="gc-sec-environment" style="margin-top:20px;padding-top:18px;border-top:1px solid rgba(255,255,255,0.1);scroll-margin-top:12px;">' +
+      '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.11em;color:#6ee7b7;margin-bottom:8px;">🌿 02 · Environment &amp; Physical Features</div>';
+
+    if (resolved.biomeLabel) {
+      html += '<div style="font-size:15.5px;font-weight:800;color:#ffffff;line-height:1.3;margin-bottom:5px;">' + esc(resolved.biomeLabel) + '</div>';
+    }
+    if (resolved.summary) {
+      html += '<p style="font-size:14px;line-height:1.62;color:#cbd5e1;margin:0 0 12px;">' + esc(resolved.summary) + '</p>';
+    }
+
+    // Strictly game-linked Land & Water features (structured unboxed rows, zero pills)
+    var physRowsHtml = '';
+    physRowsHtml += renderFeatureRowHtml('Mountains', resolved.landByGroup.mountain);
+    physRowsHtml += renderFeatureRowHtml('Peninsulas', resolved.landByGroup.peninsula);
+    physRowsHtml += renderFeatureRowHtml('Islands', resolved.landByGroup.island);
+    physRowsHtml += renderFeatureRowHtml('Archipelagos', resolved.landByGroup.archipelago);
+    physRowsHtml += renderFeatureRowHtml('Rivers', resolved.rivers);
+    physRowsHtml += renderFeatureRowHtml('Lakes', resolved.lakes);
+    physRowsHtml += renderFeatureRowHtml('Seas & Waters', resolved.seasAndStraits);
+
+    if (physRowsHtml) {
+      html += '<div style="border-top:1px solid rgba(255,255,255,0.08);margin-top:6px;">' + physRowsHtml + '</div>';
+    }
+
+    // Native Wildlife from Mapolis Animal Preserve (self-hosted local WebP icons)
+    if (resolved.animals.length > 0) {
+      html += '<div style="margin-top:14px;">' +
+        '<div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:#94a3b8;margin-bottom:8px;">Native Wildlife · Animal Preserve</div>' +
+        '<div style="display:flex;flex-direction:column;">';
+      resolved.animals.forEach(function (animal, idxA) {
+        var borderStyle = idxA > 0 ? 'border-top:1px solid rgba(255,255,255,0.06);' : '';
+        html += '<div style="display:flex;align-items:center;gap:11px;padding:7px 0;' + borderStyle + '">' +
+          '<img class="gc-animal-icon" src="/assets/badges/' + esc(animal.cp) + '.webp" alt="' + esc(animal.name) + '" loading="lazy" width="34" height="34" style="width:34px;height:34px;object-fit:contain;flex-shrink:0;">' +
+          '<div style="min-width:0;flex:1;">' +
+          '  <div style="font-size:13.5px;font-weight:800;color:#fff;line-height:1.25;">' + esc(animal.name) + '</div>' +
+          (animal.desc ? '  <div style="font-size:12px;color:#cbd5e1;line-height:1.4;margin-top:2px;">' + esc(animal.desc) + '</div>' : '') +
+          '</div>' +
+          '</div>';
+      });
+      html += '</div></div>';
+    }
+    html += '</section>';
+
+    // ── Section 3: Culture, Landmarks & Festivals ──
+    if (hasCultureSection) {
+      html += '<section id="gc-sec-culture" style="margin-top:20px;padding-top:18px;border-top:1px solid rgba(255,255,255,0.1);scroll-margin-top:12px;">' +
+        '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.11em;color:#fcd34d;margin-bottom:10px;">🏛️ 03 · Culture, Landmarks &amp; Festivals</div>';
+
+      if (resolved.triviaItems.length > 0) {
+        html += '<div style="display:flex;flex-direction:column;margin-bottom:10px;">';
+        resolved.triviaItems.forEach(function (ti, idxT) {
+          var km = TRIVIA_KIND_META[ti.kind] || TRIVIA_KIND_META.culture;
+          var borderTop = idxT > 0 ? 'border-top:1px solid rgba(255,255,255,0.06);' : '';
+          html += '<div style="padding:8px 0;' + borderTop + '">' +
+            '<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:' + km.color + ';margin-bottom:3px;">' + esc(km.label) + '</div>' +
+            '<div style="font-size:13.5px;line-height:1.58;color:#eef2ff;">' + esc(ti.fact) + '</div>' +
+            '</div>';
+        });
+        html += '</div>';
+      }
+
+      var culRowsHtml = '';
+      culRowsHtml += renderFeatureRowHtml('UNESCO Heritage', resolved.heritageSites);
+      culRowsHtml += renderFeatureRowHtml('Notable Cities', resolved.cities);
+      if (resolved.languages.length > 0) {
+        var langHtml = resolved.languages.map(function (l) {
+          return esc(l.name) + (l.clue ? ' <span style="color:#94a3b8;font-size:12px;">(' + esc(l.clue) + ')</span>' : '');
+        }).join(' <span style="color:rgba(148,163,184,0.45);margin:0 4px;">·</span> ');
+        culRowsHtml += '<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.06);">' +
+          '<div style="width:124px;flex-shrink:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;">Languages</div>' +
+          '<div style="flex:1;min-width:170px;font-size:13.5px;line-height:1.5;color:#eef2ff;">' + langHtml + '</div>' +
+          '</div>';
+      }
+
+      if (culRowsHtml) {
+        html += '<div style="border-top:1px solid rgba(255,255,255,0.08);">' + culRowsHtml + '</div>';
+      }
+      html += '</section>';
+    }
 
     // Quiet footer link to Lines on a Map (s-solidarity)
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);font-size:12px;">' +
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:18px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);font-size:12px;">' +
       '<button id="gc-lines-link" style="background:none;border:none;color:#93c5fd;font-size:12px;font-weight:700;cursor:pointer;padding:0;text-align:left;">Learn why borders matter → Lines on a Map</button>' +
       '<button id="gc-done" style="padding:7px 14px;border-radius:9px;border:1px solid var(--border);background:rgba(255,255,255,.06);color:#fff;font-size:12px;font-weight:700;cursor:pointer;">Done</button>' +
       '</div>';
 
-    var m = createOverlayModal('mapolis-genesis-card-modal', html, { maxWidth: '470px' });
+    var m = createOverlayModal('mapolis-genesis-card-modal', html, { maxWidth: '620px' });
+    m.sheet.style.scrollBehavior = 'smooth';
 
     var modalFlagImg = m.sheet.querySelector('.gc-modal-flag');
     if (modalFlagImg) {
@@ -2220,6 +2551,28 @@
         if (modalFlagImg.parentNode) modalFlagImg.parentNode.replaceChild(span, modalFlagImg);
       }, { once: true });
     }
+
+    // Graceful fallback if any animal badge image fails offline
+    m.sheet.querySelectorAll('.gc-animal-icon').forEach(function (img) {
+      img.addEventListener('error', function () {
+        img.style.display = 'none';
+      }, { once: true });
+    });
+
+    // Smooth inline section jump links inside the dossier sheet
+    var jumpBtns = m.sheet.querySelectorAll('.gc-jump-btn');
+    jumpBtns.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var targetId = btn.getAttribute('data-target');
+        var sec = targetId ? m.sheet.querySelector('#' + targetId) : null;
+        if (sec) {
+          sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          jumpBtns.forEach(function (b) {
+            b.style.color = (b === btn) ? '#93c5fd' : '#94a3b8';
+          });
+        }
+      });
+    });
 
     m.sheet.querySelector('#gc-close').addEventListener('click', function () { m.overlay.remove(); });
     m.sheet.querySelector('#gc-done').addEventListener('click', function () { m.overlay.remove(); });
@@ -2241,9 +2594,12 @@
     ORIGIN_META: ORIGIN_META,
     CONTINENT_META: CONTINENT_META,
     CONTINENT_LABELS: CONTINENT_LABELS,
+    TRIVIA_KIND_META: TRIVIA_KIND_META,
     normalizeFriendQuery: normalizeFriendQuery,
     normalizeRoomCodeInput: normalizeRoomCodeInput,
     formatRoomCodeDisplay: formatRoomCodeDisplay,
+    buildGameAssetIndex: buildGameAssetIndex,
+    resolveCardAssets: resolveCardAssets,
     resolveGenesisCard: resolveGenesisCard,
     filterGenesisCards: filterGenesisCards,
     openH2HModePicker: openH2HModePicker,

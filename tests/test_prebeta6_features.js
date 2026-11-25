@@ -411,7 +411,7 @@ test('Section 1: security, compliance text, PBKDF2 password hashing, recovery do
   assert.match(recoveryDoc, /\/api\/request-recovery/, 'SUPABASE_RECOVERY_REPORT.md must document tokenized recovery endpoint');
 
   // sw.js version & asset lists
-  assert.match(swSrc, /CACHE_NAME\s*=\s*'mapolis-cache-v13'/, 'sw.js must be bumped to mapolis-cache-v13');
+  assert.match(swSrc, /CACHE_NAME\s*=\s*'mapolis-cache-v14'/, 'sw.js must be bumped to mapolis-cache-v14');
   assert.doesNotThrow(() => new Function(swSrc), 'sw.js must parse with valid JS syntax');
   const badgeFiles = fs.readdirSync(path.join(__dirname, '..', 'assets', 'badges')).filter(f => f.endsWith('.webp'));
   const flagFiles = fs.readdirSync(path.join(__dirname, '..', 'assets', 'flags')).filter(f => f.endsWith('.svg'));
@@ -664,6 +664,136 @@ test('Section 4: Genesis Card 2024-2026 updates, 10 historical precision fixes, 
   assert.match(byId.palestine.capital, /Jerusalem|Ramallah/i);
   assert.match(byId.palestine.story, /1988/);
   assert.match(byId.palestine.story, /2012/);
+});
+
+function loadFullGameGlobals() {
+  const mapCode = fs.readFileSync(path.join(__dirname, '..', 'map-data.js'), 'utf8');
+  const playHtml = fs.readFileSync(path.join(__dirname, '..', 'play', 'index.html'), 'utf8');
+  const animalMatch = playHtml.match(/const ANIMAL_PRESERVE = \[[\s\S]*?\n\];/);
+  assert.ok(animalMatch, 'ANIMAL_PRESERVE array must exist in play/index.html');
+  assert.match(playHtml, /window\.ANIMAL_PRESERVE\s*=\s*ANIMAL_PRESERVE;/, 'play/index.html must expose window.ANIMAL_PRESERVE');
+
+  const ctx = {};
+  vm.createContext(ctx);
+  vm.runInContext(
+    mapCode +
+      '\n' +
+      animalMatch[0] +
+      '\nthis.__g = { EUROPE_DATA, AFRICA_DATA, ASIA_DATA, NA_DATA, SA_DATA, OC_DATA, ANIMAL_PRESERVE, COUNTRY_DATA };',
+    ctx
+  );
+  return ctx.__g;
+}
+
+test('Section 5: World Atlas 3-section Country Dossier two-way cross-check parity across all 200 countries', () => {
+  const dataset = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'genesis-cards.json'), 'utf8'));
+  const g = loadFullGameGlobals();
+  const assetIndex = prebeta6.buildGameAssetIndex(g);
+  assert.ok(assetIndex.loadedCount > 900, `Expected >900 indexed game assets, got ${assetIndex.loadedCount}`);
+
+  // 1. Validate zero duplicate trivia/language IDs and 100% valid targets in map-data.js
+  const continentDatas = [g.EUROPE_DATA, g.AFRICA_DATA, g.ASIA_DATA, g.NA_DATA, g.SA_DATA, g.OC_DATA];
+  const allCountryIds = new Set(Object.values(g.COUNTRY_DATA).map(c => c.id));
+  for (const cd of continentDatas) {
+    for (const c of Object.values(cd.countries || {})) allCountryIds.add(c.id);
+  }
+  const seenTriviaIds = new Set();
+  const seenLangIds = new Set();
+  for (const cd of continentDatas) {
+    const localCountryIds = new Set(Object.values(cd.countries || {}).map(c => c.id));
+    for (const t of (cd.triviaQuestions || [])) {
+      assert.ok(!seenTriviaIds.has(t.id), `Duplicate trivia question ID: ${t.id}`);
+      seenTriviaIds.add(t.id);
+      assert.ok(localCountryIds.has(t.targetId), `Invalid targetId ${t.targetId} on trivia ${t.id} in ${cd.id}`);
+      if (t.altTargetId) {
+        assert.ok(allCountryIds.has(t.altTargetId), `Invalid altTargetId ${t.altTargetId} on trivia ${t.id}`);
+      }
+      if (Array.isArray(t.altTargetIds)) {
+        for (const alt of t.altTargetIds) {
+          assert.ok(allCountryIds.has(alt), `Invalid altTargetIds entry ${alt} on trivia ${t.id}`);
+        }
+      }
+    }
+    for (const l of (cd.languageQuestions || [])) {
+      assert.ok(!seenLangIds.has(l.id), `Duplicate language question ID: ${l.id}`);
+      seenLangIds.add(l.id);
+    }
+  }
+  assert.ok(seenTriviaIds.size >= 260, `Expected >=260 synced trivia questions, got ${seenTriviaIds.size}`);
+
+  // 2. Strict two-way parity across ALL 200 cards
+  const validKinds = new Set(['festival', 'tradition', 'landmark', 'culture']);
+  let withLand = 0, withWater = 0, withAnimal = 0, withHeritage = 0, withCities = 0;
+
+  for (const card of dataset.cards) {
+    assert.ok(card.environment && typeof card.environment === 'object', `Missing environment on ${card.id}`);
+    assert.ok(card.culture && typeof card.culture === 'object', `Missing culture on ${card.id}`);
+    assert.ok(card.environment.biomeLabel && card.environment.biomeLabel.length >= 6, `Missing biomeLabel on ${card.id}`);
+    assert.ok(card.environment.summary && card.environment.summary.length >= 40, `Missing environment summary on ${card.id}`);
+    assert.ok(!/[*`_]/.test(card.environment.biomeLabel + ' ' + card.environment.summary), `Raw markdown in environment of ${card.id}`);
+
+    for (const ref of (card.environment.landFeatureIds || [])) {
+      assert.ok(assetIndex[ref.type] && assetIndex[ref.type][ref.id], `Dangling land feature ${ref.type}:${ref.id} on ${card.id}`);
+    }
+    for (const ref of (card.environment.waterFeatureIds || [])) {
+      assert.ok(assetIndex[ref.type] && assetIndex[ref.type][ref.id], `Dangling water feature ${ref.type}:${ref.id} on ${card.id}`);
+    }
+    for (const aid of (card.environment.animalIds || [])) {
+      assert.ok(assetIndex.animal[aid], `Dangling animalId ${aid} on ${card.id}`);
+    }
+    for (const hid of (card.culture.heritageIds || [])) {
+      assert.ok(assetIndex.heritage[hid], `Dangling heritageId ${hid} on ${card.id}`);
+    }
+    for (const cid of (card.culture.cityIds || [])) {
+      assert.ok(assetIndex.city[cid], `Dangling cityId ${cid} on ${card.id}`);
+    }
+    for (const lid of (card.culture.languageIds || [])) {
+      assert.ok(assetIndex.language[lid], `Dangling languageId ${lid} on ${card.id}`);
+    }
+    assert.ok(
+      (card.culture.triviaItems && card.culture.triviaItems.length > 0) ||
+      (card.culture.languageIds && card.culture.languageIds.length > 0),
+      `Expected at least 1 synced cultural highlight for ${card.id}`
+    );
+    for (const ti of (card.culture.triviaItems || [])) {
+      assert.ok(assetIndex.trivia[ti.id], `Dangling triviaItem ${ti.id} on ${card.id}`);
+      assert.ok(validKinds.has(ti.kind), `Invalid trivia kind ${ti.kind} on ${card.id}:${ti.id}`);
+      assert.ok(ti.fact && ti.fact.length >= 16, `Trivia fact too short on ${card.id}:${ti.id}`);
+      assert.ok(!/[*`_]/.test(ti.fact), `Raw markdown in trivia fact on ${card.id}:${ti.id}`);
+      assert.ok(!/\?$/.test(ti.fact.trim()), `Unconverted question mark in trivia fact on ${card.id}:${ti.id}: ${ti.fact}`);
+    }
+
+    if ((card.environment.landFeatureIds || []).length > 0) withLand++;
+    if ((card.environment.waterFeatureIds || []).length > 0) withWater++;
+    if ((card.environment.animalIds || []).length > 0) withAnimal++;
+    if ((card.culture.heritageIds || []).length > 0) withHeritage++;
+    if ((card.culture.cityIds || []).length > 0) withCities++;
+  }
+
+  assert.ok(withLand >= 130, `Expected >=130 countries with land features, got ${withLand}`);
+  assert.ok(withWater >= 115, `Expected >=115 countries with water features, got ${withWater}`);
+  assert.ok(withAnimal >= 30, `Expected >=30 countries with Preserve wildlife, got ${withAnimal}`);
+  assert.ok(withHeritage >= 50, `Expected >=50 countries with UNESCO sites, got ${withHeritage}`);
+  assert.ok(withCities >= 90, `Expected >=90 countries with notable cities, got ${withCities}`);
+
+  // 3. Spot-check resolveCardAssets & enhanced Atlas search
+  const byId = Object.fromEntries(dataset.cards.map(c => [c.id, c]));
+  const brazilRes = prebeta6.resolveCardAssets(byId.brazil, assetIndex);
+  assert.ok(brazilRes.rivers.some(r => /amazon/i.test(r.name)), 'Brazil must include Amazon River');
+  assert.ok(!brazilRes.rivers.some(r => /orinoco/i.test(r.name)), 'Brazil must not include Orinoco River');
+  assert.ok(brazilRes.animals.length >= 3, 'Brazil must include Animal Preserve wildlife');
+  assert.ok(brazilRes.triviaItems.some(t => /carnival/i.test(t.fact)), 'Brazil must include Carnival highlight');
+
+  const tuvaluRes = prebeta6.resolveCardAssets(byId.tuvalu, assetIndex);
+  assert.equal(tuvaluRes.hasLand, false);
+  assert.equal(tuvaluRes.hasWater, false);
+  assert.equal(tuvaluRes.animals.length, 0);
+  assert.ok(tuvaluRes.triviaItems.some(t => /fatele/i.test(t.fact)), 'Tuvalu must include Fatele cultural highlight');
+
+  assert.ok(prebeta6.filterGenesisCards(dataset.cards, { search: 'Oktoberfest' }, assetIndex).some(c => c.id === 'germany'));
+  assert.ok(prebeta6.filterGenesisCards(dataset.cards, { search: 'Atacama' }, assetIndex).some(c => c.id === 'chile'));
+  assert.ok(prebeta6.filterGenesisCards(dataset.cards, { search: 'Alps' }, assetIndex).some(c => c.id === 'switzerland'));
+  assert.ok(prebeta6.filterGenesisCards(dataset.cards, { search: 'Angkor' }, assetIndex).some(c => c.id === 'cambodia'));
 });
 
 
