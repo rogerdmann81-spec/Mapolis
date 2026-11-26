@@ -118,7 +118,7 @@ test('friendStore exposes all required compliance-safe RPC methods', () => {
   }
 });
 
-test('Israel Genesis Card covers Zionism, diverse Jewish viewpoints, the Nakba, West Bank settlements, ethnic cleansing, and genocide', () => {
+test('Israel Genesis Card covers Zionism, diverse Jewish viewpoints, the Nakba, West Bank settlements, settler violence, apartheid, indirect/regional deaths, ethnic cleansing, genocide, and Jerusalem Day Flag March', () => {
   const genesisData = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'genesis-cards.json'), 'utf8'));
   const israel = prebeta6.resolveGenesisCard(genesisData, 'israel');
   assert.ok(israel, 'Israel card must exist');
@@ -128,9 +128,17 @@ test('Israel Genesis Card covers Zionism, diverse Jewish viewpoints, the Nakba, 
   assert.ok(combined.includes('opposing viewpoints') && combined.includes('jewish communities'), 'Israel card must note opposing viewpoints in Jewish communities worldwide');
   assert.ok(combined.includes('nakba'), 'Israel card must mention the Nakba');
   assert.ok(combined.includes('west bank') && combined.includes('settlement'), 'Israel card must mention West Bank settlements');
+  assert.ok(combined.includes('settler violence') && combined.includes('5,300'), 'Israel card must include settler violence estimates');
+  assert.ok(combined.includes('apartheid'), 'Israel card must mention apartheid findings');
+  assert.ok(combined.includes('indirect deaths'), 'Israel card must mention indirect deaths');
+  assert.ok(combined.includes('outside israel'), 'Israel card must include deaths outside Israel borders');
   assert.ok(combined.includes('ethnic cleansing'), 'Israel card must mention continued ethnic cleansing');
   assert.ok(combined.includes('genocide'), 'Israel card must include the term genocide');
   assert.ok(!combined.includes('widely regarded as'), 'Israel card must not include "widely regarded as"');
+  assert.ok(
+    israel.culture.triviaItems.some(t => t.id === 'tri_israel_jerusalem_day' && t.kind === 'festival' && /flag march/i.test(t.fact)),
+    'Israel card culture section must include synced Jerusalem Day Flag March festival item'
+  );
 });
 
 test('findAtlasCountryAtLonLat prioritizes smaller overlapping polygons, falls back to microstate centroids, and ignores ocean', () => {
@@ -411,7 +419,7 @@ test('Section 1: security, compliance text, PBKDF2 password hashing, recovery do
   assert.match(recoveryDoc, /\/api\/request-recovery/, 'SUPABASE_RECOVERY_REPORT.md must document tokenized recovery endpoint');
 
   // sw.js version & asset lists
-  assert.match(swSrc, /CACHE_NAME\s*=\s*'mapolis-cache-v17'/, 'sw.js must be bumped to mapolis-cache-v17');
+  assert.match(swSrc, /CACHE_NAME\s*=\s*'mapolis-cache-v18'/, 'sw.js must be bumped to mapolis-cache-v18');
   assert.doesNotThrow(() => new Function(swSrc), 'sw.js must parse with valid JS syntax');
   const badgeFiles = fs.readdirSync(path.join(__dirname, '..', 'assets', 'badges')).filter(f => f.endsWith('.webp'));
   const flagFiles = fs.readdirSync(path.join(__dirname, '..', 'assets', 'flags')).filter(f => f.endsWith('.svg'));

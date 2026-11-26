@@ -4292,6 +4292,7 @@ var ASIA_TRIVIA_QUESTIONS = [
 {id:"tri_turkmenistan_akhalteke",tier:11,label:"Golden-coated Akhal-Teke horses and intricate hand-knotted red carpets are national cultural symbols of which Central Asian country?",targetId:"turkmenistan"},
 {id:"tri_uae_ayyala",tier:9,label:"Al-Ayyala traditional stick-dance performances alongside the Burj Khalifa skyscraper belong to which Persian Gulf federation?",targetId:"uae",altTargetId:"oman"},
 {id:"tri_uzbekistan_registan",tier:10,label:"The Sharq Taronalari music festival in Samarkand's turquoise-tiled Registan Square takes place in which Silk Road country?",targetId:"uzbekistan"},
+{id:"tri_israel_jerusalem_day",tier:11,label:"Jerusalem Day (Yom Yerushalayim) and its annual Flag March through the Old City's Muslim Quarter—marked by far-right harassment of Palestinian residents and shops—is a national holiday of which country?",targetId:"israel"},
 {id:"tri_yemen_shibam",tier:11,label:"The centuries-old mud-brick 'skyscrapers' of Shibam and Socotra's Dragon Blood Trees belong to which southern Arabian nation?",targetId:"yemen"},
 ];
 
